@@ -5,9 +5,9 @@ console.log(window.innerHeight);
 
 if (window.innerWidth < 1000) {
   canvas.height = 1223;
+  document.querySelector('#canva').style.height = document.body.scrollHeight+'px';
 }
 
-document.querySelector('#canva').style.height = document.body.scrollHeight+'px';
 
 console.log(window.innerHeight);
 const ctx = canvas.getContext('2d');
