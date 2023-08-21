@@ -6,6 +6,7 @@ console.log(window.innerHeight);
 if (window.innerWidth < 1000) {
   canvas.height = 1223;
   document.querySelector('#canva').style.height = document.body.scrollHeight+'px';
+  document.querySelector('.contents').style.height = 100+'%';
 }
 
 
