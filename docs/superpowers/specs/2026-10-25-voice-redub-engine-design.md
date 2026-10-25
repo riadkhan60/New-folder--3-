@@ -99,6 +99,7 @@
 | HTTP | `httpx` (async) | BSD-3 |
 | Claude | `anthropic` official SDK | MIT |
 | Schemas / validation | `pydantic` v2 | MIT |
+| Grapheme-aware text (subtitle character counts) | `regex` | Apache-2.0 |
 | Arrays / WAV I/O | `numpy`, `soundfile` (bundles libsndfile as a shared library) | BSD / LGPL-2.1 shared lib |
 | Time-stretch | `python-stretch` 0.3.x (Signalsmith Stretch) | MIT |
 | Stretch fallback | ffmpeg `atempo` | LGPL |
@@ -109,10 +110,25 @@
 
 ### 3.3 Packaging and launch
 - **Build:** PyInstaller 6.x, **onedir, console mode.** Windowed mode sets `sys.stdout` to `None` on Windows, which breaks the protocol.
+  - Build the bootloader from source, which reduces antivirus false positives.
+  - Pass `--noupx`, `--python-option u` and `--python-option "X utf8"`.
+  - The engine also calls `sys.stdout.reconfigure(encoding="utf-8", newline="\n")` and flushes after every message. Windows pipes otherwise default to the ANSI code page, which breaks Bangla text.
+  - Onefile is not used: it extracts to a temp folder on every launch, leaves folders behind when killed, and its embedded libraries can't be re-signed.
 - **Targets:** Windows 10/11 x64, macOS 13+ arm64, and macOS 13+ x64.
-- **macOS signing:** every Mach-O file, including ffmpeg, is signed with hardened runtime and notarized.
-- **Electron:** ship the engine in `extraResources` (it cannot be spawned from inside `app.asar`). Launch it with `child_process.spawn(path, [], {stdio:'pipe', windowsHide:true, env: minimalEnv})`. Read stdout line by line and always drain stderr.
-- **Tauri v2:** ship the onedir folder as `bundle.resources` and spawn it via the shell plugin's `Command`. Alternatively, build PyInstaller onefile for `bundle.externalBin` (with a target-triple suffix) and use `set_process_group(true)` so killing it also kills the bootloader child.
+- **Signing:**
+  - **macOS:** every Mach-O file, including ffmpeg, is signed with a Developer ID, hardened runtime and a secure timestamp, then notarized with `notarytool`.
+  - **Windows:** every `.exe`, `.dll` and `.pyd` in the onedir is signed (Artifact Signing). Smart App Control blocks unsigned code, and EV certificates no longer bypass SmartScreen.
+  - The engine folder is signed **before** it goes to the editor's bundler, since Tauri does not sign `bundle.resources`.
+- **Electron:**
+  - Ship the onedir in electron-builder `extraResources`, or Forge `packagerConfig.extraResource`. It cannot be spawned from inside `app.asar`.
+  - Resolve it via `process.resourcesPath`.
+  - Launch with `child_process.spawn(exe, [], {stdio:'pipe', windowsHide:true, env:{...minimalEnv, PYTHONUTF8:'1', PYTHONUNBUFFERED:'1'}})`. `utilityProcess` can't run native binaries.
+  - Read stdout line by line and always drain stderr.
+  - On quit, send `engine.shutdown`, then close stdin. Windows `kill()` is always forceful.
+- **Tauri v2:**
+  - Ship the signed onedir as `bundle.resources`.
+  - Spawn it from Rust with the shell plugin's `Command` and a `$RESOURCE/...` path, behind narrow `#[tauri::command]`s, so the webview holds no shell permissions.
+  - Capability scope: `shell:allow-spawn` (with an argument validator), `shell:allow-stdin-write` and `shell:allow-kill`.
 - **Startup target:** `engine.hello` answered in under 2 s on a mid-range laptop.
 
 ### 3.4 Concurrency model
@@ -567,7 +583,7 @@ Every version (text plus take) is kept in the job store, so reverting never need
 |---|---|---|
 | `stem` | `dub_stem.wav` | Mono, 48 kHz, 24-bit PCM, **N samples**. `bext` TimeReference = `timeline.start_sample`. Description and RIFF `ICMT` read "Contains AI-generated voice (redub-engine)". |
 | `clips` | `clips/{segment_id}.wav` + `manifest.json` | One clip per segment with its exact `start_sample`, so the editor can place clips individually. |
-| `srt`, `vtt` | `captions.srt`, `captions.vtt` | UTF-8. Cues follow utterances, split at phrase boundaries to keep ≤ 2 lines, ≤ 42 characters per line and ≥ 0.83 s per cue. Times come from the **final placed audio**. For ElevenLabs takes, character alignment refines split points where available. |
+| `srt`, `vtt` | `captions.srt`, `captions.vtt` | <ul><li>UTF-8 (SRT has an optional BOM). SRT uses `HH:MM:SS,mmm`; VTT uses a `WEBVTT` header, `HH:MM:SS.mmm` and escapes `&` and `<`. Times are rounded from samples to milliseconds.</li><li>Cues follow utterances, split at phrase boundaries. Defaults follow the Netflix English and Bangla style guides: ≤ 2 lines, ≤ 42 characters per line, ≤ 20 characters/s (en) or ≤ 22 (bn), and 0.83–7 s per cue.</li><li>Characters are counted as **extended grapheme clusters** (`regex` `\X`), so ক্ষ counts as one. Text is NFC-normalised, and ZWJ/ZWNJ are kept.</li><li>Times come from the **final placed audio**. For ElevenLabs takes, character alignment refines split points where available.</li></ul> |
 | `changes` | `changes.json` | Per segment: original text, final text, edits, status and flags. This is the audit trail. |
 | `qc` | `qc_report.json` | Per segment: α, start error, voice, takes, provider, spend. Job level: fit rate, flag counts, total spend. |
 
