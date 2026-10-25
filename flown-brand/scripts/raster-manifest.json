@@ -1,0 +1,1184 @@
+{
+ "png": [
+  {
+   "svg": "logo/svg/flown-mark.svg",
+   "png": "logo/png/flown-mark-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "logo/svg/flown-mark.svg",
+   "png": "logo/png/flown-mark-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "logo/svg/flown-mark.svg",
+   "png": "logo/png/flown-mark-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "logo/svg/flown-mark.svg",
+   "png": "logo/png/flown-mark-2048.png",
+   "w": 2048,
+   "h": 2048
+  },
+  {
+   "svg": "logo/svg/flown-mark-flat.svg",
+   "png": "logo/png/flown-mark-flat-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "logo/svg/flown-mark-flat.svg",
+   "png": "logo/png/flown-mark-flat-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "logo/svg/flown-mark-flat.svg",
+   "png": "logo/png/flown-mark-flat-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "logo/svg/flown-mark-flat.svg",
+   "png": "logo/png/flown-mark-flat-2048.png",
+   "w": 2048,
+   "h": 2048
+  },
+  {
+   "svg": "logo/svg/flown-mark-white.svg",
+   "png": "logo/png/flown-mark-white-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "logo/svg/flown-mark-white.svg",
+   "png": "logo/png/flown-mark-white-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "logo/svg/flown-mark-white.svg",
+   "png": "logo/png/flown-mark-white-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "logo/svg/flown-mark-white.svg",
+   "png": "logo/png/flown-mark-white-2048.png",
+   "w": 2048,
+   "h": 2048
+  },
+  {
+   "svg": "logo/svg/flown-mark-black.svg",
+   "png": "logo/png/flown-mark-black-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "logo/svg/flown-mark-black.svg",
+   "png": "logo/png/flown-mark-black-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "logo/svg/flown-mark-black.svg",
+   "png": "logo/png/flown-mark-black-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "logo/svg/flown-mark-black.svg",
+   "png": "logo/png/flown-mark-black-2048.png",
+   "w": 2048,
+   "h": 2048
+  },
+  {
+   "svg": "logo/svg/flown-mark-ink.svg",
+   "png": "logo/png/flown-mark-ink-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "logo/svg/flown-mark-ink.svg",
+   "png": "logo/png/flown-mark-ink-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "logo/svg/flown-mark-ink.svg",
+   "png": "logo/png/flown-mark-ink-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "logo/svg/flown-mark-ink.svg",
+   "png": "logo/png/flown-mark-ink-2048.png",
+   "w": 2048,
+   "h": 2048
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-dark.svg",
+   "png": "logo/png/flown-logo-horizontal-on-dark-600w.png",
+   "w": 600,
+   "h": 195
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-dark.svg",
+   "png": "logo/png/flown-logo-horizontal-on-dark-1200w.png",
+   "w": 1200,
+   "h": 390
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-dark.svg",
+   "png": "logo/png/flown-logo-horizontal-on-dark-2400w.png",
+   "w": 2400,
+   "h": 780
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-light.svg",
+   "png": "logo/png/flown-logo-horizontal-on-light-600w.png",
+   "w": 600,
+   "h": 195
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-light.svg",
+   "png": "logo/png/flown-logo-horizontal-on-light-1200w.png",
+   "w": 1200,
+   "h": 390
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-light.svg",
+   "png": "logo/png/flown-logo-horizontal-on-light-2400w.png",
+   "w": 2400,
+   "h": 780
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-white.svg",
+   "png": "logo/png/flown-logo-horizontal-white-600w.png",
+   "w": 600,
+   "h": 195
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-white.svg",
+   "png": "logo/png/flown-logo-horizontal-white-1200w.png",
+   "w": 1200,
+   "h": 390
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-white.svg",
+   "png": "logo/png/flown-logo-horizontal-white-2400w.png",
+   "w": 2400,
+   "h": 780
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-black.svg",
+   "png": "logo/png/flown-logo-horizontal-black-600w.png",
+   "w": 600,
+   "h": 195
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-black.svg",
+   "png": "logo/png/flown-logo-horizontal-black-1200w.png",
+   "w": 1200,
+   "h": 390
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-black.svg",
+   "png": "logo/png/flown-logo-horizontal-black-2400w.png",
+   "w": 2400,
+   "h": 780
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-dark.svg",
+   "png": "logo/png/flown-logo-stacked-on-dark-480w.png",
+   "w": 480,
+   "h": 443
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-dark.svg",
+   "png": "logo/png/flown-logo-stacked-on-dark-960w.png",
+   "w": 960,
+   "h": 885
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-dark.svg",
+   "png": "logo/png/flown-logo-stacked-on-dark-1920w.png",
+   "w": 1920,
+   "h": 1770
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-light.svg",
+   "png": "logo/png/flown-logo-stacked-on-light-480w.png",
+   "w": 480,
+   "h": 443
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-light.svg",
+   "png": "logo/png/flown-logo-stacked-on-light-960w.png",
+   "w": 960,
+   "h": 885
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-light.svg",
+   "png": "logo/png/flown-logo-stacked-on-light-1920w.png",
+   "w": 1920,
+   "h": 1770
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-white.svg",
+   "png": "logo/png/flown-logo-stacked-white-480w.png",
+   "w": 480,
+   "h": 443
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-white.svg",
+   "png": "logo/png/flown-logo-stacked-white-960w.png",
+   "w": 960,
+   "h": 885
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-white.svg",
+   "png": "logo/png/flown-logo-stacked-white-1920w.png",
+   "w": 1920,
+   "h": 1770
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-black.svg",
+   "png": "logo/png/flown-logo-stacked-black-480w.png",
+   "w": 480,
+   "h": 443
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-black.svg",
+   "png": "logo/png/flown-logo-stacked-black-960w.png",
+   "w": 960,
+   "h": 885
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-black.svg",
+   "png": "logo/png/flown-logo-stacked-black-1920w.png",
+   "w": 1920,
+   "h": 1770
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-white.svg",
+   "png": "logo/png/flown-wordmark-white-465w.png",
+   "w": 465,
+   "h": 125
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-white.svg",
+   "png": "logo/png/flown-wordmark-white-930w.png",
+   "w": 930,
+   "h": 250
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-white.svg",
+   "png": "logo/png/flown-wordmark-white-1860w.png",
+   "w": 1860,
+   "h": 500
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-ink.svg",
+   "png": "logo/png/flown-wordmark-ink-465w.png",
+   "w": 465,
+   "h": 125
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-ink.svg",
+   "png": "logo/png/flown-wordmark-ink-930w.png",
+   "w": 930,
+   "h": 250
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-ink.svg",
+   "png": "logo/png/flown-wordmark-ink-1860w.png",
+   "w": 1860,
+   "h": 500
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-black.svg",
+   "png": "logo/png/flown-wordmark-black-465w.png",
+   "w": 465,
+   "h": 125
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-black.svg",
+   "png": "logo/png/flown-wordmark-black-930w.png",
+   "w": 930,
+   "h": 250
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-black.svg",
+   "png": "logo/png/flown-wordmark-black-1860w.png",
+   "w": 1860,
+   "h": 500
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos-small.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_16x16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos-small.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_16x16@2x.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos-small.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_32x32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_32x32@2x.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_128x128.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_128x128@2x.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_256x256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_256x256@2x.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_512x512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/Flown.iconset/icon_512x512@2x.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos-small.svg",
+   "png": "app-icon/macos/png/flown-macos-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos-small.svg",
+   "png": "app-icon/macos/png/flown-macos-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/png/flown-macos-64.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/png/flown-macos-128.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/png/flown-macos-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/png/flown-macos-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-macos.svg",
+   "png": "app-icon/macos/png/flown-macos-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/png/flown-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/png/flown-64.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/png/flown-96.png",
+   "w": 96,
+   "h": 96
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/png/flown-128.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/png/flown-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/windows/tiles/Square44x44Logo.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/tiles/Square71x71Logo.png",
+   "w": 71,
+   "h": 71
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/tiles/Square150x150Logo.png",
+   "w": 150,
+   "h": 150
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/tiles/Square284x284Logo.png",
+   "w": 284,
+   "h": 284
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/tiles/Square310x310Logo.png",
+   "w": 310,
+   "h": 310
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/windows/tiles/StoreLogo.png",
+   "w": 50,
+   "h": 50
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/linux/hicolor/16x16/apps/flown.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/linux/hicolor/22x22/apps/flown.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/linux/hicolor/24x24/apps/flown.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/linux/hicolor/32x32/apps/flown.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "app-icon/linux/hicolor/48x48/apps/flown.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/linux/hicolor/64x64/apps/flown.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/linux/hicolor/128x128/apps/flown.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/linux/hicolor/256x256/apps/flown.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/linux/hicolor/512x512/apps/flown.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/png/flown-app-icon-64.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "app-icon/png/flown-app-icon-square-64.png",
+   "w": 64,
+   "h": 64
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/png/flown-app-icon-128.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "app-icon/png/flown-app-icon-square-128.png",
+   "w": 128,
+   "h": 128
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/png/flown-app-icon-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "app-icon/png/flown-app-icon-square-256.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/png/flown-app-icon-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "app-icon/png/flown-app-icon-square-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "app-icon/png/flown-app-icon-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "app-icon/png/flown-app-icon-square-1024.png",
+   "w": 1024,
+   "h": 1024
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-maskable.svg",
+   "png": "app-icon/png/flown-app-icon-maskable-512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "web/favicon-16x16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "web/favicon-32x32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-small.svg",
+   "png": "web/favicon-48x48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "web/apple-touch-icon.png",
+   "w": 180,
+   "h": 180
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "web/android-chrome-192x192.png",
+   "w": 192,
+   "h": 192
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "web/android-chrome-512x512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-maskable.svg",
+   "png": "web/maskable-icon-512x512.png",
+   "w": 512,
+   "h": 512
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon.svg",
+   "png": "web/mstile-150x150.png",
+   "w": 150,
+   "h": 150
+  },
+  {
+   "svg": "social/flown-og-1200x630.svg",
+   "png": "social/flown-og-1200x630.png",
+   "w": 1200,
+   "h": 630
+  },
+  {
+   "svg": "app-icon/svg/flown-app-icon-square.svg",
+   "png": "social/flown-avatar-800.png",
+   "w": 800,
+   "h": 800
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/macos/FlownTrayTemplate.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/macos/FlownTrayTemplate@2x.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/macos/FlownTrayPausedTemplate.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/macos/FlownTrayPausedTemplate@2x.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/macos/FlownTrayRecording-black.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/macos/FlownTrayRecording-black@2x.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/macos/FlownTrayRecording-white.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/macos/FlownTrayRecording-white@2x.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/windows/png/flown-tray-idle-black-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/linux/flown-tray-idle-black-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-black.svg",
+   "png": "tray/linux/flown-tray-idle-black-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/windows/png/flown-tray-idle-white-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/linux/flown-tray-idle-white-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-idle-white.svg",
+   "png": "tray/linux/flown-tray-idle-white-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/windows/png/flown-tray-paused-black-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/linux/flown-tray-paused-black-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-black.svg",
+   "png": "tray/linux/flown-tray-paused-black-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/windows/png/flown-tray-paused-white-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/linux/flown-tray-paused-white-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-paused-white.svg",
+   "png": "tray/linux/flown-tray-paused-white-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/windows/png/flown-tray-recording-black-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/linux/flown-tray-recording-black-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-black.svg",
+   "png": "tray/linux/flown-tray-recording-black-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/windows/png/flown-tray-recording-white-48.png",
+   "w": 48,
+   "h": 48
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/linux/flown-tray-recording-white-22.png",
+   "w": 22,
+   "h": 22
+  },
+  {
+   "svg": "tray/svg/flown-tray-recording-white.svg",
+   "png": "tray/linux/flown-tray-recording-white-44.png",
+   "w": 44,
+   "h": 44
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-16.png",
+   "w": 16,
+   "h": 16
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-20.png",
+   "w": 20,
+   "h": 20
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-24.png",
+   "w": 24,
+   "h": 24
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-32.png",
+   "w": 32,
+   "h": 32
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-40.png",
+   "w": 40,
+   "h": 40
+  },
+  {
+   "svg": "tray/svg/flown-tray-color.svg",
+   "png": "tray/windows/png/flown-tray-color-48.png",
+   "w": 48,
+   "h": 48
+  }
+ ],
+ "pdf": [
+  {
+   "svg": "logo/svg/flown-mark.svg",
+   "pdf": "logo/pdf/flown-mark.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-mark-flat.svg",
+   "pdf": "logo/pdf/flown-mark-flat.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-mark-white.svg",
+   "pdf": "logo/pdf/flown-mark-white.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-mark-black.svg",
+   "pdf": "logo/pdf/flown-mark-black.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-mark-ink.svg",
+   "pdf": "logo/pdf/flown-mark-ink.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-dark.svg",
+   "pdf": "logo/pdf/flown-logo-horizontal-on-dark.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-on-light.svg",
+   "pdf": "logo/pdf/flown-logo-horizontal-on-light.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-white.svg",
+   "pdf": "logo/pdf/flown-logo-horizontal-white.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-horizontal-black.svg",
+   "pdf": "logo/pdf/flown-logo-horizontal-black.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-dark.svg",
+   "pdf": "logo/pdf/flown-logo-stacked-on-dark.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-on-light.svg",
+   "pdf": "logo/pdf/flown-logo-stacked-on-light.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-white.svg",
+   "pdf": "logo/pdf/flown-logo-stacked-white.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-logo-stacked-black.svg",
+   "pdf": "logo/pdf/flown-logo-stacked-black.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-white.svg",
+   "pdf": "logo/pdf/flown-wordmark-white.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-ink.svg",
+   "pdf": "logo/pdf/flown-wordmark-ink.pdf"
+  },
+  {
+   "svg": "logo/svg/flown-wordmark-black.svg",
+   "pdf": "logo/pdf/flown-wordmark-black.pdf"
+  }
+ ],
+ "ui": [
+  "record",
+  "stop",
+  "pause",
+  "play",
+  "restart",
+  "countdown",
+  "screen",
+  "window",
+  "region",
+  "camera",
+  "camera-off",
+  "camera-bubble",
+  "mic",
+  "mic-off",
+  "system-audio",
+  "audio-off",
+  "cursor",
+  "click",
+  "zoom",
+  "trim",
+  "split",
+  "speed",
+  "crop",
+  "captions",
+  "blur",
+  "annotate",
+  "text",
+  "shapes",
+  "background",
+  "sparkle",
+  "export",
+  "download",
+  "upload-cloud",
+  "link",
+  "comment",
+  "library",
+  "eye",
+  "trash",
+  "settings",
+  "keyboard",
+  "check",
+  "close",
+  "more",
+  "flown"
+ ]
+}
