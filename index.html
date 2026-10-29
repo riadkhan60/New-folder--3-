@@ -3,55 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="A small 3D glass world holding the web projects I have built." />
+    <meta name="theme-color" content="#0b1f2e" />
+    <title>All my projects</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500&display=swap"
+    />
     <link rel="stylesheet" href="style.css" />
-    <script src="script.js" defer></script>
-    <title>Document</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="script.js"></script>
   </head>
-  <body>
-    <canvas id="canva"></canvas>
-    <div class="contents">
-      <h1>
-        <span class="hand"> 👋 </span>
-        <span class="text"> Hi, Here All My Projects </span>
-      </h1>
-      <ul class="projects">
-        <li class="project">
-          <img src="/Src/Imgs/TodoApp.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Todo App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/Drawing-App.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Drawing App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/MaptyApp.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Mapty App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/2rism.jpeg" alt="" srcset="" />
-          <h2 class="project-header">2rism</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-      </ul>
-    </div>
+  <body data-world="loading">
+    <canvas id="world" aria-hidden="true"></canvas>
+
+    <header class="topbar">
+      <button class="pill" id="motion-toggle" type="button" aria-pressed="false" hidden>
+        Pause the world
+      </button>
+    </header>
+
+    <main class="page">
+      <section class="hero">
+        <h1 class="hero-title">
+          <span class="hand" aria-hidden="true">👋</span>
+          <span class="hero-text">Hi, here are all my projects</span>
+        </h1>
+        <p class="hero-note">
+          Four things I built for the web, floating in a small glass world. Scroll to drift
+          through it.
+        </p>
+        <a class="pill pill-sun" href="#projects">See the projects</a>
+      </section>
+
+      <section class="projects" id="projects" aria-labelledby="projects-title">
+        <h2 id="projects-title" class="sr-only">Projects</h2>
+        <ul class="panes">
+          <li class="pane">
+            <figure class="pane-figure">
+              <img
+                src="Src/Imgs/TodoApp.jpeg"
+                alt="Screenshot of the Todo App: an add form on the left and dated entries on the right"
+                width="1168"
+                height="543"
+                loading="lazy"
+              />
+            </figure>
+            <div class="pane-body">
+              <h3 class="pane-title">Todo App</h3>
+              <p class="pane-text">
+                A dated to-do list. Add a title and a note, then edit, tick off, or delete each
+                entry.
+              </p>
+            </div>
+          </li>
+          <li class="pane">
+            <figure class="pane-figure">
+              <img
+                src="Src/Imgs/Drawing-App.jpeg"
+                alt="Screenshot of Draw Now: a floral landing page with an Open app button"
+                width="1467"
+                height="735"
+                loading="lazy"
+              />
+            </figure>
+            <div class="pane-body">
+              <h3 class="pane-title">Drawing App</h3>
+              <p class="pane-text">
+                Draw Now, a browser drawing demo. A bright floral landing page opens straight
+                into the canvas.
+              </p>
+            </div>
+          </li>
+          <li class="pane">
+            <figure class="pane-figure">
+              <img
+                src="Src/Imgs/MaptyApp.jpeg"
+                alt="Screenshot of Mapty: a list of workouts beside a map with pinned routes"
+                width="1755"
+                height="815"
+                loading="lazy"
+              />
+            </figure>
+            <div class="pane-body">
+              <h3 class="pane-title">Mapty App</h3>
+              <p class="pane-text">
+                Logs running and cycling workouts on a live map, with distance, time, and pace
+                for every session.
+              </p>
+            </div>
+          </li>
+          <li class="pane">
+            <figure class="pane-figure">
+              <img
+                src="Src/Imgs/2rism.jpeg"
+                alt="Screenshot of 2rism: a travel site with a globe and a trip search bar"
+                width="1755"
+                height="882"
+                loading="lazy"
+              />
+            </figure>
+            <div class="pane-body">
+              <h3 class="pane-title">2rism</h3>
+              <p class="pane-text">
+                A travel discovery site with a 3D globe and a search bar for places, activities,
+                dates, and guests.
+              </p>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Built with Three.js. <a href="https://github.com/riadkhan60">More on GitHub</a></p>
+    </footer>
   </body>
 </html>
