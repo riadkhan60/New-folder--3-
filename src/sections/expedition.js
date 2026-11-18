@@ -337,14 +337,15 @@ export function init(ctx) {
       signal.classList.toggle('is-shallow', isShallow)
     }
     if (inDive && readout) {
-      const left = x > W - 190
+      // keep the readout on the open side of the line (inside the swing on phones)
+      const left = x > W - 190 || (W < 560 && x > 150)
       if (left !== readLeft) {
         readLeft = left
         readout.classList.toggle('is-left', left)
       }
       readout.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
       const mins = Math.round(clamp((y - pTop) / h) * DIVE_HOURS * 60)
-      readD.textContent = `${fmt(Math.round(depthM / 10) * 10)} m`
+      readD.textContent = `${fmt(depthM > MAX - 12 ? MAX : Math.round(depthM / 10) * 10)} m`
       readT.textContent = `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} min`
     }
   }

@@ -17,7 +17,7 @@
   --exp-numw: 8.5rem;          /* column for the day numerals             */
   --exp-dim: rgb(234 246 244 / 0.24);
   position: relative;
-  padding-block: var(--s-10) var(--s-9);
+  padding-block: var(--s-10) var(--s-7);
 }
 
 .exp {
@@ -108,7 +108,7 @@
 .exp__log {
   position: relative;
   margin-top: var(--s-8);
-  padding-bottom: var(--s-9);
+  padding-bottom: var(--s-8);
 }
 
 .exp__cable {
@@ -195,6 +195,7 @@
   to { transform: scale(3.2); opacity: 0; }
 }
 .exp__log.is-live .exp__signal { opacity: 1; }
+.exp__log:not(.is-live) .exp__signal::after { animation-play-state: paused; }
 /* in the shallow part of the dive (on Day 6) the lamps are still white-blue */
 .exp__signal.is-shallow {
   --exp-accent: var(--c-photophore);
@@ -466,7 +467,7 @@
 }
 .exp__phase--floor {
   right: calc(100% - var(--pl-deep) + 1.5rem);
-  top: calc(33.333% + 1.25rem);
+  top: calc(66.667% - 7.5rem);
   text-align: right;
 }
 .exp__phase--up {
@@ -573,7 +574,7 @@
   .exp__plunge {
     --pl-deep: 92%;
     height: clamp(40rem, 125vh, 56rem);
-    margin-top: var(--s-6);
+    margin-top: 4.5rem;
   }
   .exp__deep {
     left: calc(var(--pl-track) + 1.1rem);
