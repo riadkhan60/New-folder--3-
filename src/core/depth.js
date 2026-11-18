@@ -23,6 +23,11 @@
  *   MAX                → 10935
  *   ZONES              → zone table
  *   refresh()          → re-measure sections (call after layout changes)
+ *   scrollYForDepth(m) → the window.scrollY at which the HUD reads m metres
+ *
+ * A section may contain one element marked `data-depth-until`: the section
+ * then reaches its end depth when the probe reaches that element's centre
+ * (and holds it below), instead of at the bottom of the section.
  */
 
 export const MAX_DEPTH = 10935
@@ -146,7 +151,7 @@ export function createDepth({ gsap }) {
       el.style.setProperty('--wdth', c.wdth)
       el.style.setProperty('--wght', c.wght)
       if (!el.dataset.zone) el.dataset.zone = zoneAt(mid).id
-      return { el, start, end }
+      return { el, start, end, until: el.querySelector('[data-depth-until]') }
     })
   }
 
@@ -171,13 +176,37 @@ export function createDepth({ gsap }) {
         continue
       }
       if (r.top <= probe) {
-        const t = clamp((probe - r.top) / Math.max(1, r.height))
+        const t = clamp((probe - r.top) / spanOf(s, r))
         depth = s.start + (s.end - s.start) * t
         id = s.el.id
       }
       break
     }
     return { depth, id }
+  }
+
+  /** Scroll distance over which a section interpolates start → end. */
+  function spanOf(s, r) {
+    if (s.until) {
+      const u = s.until.getBoundingClientRect()
+      return Math.max(1, u.top + u.height / 2 - r.top)
+    }
+    return Math.max(1, r.height)
+  }
+
+  function scrollYForDepth(d) {
+    const vh = window.innerHeight
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - vh)
+    if (d <= 0) return 0
+    for (const s of sections) {
+      if (s.end > s.start && d >= s.start && d <= s.end) {
+        const r = measureEl(s.el).getBoundingClientRect()
+        const top = r.top + window.scrollY
+        const y = top + ((d - s.start) / (s.end - s.start)) * spanOf(s, r) - vh * 0.5
+        return clamp(y, 0, maxScroll)
+      }
+    }
+    return maxScroll
   }
 
   let last = -1
@@ -233,6 +262,7 @@ export function createDepth({ gsap }) {
     zoneAt,
     colorAt,
     format,
+    scrollYForDepth,
     refresh() {
       refresh()
       update(true)
