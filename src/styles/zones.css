@@ -239,35 +239,48 @@
   position: absolute;
   inset: 0;
   --scale-x: var(--rail);
+  /* the band the scale covers: the layer's top … its bottom */
+  --band-top: 12%;
+  --band-bottom: 20%;
 }
 
-/* the window: this layer's own water, melting into the water around it */
+/* the window: a pool of this layer's own water, melting into the water
+   around it (eased edges, so it never reads as a box) */
 .zones__window {
   position: absolute;
   inset: 0;
   background: linear-gradient(to bottom, var(--water-top, transparent), var(--water-bottom, transparent));
   -webkit-mask-image:
-    linear-gradient(to right, transparent, #000 10%, #000 90%, transparent),
-    linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
+    linear-gradient(to right, transparent, rgb(0 0 0 / 0.2) 7%, rgb(0 0 0 / 0.55) 15%, rgb(0 0 0 / 0.85) 23%, #000 31%, #000 69%, rgb(0 0 0 / 0.85) 77%, rgb(0 0 0 / 0.55) 85%, rgb(0 0 0 / 0.2) 93%, transparent),
+    linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.2) 6%, rgb(0 0 0 / 0.55) 13%, rgb(0 0 0 / 0.85) 20%, #000 27%, #000 64%, rgb(0 0 0 / 0.85) 73%, rgb(0 0 0 / 0.55) 82%, rgb(0 0 0 / 0.2) 91%, transparent);
   -webkit-mask-composite: source-in;
   mask-image:
-    linear-gradient(to right, transparent, #000 10%, #000 90%, transparent),
-    linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
+    linear-gradient(to right, transparent, rgb(0 0 0 / 0.2) 7%, rgb(0 0 0 / 0.55) 15%, rgb(0 0 0 / 0.85) 23%, #000 31%, #000 69%, rgb(0 0 0 / 0.85) 77%, rgb(0 0 0 / 0.55) 85%, rgb(0 0 0 / 0.2) 93%, transparent),
+    linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.2) 6%, rgb(0 0 0 / 0.55) 13%, rgb(0 0 0 / 0.85) 20%, #000 27%, #000 64%, rgb(0 0 0 / 0.85) 73%, rgb(0 0 0 / 0.55) 82%, rgb(0 0 0 / 0.2) 91%, transparent);
   mask-composite: intersect;
 }
+/* the scene: only its outermost edge is softened */
 .zones__canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
+    linear-gradient(to bottom, transparent, #000 8%, #000 88%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
+    linear-gradient(to bottom, transparent, #000 8%, #000 88%, transparent);
+  mask-composite: intersect;
 }
 
-/* the layer's own scale: its top at 12%, its bottom at 80% of the window */
+/* the layer's own scale */
 .zones__scale {
   position: absolute;
   z-index: 1;
-  top: 12%;
-  bottom: 20%;
+  top: var(--band-top);
+  bottom: var(--band-bottom);
   left: var(--scale-x);
   width: 1px;
   background: linear-gradient(to bottom, var(--c-line-strong), var(--c-line) 50%, var(--c-line-strong));
@@ -325,7 +338,7 @@
   position: absolute;
   z-index: 1;
   left: var(--scale-x);
-  top: calc(80% + 1.5rem);
+  top: calc(100% - var(--band-bottom) + 1.5rem);
   max-width: min(30ch, 80%);
   font-family: var(--font-text);
   font-style: italic;
@@ -348,8 +361,8 @@
 .zones__focus {
   position: absolute;
   z-index: 1;
-  top: 12%;
-  bottom: 20%;
+  top: var(--band-top);
+  bottom: var(--band-bottom);
   left: var(--scale-x);
   right: 16%;
 }
@@ -600,15 +613,10 @@
 }
 #zones.is-horizontal .zones__frame {
   --scale-x: 1.4rem;
+  /* 8vh … 82vh; the band starts at 31vh, clear of the depth range above */
+  --band-top: 31%;
+  --band-bottom: 20%;
   inset: 8vh 3vw 18vh calc(var(--copy-x) + var(--copy-indent) + var(--copy-w) + 3vw);
-}
-#zones.is-horizontal .zones__window {
-  -webkit-mask-image:
-    linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
-    linear-gradient(to bottom, transparent, #000 15%, #000 80%, transparent);
-  mask-image:
-    linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
-    linear-gradient(to bottom, transparent, #000 15%, #000 80%, transparent);
 }
 #zones.is-horizontal .zones__focus {
   left: 12%;

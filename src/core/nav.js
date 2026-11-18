@@ -81,8 +81,13 @@ export function init(ctx) {
       // while the water scrolls
       land()
     }
+    // A pinned section sits inside a .pin-spacer; once scrolled past, the
+    // section itself is parked at the end of its pin. Aim for the spacer, so
+    // "The layers" from below lands at the start of the pass, not its end.
+    const p = target.parentElement
+    const dest = p && p.classList.contains('pin-spacer') ? p : target
     if (id === '#surface') ctx.scrollTo(0, { onComplete: land })
-    else ctx.scrollTo(target, { onComplete: land })
+    else ctx.scrollTo(dest, { onComplete: land })
     if (!ctx.lenis) land()
   })
 
