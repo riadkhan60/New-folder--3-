@@ -1,3 +1,124 @@
-<section id="reserve" class="finale" data-depth-start="10600" data-depth-end="10935" aria-label="Reserve a dive">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[finale — 10600 m → 10935 m]</div>
+<section id="reserve" class="finale" data-depth-start="10600" data-depth-end="10935" aria-labelledby="reserve-title">
+  <!-- ============================================ the floor: touchdown -->
+  <div class="fin__stage" data-fin-stage>
+    <div class="fin__scene" data-fin-scene aria-hidden="true">
+      <!-- static light: the lamps' haze, the trench walls, the lit sediment -->
+      <canvas class="fin__floor" data-fin-floor></canvas>
+      <!-- live: silt, marine snow, sonar rings and what they reveal -->
+      <canvas class="fin__fx" data-fin-fx></canvas>
+    </div>
+
+    <div class="fin__stage-inner wrap">
+      <div class="fin__lockup" data-fin-lockup>
+        <h2 id="reserve-title" class="fin__figure" data-fin-figure>
+          <span class="fin__digits" data-fin-digits aria-hidden="true">10,935</span><span class="fin__unit" aria-hidden="true">m</span>
+          <span class="visually-hidden">10,935 metres: the floor of the Challenger Deep</span>
+        </h2>
+
+        <div class="fin__under">
+          <p class="fin__lead" data-fin-reveal>
+            You are on the floor of the Challenger Deep, the deepest point on Earth. Outside the
+            viewport the water presses on Vesper at about 1,100 bar, a little over a tonne on every
+            square centimetre. It is 2.5&nbsp;°C, and the only light is the light we brought.
+          </p>
+          <button class="fin__ping" type="button" data-fin-ping data-fin-reveal>
+            <span class="fin__ping-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="fin__ping-label">Send a sonar ping</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ the reservation -->
+  <div class="fin__book wrap" id="reserve-form" data-fin-book>
+    <div class="fin__book-copy">
+      <h3 class="fin__book-title" id="fin-book-title">Reserve a dive</h3>
+      <p class="fin__book-lead">
+        Six guests a season come this far. Tell us who is coming and when you would like to go,
+        and a dive planner will take it from there.
+      </p>
+      <p class="fin__book-note">
+        Nothing is charged now. Dives leave Apra Harbor, Guam, between November and April. Every
+        guest completes a short medical questionnaire before a seat is confirmed.
+      </p>
+    </div>
+
+    <div class="fin__panel" data-fin-panel>
+      <form class="fin__form" data-fin-form novalidate aria-labelledby="fin-book-title">
+        <div class="fin__row fin__row--pair">
+          <div class="fin__field" data-fin-field="name">
+            <label class="fin__label" for="fin-name">Your name</label>
+            <input class="fin__input" id="fin-name" name="name" type="text" autocomplete="name" required aria-describedby="fin-name-err" />
+            <span class="fin__line" aria-hidden="true"></span>
+            <p class="fin__error" id="fin-name-err" data-fin-error></p>
+          </div>
+
+          <div class="fin__field" data-fin-field="email">
+            <label class="fin__label" for="fin-email">Email</label>
+            <input class="fin__input" id="fin-email" name="email" type="email" autocomplete="email" inputmode="email" spellcheck="false" autocapitalize="off" required aria-describedby="fin-email-err" />
+            <span class="fin__line" aria-hidden="true"></span>
+            <p class="fin__error" id="fin-email-err" data-fin-error></p>
+          </div>
+        </div>
+
+        <div class="fin__field fin__field--select" data-fin-field="profile">
+          <label class="fin__label" for="fin-profile">Dive profile</label>
+          <div class="fin__select-wrap">
+            <select class="fin__select" id="fin-profile" name="profile" required aria-describedby="fin-profile-info fin-profile-err">
+              <button class="fin__select-btn"><selectedcontent></selectedcontent></button>
+              <option value="" selected disabled hidden>Choose a profile</option>
+              <option value="twilight"><span class="fin__opt-name">Twilight</span><span class="fin__opt-sep"> to </span><span class="fin__opt-depth">1,000 m</span><span class="fin__opt-sep">, </span><span class="fin__opt-price">$48,000</span></option>
+              <option value="abyss"><span class="fin__opt-name">Abyss</span><span class="fin__opt-sep"> to </span><span class="fin__opt-depth">5,500 m</span><span class="fin__opt-sep">, </span><span class="fin__opt-price">$195,000</span></option>
+              <option value="hadal"><span class="fin__opt-name">Hadal</span><span class="fin__opt-sep"> to </span><span class="fin__opt-depth">10,935 m</span><span class="fin__opt-sep">, </span><span class="fin__opt-price">$750,000</span></option>
+            </select>
+            <svg class="fin__chev" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+          </div>
+          <span class="fin__line" aria-hidden="true"></span>
+          <p class="fin__info" id="fin-profile-info" data-fin-info aria-live="polite">Prices are per guest, for the whole trip.</p>
+          <p class="fin__error" id="fin-profile-err" data-fin-error></p>
+        </div>
+
+        <fieldset class="fin__field fin__months" data-fin-field="month" aria-describedby="fin-month-hint fin-month-err">
+          <legend class="fin__label">Preferred month</legend>
+          <div class="fin__month-row">
+            <label class="fin__month"><input type="radio" name="month" value="November" required /><span class="fin__month-abbr" aria-hidden="true">Nov</span><span class="visually-hidden">November</span></label>
+            <label class="fin__month"><input type="radio" name="month" value="December" /><span class="fin__month-abbr" aria-hidden="true">Dec</span><span class="visually-hidden">December</span></label>
+            <label class="fin__month"><input type="radio" name="month" value="January" /><span class="fin__month-abbr" aria-hidden="true">Jan</span><span class="visually-hidden">January</span></label>
+            <label class="fin__month"><input type="radio" name="month" value="February" /><span class="fin__month-abbr" aria-hidden="true">Feb</span><span class="visually-hidden">February</span></label>
+            <label class="fin__month"><input type="radio" name="month" value="March" /><span class="fin__month-abbr" aria-hidden="true">Mar</span><span class="visually-hidden">March</span></label>
+            <label class="fin__month"><input type="radio" name="month" value="April" /><span class="fin__month-abbr" aria-hidden="true">Apr</span><span class="visually-hidden">April</span></label>
+          </div>
+          <p class="fin__info" id="fin-month-hint">The season runs from November to April, when the weather over the trench is calmest.</p>
+          <p class="fin__error" id="fin-month-err" data-fin-error></p>
+        </fieldset>
+
+        <div class="fin__field fin__field--note" data-fin-field="note">
+          <label class="fin__label" for="fin-note">A note for your dive planner <span class="fin__optional">(optional)</span></label>
+          <textarea class="fin__input fin__textarea" id="fin-note" name="note" rows="1"></textarea>
+          <span class="fin__line" aria-hidden="true"></span>
+        </div>
+
+        <div class="fin__actions">
+          <button class="btn btn--solid fin__submit" type="submit" data-fin-submit>Reserve a dive</button>
+          <p class="fin__small">No payment is taken until you confirm a date.</p>
+        </div>
+      </form>
+
+      <div class="fin__done" data-fin-done hidden>
+        <div class="fin__done-mark" aria-hidden="true">
+          <svg viewBox="0 0 120 120" focusable="false">
+            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
+            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
+            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
+            <circle class="fin__done-core" cx="60" cy="60" r="4" />
+          </svg>
+        </div>
+        <h3 class="fin__done-title" data-fin-done-title tabindex="-1">Reservation request received</h3>
+        <p class="fin__done-body">A dive planner will reply within two working days.</p>
+        <p class="fin__done-summary" data-fin-summary></p>
+        <button class="fin__again" type="button" data-fin-again>Change the request</button>
+      </div>
+    </div>
+  </div>
 </section>

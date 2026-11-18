@@ -1,0 +1,324 @@
+/* ==========================================================================
+   voices — #voices (10,000 → 10,600 m)
+   Three guests describe the bottom. Desktop: one quote at a time on a pinned
+   stage while the sub's red lamp pans across the words and lights them.
+   Mobile / reduced motion: the three quotes stack, fully lit.
+   ========================================================================== */
+
+.voices {
+  --vo-red: var(--c-redlight);
+  /* the words, by light: unlit → hot under the beam → read */
+  --vo-dim: rgb(234 246 244 / 0.13);
+  --vo-ember: color-mix(in srgb, var(--c-redlight) 55%, transparent);
+  --vo-hot: color-mix(in srgb, var(--c-redlight) 34%, #fff6f2);
+  --vo-warm: color-mix(in srgb, var(--c-ink) 76%, var(--c-redlight));
+  --vo-lit: color-mix(in srgb, var(--c-ink) 94%, var(--c-redlight));
+  position: relative;
+  padding-block: var(--s-9);
+}
+
+.voices__stage {
+  position: relative;
+}
+
+.voices__beam {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.voices__inner {
+  position: relative;
+}
+
+/* ------------------------------------------------------------- heading */
+.voices__title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 52ch;
+  margin-bottom: var(--s-8);
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 430;
+  font-size: clamp(0.95rem, 1.05vw, 1.1rem);
+  line-height: 1.35;
+  letter-spacing: 0.005em;
+  color: var(--c-ink-2);
+}
+
+.voices__lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vo-red);
+  box-shadow:
+    0 0 6px 1px color-mix(in srgb, var(--vo-red) 80%, transparent),
+    0 0 22px 4px color-mix(in srgb, var(--vo-red) 35%, transparent);
+}
+
+/* ---------------------------------------------------------------- list */
+.voices__list {
+  position: relative;
+}
+
+.voices__item {
+  position: relative;
+}
+
+.voices__item + .voices__item {
+  margin-top: var(--s-9);
+}
+
+.voices__figure {
+  position: relative;
+}
+
+.voices__quote {
+  position: relative;
+}
+
+/* a hanging opening mark, lit like everything else here: by the lamp */
+.voices__quote::before {
+  content: '\201C';
+  position: absolute;
+  left: -0.5em;
+  top: -0.08em;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(3.2rem, 6.2vw, 6.6rem);
+  line-height: 1;
+  color: var(--vo-red);
+  opacity: var(--vo-mark, 1);
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--vo-red) 60%, transparent),
+    0 0 48px color-mix(in srgb, var(--vo-red) 30%, transparent);
+  pointer-events: none;
+}
+
+.voices__text {
+  --b: 140%;
+  max-width: 25em;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-weight: 320;
+  font-size: clamp(1.55rem, 2.9vw, 3.1rem);
+  line-height: 1.17;
+  letter-spacing: -0.012em;
+  text-wrap: pretty;
+  hanging-punctuation: first;
+  /* the beam: read text behind it, a hot band under it, dark water ahead */
+  background-image: linear-gradient(
+    100deg,
+    var(--vo-lit) 0%,
+    var(--vo-lit) calc(var(--b) - 26%),
+    var(--vo-warm) calc(var(--b) - 11%),
+    var(--vo-hot) calc(var(--b) - 3%),
+    var(--vo-hot) calc(var(--b) + 1%),
+    var(--vo-ember) calc(var(--b) + 8%),
+    var(--vo-dim) calc(var(--b) + 19%),
+    var(--vo-dim) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.voices__text::selection {
+  background: var(--vo-red);
+  color: #1a0201;
+  -webkit-text-fill-color: #1a0201;
+}
+
+/* ---------------------------------------------------------- attribution */
+.voices__cite {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: var(--s-6);
+  padding-left: 2.6rem;
+  position: relative;
+  max-width: 46ch;
+}
+
+.voices__cite::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 1.75rem;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--vo-red) 20%, transparent), var(--vo-red));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--vo-red) 60%, transparent);
+}
+
+.voices__name {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 520;
+  font-size: 1.02rem;
+  line-height: 1.3;
+  letter-spacing: 0.005em;
+  color: var(--c-ink);
+}
+
+.voices__who {
+  text-wrap: pretty;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  color: var(--c-ink-3);
+}
+
+/* ------------------------------------------------------------ progress */
+.voices__progress {
+  display: none;
+}
+
+/* ============================================================ stacked
+   (mobile, reduced motion, before JS) */
+@media (min-width: 768px) {
+  .voices:not(.is-staged) .voices__list {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--gap);
+  }
+  .voices:not(.is-staged) .voices__item {
+    grid-column: 3 / 12;
+  }
+}
+
+@media (max-width: 767px) {
+  .voices {
+    padding-block: var(--s-9) var(--s-8);
+  }
+  .voices__title {
+    margin-bottom: var(--s-7);
+  }
+  .voices__quote::before {
+    position: relative;
+    display: block;
+    left: -0.04em;
+    top: 0;
+    height: 0.5em;
+    margin-bottom: 0.1em;
+    font-size: 4.2rem;
+  }
+  .voices__text {
+    font-size: clamp(1.45rem, 6.4vw, 1.9rem);
+    line-height: 1.22;
+  }
+  .voices__item + .voices__item {
+    margin-top: var(--s-8);
+    padding-top: var(--s-7);
+  }
+  .voices__item + .voices__item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4.5rem;
+    height: 1px;
+    background: linear-gradient(90deg, var(--vo-red), transparent);
+    opacity: 0.7;
+  }
+  .voices__cite {
+    padding-left: 2.2rem;
+  }
+}
+
+/* ============================================================== staged
+   (≥ 768 px, motion allowed: set by voices.js) */
+.voices.is-staged {
+  padding-block: 0;
+}
+
+.voices.is-staged .voices__stage {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.voices.is-staged .voices__beam {
+  display: block;
+}
+
+.voices.is-staged .voices__inner {
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: var(--gap);
+  padding-top: clamp(92px, 13vh, 132px);
+  padding-bottom: clamp(40px, 9vh, 96px);
+}
+
+.voices.is-staged .voices__title {
+  grid-column: 1 / 9;
+  grid-row: 1;
+  margin: 0;
+  align-self: start;
+}
+
+.voices.is-staged .voices__progress {
+  grid-column: 10 / 13;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.voices__tick {
+  position: relative;
+  display: block;
+  width: 2.75rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--c-line-strong);
+  overflow: hidden;
+}
+
+.voices__tick i {
+  position: absolute;
+  inset: 0;
+  background: var(--vo-red);
+  box-shadow: 0 0 6px var(--vo-red);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.voices.is-staged .voices__list {
+  grid-column: 4 / 12;
+  grid-row: 2;
+  align-self: center;
+  display: grid;
+  margin-top: -2vh;
+}
+
+.voices.is-staged .voices__item {
+  grid-area: 1 / 1;
+  margin: 0;
+  visibility: hidden;
+}
+
+.voices.is-staged .voices__item:first-child {
+  visibility: visible;
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .voices.is-staged .voices__list {
+    grid-column: 3 / 13;
+  }
+}
+
+@media (min-width: 768px) and (max-height: 760px) {
+  .voices.is-staged .voices__text {
+    font-size: clamp(1.45rem, 2.4vw, 2.5rem);
+  }
+}

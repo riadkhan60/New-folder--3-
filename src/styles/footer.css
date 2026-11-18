@@ -1,0 +1,395 @@
+/* ==========================================================================
+   footer — #footer (10,935 m)
+   Small print at the bottom of the world: true black, red-lit hairlines,
+   and one way back up.
+   ========================================================================== */
+
+.footer {
+  --foot-red: var(--c-redlight);
+  position: relative;
+  z-index: var(--z-content);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.foot {
+  position: relative;
+  padding-top: var(--s-6);
+  padding-bottom: clamp(28px, 5vh, 52px);
+}
+
+/* the lamp's last light along the top edge */
+.foot__rule {
+  display: block;
+  height: 1px;
+  margin-bottom: var(--s-8);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 59 47 / 0.4) 22%,
+    color-mix(in srgb, var(--foot-red) 70%, #fff) 50%,
+    rgb(255 59 47 / 0.4) 78%,
+    transparent
+  );
+  box-shadow: 0 0 14px rgb(255 59 47 / 0.45);
+}
+
+.foot__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  column-gap: var(--gap);
+  row-gap: var(--s-7);
+}
+
+/* --------------------------------------------------------------- brand */
+.foot__brand {
+  grid-column: 1 / 6;
+  grid-row: 1 / 3;
+}
+
+.foot__word {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: 112%;
+  font-weight: 520;
+  font-size: clamp(2.6rem, 4.4vw, 4.4rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--c-ink);
+  white-space: nowrap;
+}
+
+.foot__i {
+  position: relative;
+  display: inline-block;
+}
+
+.foot__tittle {
+  position: absolute;
+  left: 50%;
+  top: 0.085em;
+  width: 0.13em;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  translate: -50% -0.01em;
+  background: radial-gradient(circle, #fff 0 26%, var(--foot-red) 72%);
+  box-shadow:
+    0 0 2px #fff,
+    0 0 6px var(--foot-red),
+    0 0 16px var(--foot-red),
+    0 0 34px rgb(255 59 47 / 0.55);
+  animation: foot-lamp 5.5s ease-in-out infinite;
+}
+
+@keyframes foot-lamp {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+
+.foot__line {
+  max-width: 30ch;
+  margin-top: var(--s-5);
+  font-family: var(--font-text);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--c-ink-2);
+}
+
+/* ----------------------------------------------------------------- nav */
+.foot__nav {
+  grid-column: 6 / 9;
+  grid-row: 1 / 3;
+}
+
+.foot__list {
+  display: grid;
+}
+
+.foot__link {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: 0.62rem 0;
+  border-bottom: 1px solid var(--c-line);
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  color: var(--c-ink-2);
+  transition: color 0.45s var(--ease-out);
+}
+
+.foot__list li:first-child .foot__link {
+  padding-top: 0;
+}
+
+.foot__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--foot-red);
+  box-shadow: 0 0 8px var(--foot-red);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.7s var(--ease-out);
+}
+
+.foot__link-depth {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 0.8rem;
+  color: var(--c-ink-3);
+  transition: color 0.45s var(--ease-out);
+}
+
+.foot__link:hover,
+.foot__link:focus-visible {
+  color: var(--c-ink);
+}
+
+.foot__link:hover .foot__link-depth,
+.foot__link:focus-visible .foot__link-depth {
+  color: color-mix(in srgb, var(--foot-red) 70%, #fff);
+}
+
+.foot__link:hover::after,
+.foot__link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ------------------------------------------------------------- contact */
+.foot__contact {
+  grid-column: 10 / 13;
+  grid-row: 1;
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+}
+
+.foot__label {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 430;
+  font-size: 0.82rem;
+  color: var(--c-ink-3);
+}
+
+.foot__mail {
+  justify-self: start;
+  font-family: var(--font-text);
+  font-size: clamp(1.05rem, 1.2vw, 1.2rem);
+  line-height: 1.4;
+  color: var(--c-ink);
+  background: linear-gradient(var(--foot-red), var(--foot-red)) 0 100% / 0% 1px no-repeat,
+    linear-gradient(var(--c-line-strong), var(--c-line-strong)) 0 100% / 100% 1px no-repeat;
+  padding-bottom: 2px;
+  transition: background-size 0.7s var(--ease-out);
+  overflow-wrap: anywhere;
+}
+
+.foot__mail:hover,
+.foot__mail:focus-visible {
+  background-size:
+    100% 1px,
+    100% 1px;
+}
+
+.foot__addr {
+  font-family: var(--font-text);
+  font-size: 1rem;
+  color: var(--c-ink-2);
+}
+
+/* -------------------------------------------------------------- ascent */
+.foot__ascent {
+  grid-column: 10 / 13;
+  grid-row: 2;
+  align-self: end;
+}
+
+.foot__return {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.95rem;
+  padding: 0.25rem 0.25rem 0.25rem 0;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 500;
+  font-size: 1rem;
+  line-height: 1.2;
+  color: var(--c-ink);
+  text-align: left;
+}
+
+/* a line up into the dark, and a lamp-lit bead that climbs it */
+.foot__rope {
+  position: relative;
+  flex: none;
+  width: 9px;
+  height: 3.4rem;
+}
+
+.foot__rope::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to top, rgb(255 59 47 / 0.85), rgb(255 59 47 / 0.25) 60%, rgb(234 246 244 / 0.06));
+}
+
+.foot__bead {
+  position: absolute;
+  left: 1px;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 25%, var(--foot-red) 70%);
+  box-shadow:
+    0 0 6px var(--foot-red),
+    0 0 16px rgb(255 59 47 / 0.6);
+  transition:
+    transform 1.2s var(--ease-out),
+    opacity 0.6s var(--ease-out);
+}
+
+.foot__return-label {
+  position: relative;
+  padding-bottom: 0.15rem;
+}
+
+.foot__return-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.15rem;
+  height: 1px;
+  background: rgb(255 59 47 / 0.45);
+  transition:
+    background-color 0.5s var(--ease-out),
+    box-shadow 0.5s var(--ease-out);
+}
+
+.foot__return:hover .foot__bead,
+.foot__return:focus-visible .foot__bead {
+  transform: translateY(-2.4rem);
+}
+
+.foot__return:hover .foot__return-label::after,
+.foot__return:focus-visible .foot__return-label::after {
+  background: var(--foot-red);
+  box-shadow: 0 0 10px var(--foot-red);
+}
+
+.foot__return.is-rising .foot__bead {
+  transform: translateY(-3.4rem);
+  opacity: 0;
+  transition:
+    transform 1.6s var(--ease-in-out),
+    opacity 1.6s var(--ease-in-out);
+}
+
+.foot__return:focus-visible {
+  outline-color: var(--foot-red);
+}
+
+.foot__return-note {
+  max-width: 30ch;
+  margin-top: var(--s-3);
+  padding-left: calc(9px + 0.95rem);
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--c-ink-3);
+}
+
+/* ---------------------------------------------------------------- base */
+.foot__base {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3) var(--s-6);
+  margin-top: var(--s-8);
+  padding-top: var(--s-5);
+  border-top: 1px solid rgb(255 59 47 / 0.2);
+  font-family: var(--font-text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--c-ink-3);
+}
+
+.foot__disclaimer {
+  max-width: 62ch;
+}
+
+.foot__copy {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 420;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.footer :focus-visible {
+  outline-color: var(--foot-red);
+}
+
+/* ------------------------------------------------------------- layouts */
+@media (min-width: 768px) and (max-width: 1100px) {
+  .foot__brand {
+    grid-column: 1 / 7;
+    grid-row: 1;
+  }
+  .foot__nav {
+    grid-column: 1 / 7;
+    grid-row: 2;
+  }
+  .foot__contact {
+    grid-column: 8 / 13;
+    grid-row: 1;
+  }
+  .foot__ascent {
+    grid-column: 8 / 13;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 767px) {
+  .foot {
+    padding-top: var(--s-5);
+  }
+  .foot__rule {
+    margin-bottom: var(--s-7);
+  }
+  .foot__grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-7);
+  }
+  .foot__return {
+    padding-block: 0.5rem;
+  }
+  .foot__link {
+    padding: 0.85rem 0;
+    font-size: 1rem;
+  }
+  .foot__base {
+    flex-direction: column;
+    margin-top: var(--s-7);
+  }
+}
