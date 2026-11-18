@@ -602,23 +602,23 @@ class Squid extends Animal {
     g.fill()
     // eyes: proportionally the largest of any animal
     for (const sx of [-1, 1]) {
-      const ex = sx * 15.5
-      const ey = 0
-      g.fillStyle = 'rgb(18,6,10)'
+      const ex = sx * 16.5
+      const ey = 1
+      g.fillStyle = 'rgb(16,5,9)'
       g.beginPath()
-      g.arc(ex, ey, 10.5, 0, TAU)
+      g.ellipse(ex, ey, 9.6, 9, 0, 0, TAU)
       g.fill()
-      const ig = g.createRadialGradient(ex + hx * 0.08, ey + hy * 0.08, 0.5, ex, ey, 8.5)
-      ig.addColorStop(0, 'rgb(128,196,236)')
-      ig.addColorStop(0.5, 'rgb(34,92,160)')
-      ig.addColorStop(1, 'rgb(8,20,40)')
+      const ig = g.createRadialGradient(ex + hx * 0.08, ey + hy * 0.08, 0.5, ex, ey, 7.4)
+      ig.addColorStop(0, 'rgb(104,170,214)')
+      ig.addColorStop(0.45, 'rgb(30,78,138)')
+      ig.addColorStop(1, 'rgb(8,16,32)')
       g.fillStyle = ig
       g.beginPath()
-      g.arc(ex, ey, 8.5, 0, TAU)
+      g.arc(ex, ey, 7.4, 0, TAU)
       g.fill()
-      g.fillStyle = 'rgb(4,8,14)'
+      g.fillStyle = 'rgb(3,6,12)'
       g.beginPath()
-      g.ellipse(ex, ey, 3.4, 5.8, 0, 0, TAU)
+      g.ellipse(ex, ey, 4.6, 3.2, 0, 0, TAU)
       g.fill()
       g.fillStyle = 'rgba(255,250,240,0.8)'
       g.beginPath()
@@ -1512,7 +1512,7 @@ const LAYOUTS = {
           [0.875, 0.7],
         ],
       },
-      angler: { x: 0.26, y: 0.6, size: 1.15, z: 0.96, side: 1 },
+      angler: { x: 0.27, y: 0.52, size: 1.15, z: 0.96, side: 1 },
       squid: { x: 0.47, y: 0.47, size: 1.18, z: 1.0, side: 1 },
       dragon: { x: 0.69, y: 0.77, size: 1.08, z: 0.9, side: -1 },
       comb: { x: 0.43, y: 0.86, size: 0.9, z: 0.8, side: 1 },
@@ -1555,15 +1555,13 @@ export function init(ctx) {
   const g = canvas?.getContext('2d')
   if (!stage || !g) return
 
-  const { gsap, ScrollTrigger } = ctx
+  const { gsap } = ctx
   const reduced = ctx.reducedMotion
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches && !ctx.isTouch
-  section.classList.add('is-live')
-  if (reduced) section.classList.add('is-static')
+  section.classList.add('is-live', reduced ? 'is-static' : 'is-float')
 
-  if (!fine) {
-    section.querySelectorAll('[data-hint]').forEach((el) => (el.textContent = 'Tap the dark to see who made it.'))
-  }
+  const hint = reduced ? 'Here are six of the animals that make it.' : fine ? null : 'Tap the dark to see who made it.'
+  if (hint) section.querySelectorAll('[data-hint]').forEach((el) => (el.textContent = hint))
 
   const sp = {
     cyan: makeSprite(C.cyan),
@@ -1612,6 +1610,8 @@ export function init(ctx) {
   let bottomInset = 24
   let leftInset = 20
   let obstacles = []
+  let logRect = null
+  let introRect = null
 
   const lamp = { x: 0, y: 0, r: 220, on: 0, onT: -1, want: false, mode: 'idle' }
   const pointer = { cx: 0, cy: 0, t: -1e9, inside: false }
@@ -1651,15 +1651,15 @@ export function init(ctx) {
   /* ----------------------------------------------------------- layout */
   function measure() {
     const r = stage.getBoundingClientRect()
-    W = Math.max(1, Math.round(stage.clientWidth))
-    H = Math.max(1, Math.round(stage.clientHeight))
+    // the canvas is the scene: the whole stage, or a still frame (static)
+    W = Math.max(1, Math.round(canvas.clientWidth))
+    H = Math.max(1, Math.round(canvas.clientHeight))
     mobile = W < 768
     L = mobile ? LAYOUTS.mobile : LAYOUTS.desktop
     dpr = Math.min(ctx.dpr || 1, mobile ? 1.5 : 1.5)
     canvas.width = Math.round(W * dpr)
     canvas.height = Math.round(H * dpr)
     unit = L.unit(W, H)
-    const vh = reduced && mobile ? window.innerHeight : H
     for (const a of animals) {
       const cfg = { ...L.animals[a.id] }
       if (reduced && mobile) {
@@ -1671,9 +1671,9 @@ export function init(ctx) {
     }
     lamp.r = mobile ? clamp(W * 0.42, 130, 220) : clamp(Math.min(W, H) * 0.27, 170, 300)
     if (reduced) lamp.r *= 1.3
-    if (!lamp.x) {
+    if (!lamp.x || reduced) {
       lamp.x = W * 0.5
-      lamp.y = (reduced && mobile ? vh : H) * 0.5
+      lamp.y = H * 0.5
     }
     // insets keep labels clear of the nav, the depth ruler and the HUD
     const cs = getComputedStyle(document.documentElement)
@@ -1686,6 +1686,10 @@ export function init(ctx) {
     for (const lab of labels.values()) {
       lab.w = lab.el.offsetWidth
       lab.h = lab.el.offsetHeight
+      const nm = lab.el.querySelector('.creatures__common')
+      lab.nw = nm ? nm.offsetWidth : lab.w
+      lab.nh = nm ? nm.offsetHeight : 22
+      lab.x = lab.y = -1e4
     }
     for (const el of litEls) {
       const b = el.getBoundingClientRect()
@@ -1702,10 +1706,12 @@ export function init(ctx) {
       const y0 = Math.min(tb.top, lb.top) - r.top - introY
       const x1 = Math.max(tb.left + Math.min(tb.width, 520), lb.right) - r.left
       const y1 = Math.max(tb.bottom, lb.bottom) - r.top - introY
-      obstacles.push({ x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2, intro: true })
+      introRect = { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2, intro: true }
+      obstacles.push(introRect)
     }
     const lg = section.querySelector('.creatures__log')?.getBoundingClientRect()
-    if (lg) obstacles.push({ x: lg.left - r.left - pad, y: lg.top - r.top - pad, w: lg.width + pad * 2, h: lg.height + pad * 2 })
+    logRect = lg ? { x: lg.left - r.left - pad, y: lg.top - r.top - pad, w: lg.width + pad * 2, h: lg.height + pad * 2 } : null
+    if (logRect) obstacles.push(logRect)
     const hud = document.querySelector('.hud__readout')?.getBoundingClientRect()
     if (hud && hud.width) obstacles.push({ x: hud.left - pad, y: hud.top - pad, w: hud.width + pad * 2, h: hud.height + pad * 2 })
     seedSnow()
@@ -1916,14 +1922,22 @@ export function init(ctx) {
       if (!lab || a.labelA < 0.02 || lab.sx === undefined) continue
       const ax = lab.sx
       const ay = lab.sy
-      const lx = lab.left ? lab.x + lab.w + 8 : lab.x - 8
-      const ly = lab.y + 11
+      const cw = lab.cw || lab.w
+      let lx = lab.x - 8
+      let ly = lab.y + 11
+      let kx = lx - 14
+      if (lab.mode === 'l') {
+        lx = lab.x + cw + 8
+        kx = lx + 14
+      } else if (lab.mode === 'db' || lab.mode === 'dt') {
+        lx = kx = clamp(ax, lab.x + 10, lab.x + Math.min(cw, 240) - 10)
+        ly = lab.mode === 'db' ? lab.y - 10 : lab.y + lab.h + 8
+      }
       g.globalAlpha = a.labelA * 0.42
       g.strokeStyle = 'rgba(234,246,244,0.9)'
       g.lineWidth = 1
       g.beginPath()
       g.moveTo(ax, ay)
-      const kx = lab.left ? lx + 14 : lx - 14
       g.lineTo(kx, ly)
       g.lineTo(lx, ly)
       g.stroke()
@@ -1974,9 +1988,10 @@ export function init(ctx) {
   }
 
   function pickIdle() {
+    const yMax = logRect && mobile ? logRect.y - 10 : H * 0.86
     const cand = animals.filter((a) => {
       const [x, y] = a.center()
-      return x > W * 0.06 && x < W - rightInset && y > H * 0.14 && y < H * 0.86 && a !== idle.last
+      return x > W * 0.06 && x < W - rightInset && y > H * 0.14 && y < yMax && a !== idle.last
     })
     const unfound = cand.filter((a) => !a.found)
     const pool = unfound.length ? unfound : cand
@@ -2015,7 +2030,7 @@ export function init(ctx) {
       ;[tx, ty] = focusA.center()
       k = 0.07
       lamp.mode = 'focus'
-    } else if (fine && pointer.inside && now - pointer.t < 5000) {
+    } else if (fine && pointer.inside && now - pointer.t < 9000) {
       tx = pointer.cx - rect.left
       ty = pointer.cy - rect.top
       k = 0.13
@@ -2052,7 +2067,7 @@ export function init(ctx) {
       // a slow, hand-held search
       tx += Math.sin(t * 1.3) * 6
       ty += Math.sin(t * 0.9 + 1) * 5
-      k = 0.024
+      k = 0.03
     }
     const e = ease(k, dt)
     lamp.x += (tx - lamp.x) * e
@@ -2062,13 +2077,15 @@ export function init(ctx) {
   /* ----------------------------------------------------- discoveries */
   const NOTES = {
     start: 'Vesper passes all six on the way down, between 200 and 4,000 m.',
-    one: 'One more. Look for colour, not light.',
+    one: 'One more. Look for color, not light.',
     all: 'All six found. In one survey off California, about three quarters of the animals seen in open water could make light.',
+    still:
+      'Vesper passes all six on the way down, between 200 and 4,000\u00a0m. In one survey off California, about three quarters of the animals seen in open water could make light.',
   }
   function setFound(a, quiet = false) {
     if (a.found) return
     a.found = true
-    a.reticle = 0
+    a.reticle = quiet ? -1 : 0
     foundCount++
     const lab = labels.get(a)
     if (lab) lab.el.classList.add('is-found')
@@ -2116,6 +2133,7 @@ export function init(ctx) {
       const oy = o.intro ? o.y + introY : o.y
       c += overlap(x, y, w, h, { x: o.x, y: oy, w: o.w, h: o.h }) * 2
     }
+    for (const o of placed) c += overlap(x, y, w, h, o) * 1.5
     for (const b of animals) {
       if (b === self || b.id === 'siphonophore') continue
       const [bx, by] = b.center()
@@ -2127,11 +2145,25 @@ export function init(ctx) {
   }
   function placeLabel(a, lab) {
     const [cx, cy] = a.center()
+    if (mobile && !reduced) {
+      // phones: the open label is a caption docked above or below the animal
+      const w = lab.w
+      const h = lab.h
+      const top = Math.max(topInset, introRect ? introRect.y + introRect.h + introY : 0)
+      const bottom = (logRect ? logRect.y : H - bottomInset) - 6
+      const below = cy < (top + bottom) / 2
+      lab.mode = below ? 'db' : 'dt'
+      lab.cw = w
+      const ey = a.ext[1] * 0.62
+      ;[lab.sx, lab.sy] = a.id === 'siphonophore' ? a.center() : a.toScreen(0, below ? ey : -ey)
+      return [leftInset, below ? clamp(cy + a.ext[1] * a.s + 22, top, bottom - h) : clamp(cy - a.ext[1] * a.s - 22 - h, top, bottom - h)]
+    }
     const ex = a.ext[0] * a.s
     const ey = a.ext[1] * a.s
     const gap = mobile ? 14 : 24
-    const w = lab.w
-    const h = lab.h
+    const w = lab.on ? lab.w : lab.nw
+    const h = lab.on ? lab.h : lab.nh
+    lab.cw = w
     const yS = cy - Math.min(ey * 0.55, h * 0.3)
     const xC = cx + 26
     const cands = [
@@ -2166,23 +2198,33 @@ export function init(ctx) {
             : a.toScreen(0, (best.k === 'b' ? 1 : -1) * a.ext[1] * 0.55)
     lab.sx = sx
     lab.sy = sy
-    lab.left = best.k === 'l'
+    lab.mode = best.k
     return [x, y]
   }
 
+  const placed = []
   function updateLabels(dt, now) {
+    // reduced motion: the six are a list under the still scene
+    if (reduced) {
+      for (const lab of labels.values()) lab.el.classList.add('is-found', 'is-on')
+      return
+    }
     // one full label at a time: the most lit (or focused) found animal
     let best = null
     let bestL = 0.3
     for (const a of animals) {
       if (!a.found && a !== focusA) continue
+      const [, cy] = a.center()
+      if (a !== focusA && (cy < 0 || cy > H)) continue
       const l = a === focusA ? 2 : a.light + (now - a.lastLit < 1800 ? 0.2 : 0)
       if (l > bestL) {
         bestL = l
         best = a
       }
     }
-    for (const a of animals) {
+    placed.length = 0
+    const order = best ? [best, ...animals.filter((a) => a !== best)] : animals
+    for (const a of order) {
       const lab = labels.get(a)
       if (!lab) continue
       const on = reduced || a === best
@@ -2191,11 +2233,16 @@ export function init(ctx) {
         lab.el.classList.toggle('is-on', on)
         if (on && a.id === 'siphonophore') a.anchorIdx = a.litIdx
       }
-      const target = on ? 1 : a.found ? 0.32 : 0
+      const target = on ? 1 : a.found && !mobile ? 0.32 : 0
       a.labelA += (target - a.labelA) * ease(0.08, dt)
       if (a.labelA < 0.01 && !on) continue
-      const [x, y] = placeLabel(a, lab)
-      if (Math.abs(x - lab.x) > 0.3 || Math.abs(y - lab.y) > 0.3) {
+      const [tx, ty] = placeLabel(a, lab)
+      const far = lab.x < -1e3 || Math.abs(tx - lab.x) > W * 0.5
+      const e = far || reduced ? 1 : ease(0.14, dt)
+      const x = lab.x + (tx - lab.x) * e
+      const y = lab.y + (ty - lab.y) * e
+      placed.push({ x: tx - 6, y: ty - 4, w: (lab.cw || lab.w) + 12, h: (lab.on ? lab.h : lab.nh) + 8 })
+      if (Math.abs(x - lab.x) > 0.2 || Math.abs(y - lab.y) > 0.2 || far) {
         lab.x = x
         lab.y = y
         lab.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
@@ -2207,11 +2254,19 @@ export function init(ctx) {
   let lastLx = -1
   let lastLy = -1
   let lastOn = -1
+  let lastIntro = 0
   function updateText() {
-    if (Math.abs(lamp.x - lastLx) < 0.4 && Math.abs(lamp.y - lastLy) < 0.4 && Math.abs(lamp.on - lastOn) < 0.01) return
+    if (
+      Math.abs(lamp.x - lastLx) < 0.4 &&
+      Math.abs(lamp.y - lastLy) < 0.4 &&
+      Math.abs(lamp.on - lastOn) < 0.01 &&
+      Math.abs(introY - lastIntro) < 0.4
+    )
+      return
     lastLx = lamp.x
     lastLy = lamp.y
     lastOn = lamp.on
+    lastIntro = introY
     stage.style.setProperty('--lr', lamp.r.toFixed(0))
     stage.style.setProperty('--lamp', lamp.on.toFixed(3))
     for (const el of litEls) {
@@ -2221,22 +2276,52 @@ export function init(ctx) {
   }
 
   let lastDark = -1
+  let lastEdge = -1
+  let lastEdgeB = -1
+  let progress = 0
+  function setActive(v) {
+    if (v === active) return
+    active = v
+    lamp.want = v || reduced
+    if (v && lamp.onT < 0 && !reduced) {
+      // the lamp comes on where the visitor is pointing, or near the squid
+      const r = stage.getBoundingClientRect()
+      if (fine && pointer.inside) {
+        lamp.x = pointer.cx - r.left
+        lamp.y = pointer.cy - r.top
+      } else {
+        ;[lamp.x, lamp.y] = byId.squid.center()
+        lamp.x -= lamp.r * 0.25
+      }
+    }
+    ctx.emit('lamp', { on: v })
+  }
   function updateScroll() {
     const r = section.getBoundingClientRect()
     const vh = window.innerHeight
+    // read live geometry every frame: robust to other sections changing
+    // the page height after their own triggers were measured
+    progress = clamp(-r.top / Math.max(1, r.height - vh))
+    setActive(r.top < vh * 0.45 && r.bottom > vh * 0.55)
     // darkness: the stage is the water with its lights switched off
     const enter = clamp((vh - r.top) / (vh * 0.85))
     const exit = clamp(r.bottom / (vh * 0.85))
     const dark = smooth(0, 1, enter) * smooth(0, 1, exit)
-    if (Math.abs(dark - lastDark) > 0.004) {
+    const edge = Math.max(0, r.top) * 1.25
+    const edgeB = Math.max(0, vh - r.bottom) * 1.25
+    if (Math.abs(dark - lastDark) > 0.004 || Math.abs(edge - lastEdge) > 1 || Math.abs(edgeB - lastEdgeB) > 1) {
       lastDark = dark
+      lastEdge = edge
+      lastEdgeB = edgeB
       stage.style.setProperty('--dark', dark.toFixed(3))
+      stage.style.setProperty('--edge', `${edge.toFixed(0)}px`)
+      stage.style.setProperty('--edge-b', `${edgeB.toFixed(0)}px`)
     }
     if (reduced) {
       shift = 0
       return
     }
-    const p = st ? st.progress : 0
+    const p = progress
     lastShift = shift
     shift = (0.5 - p) * L.travel * H
     if (mobile) {
@@ -2253,6 +2338,7 @@ export function init(ctx) {
 
   /* ------------------------------------------------------------- loop */
   let lastNow = performance.now()
+  let cost = 0
   function tick() {
     const now = performance.now()
     const dt = Math.min(0.05, (now - lastNow) / 1000)
@@ -2264,6 +2350,7 @@ export function init(ctx) {
     updateLabels(dt, now)
     updateText()
     render(dt)
+    cost += (performance.now() - now - cost) * 0.05
   }
 
   function start() {
@@ -2276,6 +2363,7 @@ export function init(ctx) {
     if (!running) return
     running = false
     gsap.ticker.remove(tick)
+    setActive(false)
   }
   function sync() {
     if (visible && !document.hidden) start()
@@ -2294,40 +2382,14 @@ export function init(ctx) {
       a.update(t, 0)
       a.light = a.sample(lightAt)
       if (!a.found) setFound(a, true)
-      a.labelA = 1
     }
+    if (noteEl) noteEl.textContent = NOTES.still
     updateLabels(1, now)
     updateText()
     render(0)
   }
 
-  /* -------------------------------------------------------- triggers */
-  let st = null
-  if (!reduced) {
-    st = ScrollTrigger.create({ trigger: section, start: 'top top', end: 'bottom bottom' })
-  }
-  ScrollTrigger.create({
-    trigger: section,
-    start: 'top 45%',
-    end: 'bottom 55%',
-    onToggle(self) {
-      active = self.isActive
-      lamp.want = active || reduced
-      if (active && lamp.onT < 0 && !reduced) {
-        // the lamp comes on where the visitor is pointing, or on the nearest animal
-        const r = stage.getBoundingClientRect()
-        if (fine && pointer.inside) {
-          lamp.x = pointer.cx - r.left
-          lamp.y = pointer.cy - r.top
-        } else {
-          ;[lamp.x, lamp.y] = byId.squid.center()
-          lamp.x -= lamp.r * 0.25
-        }
-      }
-      ctx.emit('lamp', { on: active })
-    },
-  })
-
+  /* ---------------------------------------------------- visibility */
   const io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) visible = e.isIntersecting
@@ -2357,6 +2419,8 @@ export function init(ctx) {
     },
     { passive: true },
   )
+  // scrolling with the wheel over the stage counts as attention, too
+  stage.addEventListener('wheel', () => (pointer.t = performance.now()), { passive: true })
   stage.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'mouse' || e.pointerType === 'pen') pointer.inside = false
   })
@@ -2381,14 +2445,16 @@ export function init(ctx) {
 
   // Keyboard: every animal is a real button. Focus glides the lamp to it.
   function bringIntoView(a) {
-    if (reduced || !st) return
+    if (reduced) return
+    const r = section.getBoundingClientRect()
+    const vh = window.innerHeight
     const [, y] = a.center()
-    const inStage = st.progress > 0 && st.progress < 1
-    if (inStage && y > H * 0.16 && y < H * 0.84) return
-    // progress at which this animal sits at ~half height
-    const base = a.id === 'siphonophore' ? a.baseY : a.baseY
-    const p = clamp(0.5 - (H * 0.5 - base) / (L.travel * H * a.z), 0.02, 0.98)
-    ctx.scrollTo(st.start + p * (st.end - st.start), { duration: 1.4 })
+    const pinned = r.top <= 1 && r.bottom >= vh - 1
+    if (pinned && y > H * 0.16 && y < H * 0.84) return
+    // the progress at which this animal sits at about half height
+    const p = clamp(0.5 - (H * 0.5 - a.baseY) / (L.travel * H * a.z), 0.02, 0.98)
+    const top = r.top + window.scrollY
+    ctx.scrollTo(top + p * Math.max(0, r.height - vh), { duration: 1.4 })
   }
   for (const [a, lab] of labels) {
     lab.btn.addEventListener('focus', () => {
@@ -2431,5 +2497,5 @@ export function init(ctx) {
   })
 
   // handy for QA in the console
-  section.__creatures = { animals: byId, lamp, found: () => foundCount }
+  section.__creatures = { animals: byId, lamp, found: () => foundCount, cost: () => cost }
 }
