@@ -37,6 +37,7 @@ import {
   BoxGeometry,
   ConeGeometry,
   CircleGeometry,
+  PlaneGeometry,
   ExtrudeGeometry,
   Shape,
   Vector2,
@@ -389,7 +390,10 @@ function thrusterGeometry() {
   }
   prof.push(prof[0].clone())
   const duct = new LatheGeometry(prof, 40)
-  const satin = [duct]
+  const satin = [
+    new TorusGeometry((ri + ro) / 2, 0.012, 8, 40).rotateX(Math.PI / 2).translate(0, L / 2 + 0.004, 0),
+    new TorusGeometry((ri + ro) / 2, 0.01, 8, 40).rotateX(Math.PI / 2).translate(0, -L / 2 - 0.006, 0),
+  ]
   for (let k = 0; k < 3; k++) {
     const a = (k / 3) * Math.PI * 2 + 0.3
     const b = new BoxGeometry(0.1, 0.012, 0.014)
@@ -397,15 +401,15 @@ function thrusterGeometry() {
     b.rotateY(a)
     satin.push(b)
   }
-  const dark = [new CylinderGeometry(0.038, 0.046, 0.15, 18), new SphereGeometry(0.038, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.075, 0)]
+  satin.push(new CylinderGeometry(0.038, 0.046, 0.15, 18), new SphereGeometry(0.038, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.075, 0))
   for (let k = 0; k < 5; k++) {
     const b = new BoxGeometry(0.09, 0.008, 0.042)
     b.rotateX(0.55)
     b.translate(0.078, 0.02, 0)
     b.rotateY((k / 5) * Math.PI * 2)
-    dark.push(b)
+    satin.push(b)
   }
-  return { satin: merge(satin), dark: merge(dark) }
+  return { satin: merge(satin), dark: merge([duct]) }
 }
 
 /* ==========================================================================
@@ -422,7 +426,7 @@ float vsNoise(vec3 x) {
 float vsSeam(float d) { float w = fwidth(d); return 1.0 - smoothstep(0.0035, 0.0035 + w * 1.6, abs(d)); }
 `
 
-function patch(mat, U, variant, { seams = false } = {}) {
+function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
   mat.customProgramCacheKey = () => 'vesper-' + variant
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uBuild = U.uBuild
@@ -445,6 +449,9 @@ function patch(mat, U, variant, { seams = false } = {}) {
         '#include <common>',
         `#include <common>
         ${seams ? '#define VESPER_SEAMS' : ''}
+        ${ao === 'hull' ? '#define VESPER_AO_HULL' : ''}
+        ${ao === 'sphere' ? '#define VESPER_AO_SPHERE' : ''}
+        ${lens ? '#define VESPER_LENS' : ''}
         uniform float uBuild; uniform vec3 uCore; uniform vec3 uEdge; varying vec3 vLocal;
         ${GLSL_NOISE}`,
       )
@@ -466,21 +473,44 @@ function patch(mat, U, variant, { seams = false } = {}) {
           vsSm = max(vsSm, vsSeam(vLocal.x - 0.12));
           vsSm = max(vsSm, vsSeam(vLocal.x + 0.55) * step(0.42, vLocal.y));
           vsSm = max(vsSm, vsSeam(vLocal.y - 0.42) * step(vLocal.x, 1.55));
+          vsSm = max(vsSm, vsSeam(vLocal.y + 0.62) * step(vLocal.x, 0.05));
           vsSm = max(vsSm, vsSeam(vLocal.z) * step(1.0, vLocal.y));
-          diffuseColor.rgb *= 1.0 - 0.6 * vsSm;
+          diffuseColor.rgb *= 1.0 - 0.75 * vsSm;
           diffuseColor.rgb *= mix(0.62, 1.08, smoothstep(-1.5, 1.3, vLocal.y));
         #endif`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
+        #ifdef VESPER_LENS
+          totalEmissiveRadiance *= pow(clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+        #endif
         totalEmissiveRadiance += uEdge * vsEdge * 2.6;`,
+      )
+      .replace(
+        '#include <aomap_fragment>',
+        `#include <aomap_fragment>
+        float vsAO = 1.0;
+        #ifdef VESPER_AO_HULL
+          vsAO *= mix(0.22, 1.0, smoothstep(0.86, 1.32, length(vLocal.xy - uCore.xy)));
+          vsAO *= mix(0.5, 1.0, smoothstep(-1.45, -0.1, vLocal.y));
+        #endif
+        #ifdef VESPER_AO_SPHERE
+          vec3 vsDir = normalize(vLocal - uCore);
+          float vsIn = smoothstep(0.3, -0.35, dot(vsDir.xy, vec2(0.8, -0.6))) * smoothstep(0.95, 0.62, abs(vsDir.z));
+          vsAO *= 1.0 - 0.82 * vsIn;
+          vsAO *= mix(0.55, 1.0, smoothstep(-0.95, 0.2, vsDir.y));
+        #endif
+        reflectedLight.indirectDiffuse *= vsAO;
+        reflectedLight.indirectSpecular *= vsAO;
+        reflectedLight.directDiffuse *= vsAO;
+        reflectedLight.directSpecular *= mix(1.0, vsAO, 0.75);`,
       )
     if (seams) {
       frag = frag.replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor + vsSm * 0.35 + (vsNoise(vLocal * 22.0) - 0.5) * 0.07, 0.0, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor + vsSm * 0.5 + (vsNoise(vLocal * 22.0) - 0.5) * 0.08, 0.0, 1.0);`,
       )
     }
     sh.fragmentShader = frag
@@ -500,7 +530,8 @@ const PLANES = (() => {
   return P
 })()
 
-function sliceInto(out, geo) {
+function sliceInto(out, src) {
+  const geo = src.index ? src.toNonIndexed() : src
   const pos = geo.attributes.position.array
   geo.computeBoundingBox()
   const bb = geo.boundingBox
@@ -541,7 +572,7 @@ function blueprintGeometry(geos) {
     const mx = (seg[i * 3] + seg[i * 3 + 3]) / 2 - CORE.x
     const my = (seg[i * 3 + 1] + seg[i * 3 + 4]) / 2 - CORE.y
     const mz = (seg[i * 3 + 2] + seg[i * 3 + 5]) / 2 - CORE.z
-    const delay = clamp(Math.hypot(mx, my, mz) / maxD) * 0.84 + rnd() * 0.07
+    const delay = clamp(Math.hypot(mx, my, mz) / maxD) * 0.86 + rnd() * 0.012
     aSeg[i * 2] = delay
     aSeg[i * 2 + 1] = 0
     aSeg[i * 2 + 2] = delay
@@ -566,7 +597,7 @@ function lineMaterial() {
       void main() {
         vT = aSeg.y; vDelay = aSeg.x;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vFade = smoothstep(15.5, 8.0, -mv.z);
+        vFade = smoothstep(23.5, 17.0, -mv.z);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
@@ -587,7 +618,7 @@ function lineMaterial() {
 
 function beamMaterial() {
   return new ShaderMaterial({
-    uniforms: { uI: { value: 0 }, uColor: { value: new Color('#d8f4ff') } },
+    uniforms: { uI: { value: 0 }, uTime: { value: 0 }, uColor: { value: new Color('#d8f4ff') } },
     vertexShader: /* glsl */ `
       varying float vAlong; varying vec3 vN; varying vec3 vV;
       void main() {
@@ -598,11 +629,12 @@ function beamMaterial() {
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uI; uniform vec3 uColor;
+      uniform float uI; uniform float uTime; uniform vec3 uColor;
       varying float vAlong; varying vec3 vN; varying vec3 vV;
       void main() {
         float f = abs(dot(normalize(vN), normalize(vV)));
-        float a = uI * pow(f, 1.7) * pow(1.0 - vAlong, 2.3) * smoothstep(0.0, 0.05, vAlong) * 0.3;
+        float dust = 0.78 + 0.22 * sin(vAlong * 23.0 - uTime * 0.7) * sin(vAlong * 9.0 + uTime * 0.4 + f * 3.0);
+        float a = uI * pow(f, 2.4) * pow(1.0 - vAlong, 2.0) * smoothstep(0.0, 0.07, vAlong) * dust * 0.2;
         gl_FragColor = vec4(uColor, a);
       }`,
     transparent: true,
@@ -617,8 +649,8 @@ function snowMaterial(dpr) {
   return new ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
-      uMin: { value: new Vector3(1.4, -6.5, -3.6) },
-      uSize: { value: new Vector3(8.5, 8.4, 7.2) },
+      uMin: { value: new Vector3(1.6, -6.4, -3.2) },
+      uSize: { value: new Vector3(8.0, 7.8, 6.4) },
       uBO: { value: zeros() },
       uBD: { value: zeros() },
       uBL: { value: new Array(6).fill(8) },
@@ -649,7 +681,7 @@ function snowMaterial(dpr) {
         vI = I;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uPx * (0.6 + 1.5 * aRand.w) / -mv.z, 1.0, 26.0);
+        gl_PointSize = clamp(uPx * 2.4 * (0.6 + 1.6 * aRand.w) / -mv.z, 1.0, 26.0);
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor; uniform float uBase;
@@ -657,7 +689,7 @@ function snowMaterial(dpr) {
       void main() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.05, d);
-        float k = a * (min(vI, 1.5) * 0.95 + uBase);
+        float k = a * (min(vI, 1.4) * 1.7 + uBase);
         if (k < 0.002) discard;
         gl_FragColor = vec4(uColor, k);
       }`,
@@ -692,7 +724,7 @@ function flareTexture() {
 
 function flareMaterial(dpr) {
   return new ShaderMaterial({
-    uniforms: { uBanks: { value: new Vector3() }, uPx: { value: 36 * dpr }, uMap: { value: flareTexture() } },
+    uniforms: { uBanks: { value: new Vector3() }, uPx: { value: 46 * dpr }, uMap: { value: flareTexture() } },
     vertexShader: /* glsl */ `
       attribute float aBank;
       uniform vec3 uBanks; uniform float uPx;
@@ -702,7 +734,7 @@ function flareMaterial(dpr) {
         vI = I;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = I > 0.01 ? uPx * (0.55 + 0.45 * min(I, 1.3)) * (10.0 / -mv.z) : 0.0;
+        gl_PointSize = I > 0.01 ? uPx * (0.55 + 0.45 * min(I, 1.3)) * (19.0 / -mv.z) : 0.0;
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D uMap;
@@ -715,6 +747,28 @@ function flareMaterial(dpr) {
     depthWrite: false,
     blending: AdditiveBlending,
   })
+}
+
+/* ---- livery: painted on the flat side panels (x -1.95…0.05, y -0.62…0.42) */
+const LIVERY = { x0: -1.95, x1: 0.05, y0: -0.62, y1: 0.42 }
+function drawLivery(c) {
+  const g = c.getContext('2d')
+  const k = c.width / (LIVERY.x1 - LIVERY.x0)
+  const X = (x) => (x - LIVERY.x0) * k
+  const Y = (y) => (LIVERY.y1 - y) * k
+  g.clearRect(0, 0, c.width, c.height)
+  g.fillStyle = 'rgba(226, 236, 236, 0.86)'
+  g.font = '620 condensed 300px Anybody, "Arial Narrow", sans-serif'
+  if ('fontStretch' in g) g.fontStretch = 'condensed'
+  g.textBaseline = 'alphabetic'
+  g.fillText('Vesper', X(-1.04), Y(-0.31))
+  // pinstripe + small print, in the same paint
+  g.fillStyle = 'rgba(226, 236, 236, 0.5)'
+  g.fillRect(X(-1.04), Y(-0.4), X(-0.02) - X(-1.04), 0.009 * k)
+  g.font = '500 54px Anybody, sans-serif'
+  if ('fontStretch' in g) g.fontStretch = 'normal'
+  g.fillStyle = 'rgba(226, 236, 236, 0.55)'
+  g.fillText('Full ocean depth, 11,000 m', X(-1.04), Y(-0.49))
 }
 
 /* ==========================================================================
@@ -733,11 +787,11 @@ function createVesper(canvas, { dpr, mobile }) {
   const pmrem = new PMREMGenerator(renderer)
   const room = new RoomEnvironment()
   scene.environment = pmrem.fromScene(room, 0.04).texture
-  scene.environmentIntensity = 0.42
+  scene.environmentIntensity = 0.55
   room.dispose?.()
   pmrem.dispose()
 
-  const camera = new PerspectiveCamera(26, 1, 0.1, 80)
+  const camera = new PerspectiveCamera(19, 1, 0.1, 90)
   const target = new Vector3(0.06, -0.12, 0)
 
   const U = {
@@ -756,40 +810,44 @@ function createVesper(canvas, { dpr, mobile }) {
   const M = {
     hull: patch(
       new MeshPhysicalMaterial({
-        color: '#171b1f',
-        metalness: 0.18,
-        roughness: 0.44,
-        clearcoat: 0.55,
-        clearcoatRoughness: 0.28,
+        color: '#1d2227',
+        metalness: 0.22,
+        roughness: 0.4,
+        clearcoat: 0.6,
+        clearcoatRoughness: 0.3,
+        envMapIntensity: 1.7,
         polygonOffset: true,
         polygonOffsetFactor: 1,
         polygonOffsetUnits: 1,
       }),
       U,
       'hull',
-      { seams: true },
+      { seams: true, ao: 'hull' },
     ),
     sphere: patch(
-      new MeshPhysicalMaterial({ color: '#cfcac3', metalness: 1, roughness: 0.13, clearcoat: 0.3, clearcoatRoughness: 0.08, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
+      new MeshPhysicalMaterial({ color: '#d2cdc6', metalness: 1, roughness: 0.17, clearcoat: 0.35, clearcoatRoughness: 0.06, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
       U,
       'sphere',
+      { ao: 'sphere' },
     ),
     satin: patch(new MeshPhysicalMaterial({ color: '#8f959c', metalness: 1, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'satin'),
-    dark: patch(new MeshPhysicalMaterial({ color: '#2b3036', metalness: 0.75, roughness: 0.42, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'dark'),
+    dark: patch(new MeshPhysicalMaterial({ color: '#23282e', metalness: 0.6, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'dark'),
     acrylic: patch(
       new MeshPhysicalMaterial({
-        color: '#041a1e',
+        color: '#010608',
         metalness: 0,
-        roughness: 0.03,
+        roughness: 0.015,
+        envMapIntensity: 2.6,
         clearcoat: 1,
         clearcoatRoughness: 0.02,
         ior: 1.49,
         specularIntensity: 1,
-        emissive: new Color('#2fd8c8'),
+        emissive: new Color('#48e6d8'),
         emissiveIntensity: 0.0,
       }),
       U,
       'acrylic',
+      { lens: true },
     ),
   }
   const add = (geo, mat, slice = true) => {
@@ -802,6 +860,53 @@ function createVesper(canvas, { dpr, mobile }) {
 
   /* ---- foam body */
   add(hullGeometry(), M.hull)
+
+  /* ---- livery decals, one per side, sitting exactly on the side planes */
+  const liveryCanvas = document.createElement('canvas')
+  liveryCanvas.width = 2048
+  liveryCanvas.height = Math.round((2048 * (LIVERY.y1 - LIVERY.y0)) / (LIVERY.x1 - LIVERY.x0))
+  drawLivery(liveryCanvas)
+  const liveryTex = new CanvasTexture(liveryCanvas)
+  liveryTex.colorSpace = SRGBColorSpace
+  liveryTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+  document.fonts?.load('620 300px Anybody').then(() => {
+    drawLivery(liveryCanvas)
+    liveryTex.needsUpdate = true
+  })
+  const liveryMat = patch(
+    new MeshPhysicalMaterial({
+      color: '#ffffff',
+      map: liveryTex,
+      transparent: true,
+      metalness: 0.1,
+      roughness: 0.42,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.3,
+      envMapIntensity: 1.4,
+      depthWrite: false,
+      side: DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    }),
+    U,
+    'livery',
+  )
+  for (const side of [1, -1]) {
+    const g = new PlaneGeometry(LIVERY.x1 - LIVERY.x0, LIVERY.y1 - LIVERY.y0, 4, 2)
+    g.translate((LIVERY.x0 + LIVERY.x1) / 2, (LIVERY.y0 + LIVERY.y1) / 2, 0)
+    const pos = g.attributes.position
+    const uv = g.attributes.uv
+    for (let i = 0; i < pos.count; i++) {
+      pos.setZ(i, side * (sideZ(pos.getX(i), pos.getY(i)) + 0.003))
+      if (side < 0) uv.setX(i, 1 - uv.getX(i))
+    }
+    g.computeVertexNormals()
+    const m = new Mesh(g, liveryMat)
+    m.renderOrder = 1
+    root.add(m)
+    surfaces.push(m)
+  }
 
   /* ---- titanium pressure sphere, flange, bolts, viewports */
   const S = new Vector3(SPHERE.x, SPHERE.y, 0)
@@ -893,7 +998,7 @@ function createVesper(canvas, { dpr, mobile }) {
     const m = new Matrix4().compose(p, aim(v3(t.d)), new Vector3(t.s, t.s, t.s))
     tSat.setMatrixAt(i, m)
     tDark.setMatrixAt(i, m)
-    sliceSrc.push(T.satin.clone().applyMatrix4(m))
+    sliceSrc.push(T.dark.clone().applyMatrix4(m))
   })
   root.add(tSat, tDark)
   surfaces.push(tSat, tDark)
@@ -940,7 +1045,7 @@ function createVesper(canvas, { dpr, mobile }) {
   })
 
   /* ---- marine snow caught in the beams */
-  const N = mobile ? 900 : 2000
+  const N = mobile ? 1400 : 3200
   const sp = new Float32Array(N * 3)
   const sr = new Float32Array(N * 4)
   const snowU = snowMaterial(dpr)
@@ -973,9 +1078,9 @@ function createVesper(canvas, { dpr, mobile }) {
   root.add(lines)
 
   /* ---- light rig: key + two photophore rims, kept relative to the camera */
-  const key = new DirectionalLight('#dff3ff', 1.5)
-  const rimA = new DirectionalLight(PHOTOPHORE, 3.4)
-  const rimB = new DirectionalLight(PHOTOPHORE_2, 3.0)
+  const key = new DirectionalLight('#e6f5ff', 2.1)
+  const rimA = new DirectionalLight(PHOTOPHORE, 2.6)
+  const rimB = new DirectionalLight(PHOTOPHORE_2, 2.2)
   scene.add(key, rimA, rimB)
   const spot = new SpotLight('#eaf9ff', 0, 9, 34 * DEG, 0.7, 1.4)
   spot.position.set(2.15, -0.05, 0)
@@ -1036,8 +1141,8 @@ function createVesper(canvas, { dpr, mobile }) {
     up.crossVectors(right, fwd).normalize()
     const place = (light, r, u, f) => light.position.copy(target).addScaledVector(right, r).addScaledVector(up, u).addScaledVector(fwd, -f)
     place(key, -5, 7, 6)
-    place(rimA, -7, 4, -8)
-    place(rimB, 8, -1.5, -7)
+    place(rimA, -6, 5, -12)
+    place(rimB, 8, -2.5, -11)
 
     // acts
     const build = s.build
@@ -1048,7 +1153,7 @@ function createVesper(canvas, { dpr, mobile }) {
     lineMat.uniforms.uDraw.value = s.draw
     lineMat.uniforms.uAlpha.value = s.wire
     lines.visible = s.draw > 0.001 && s.wire > 0.003
-    M.acrylic.emissiveIntensity = 0.05 + s.cabin * 0.5
+    M.acrylic.emissiveIntensity = 0.04 + s.cabin * 0.55
 
     const b = s.banks
     let any = 0
@@ -1071,6 +1176,7 @@ function createVesper(canvas, { dpr, mobile }) {
     BEAMS.forEach((bm, i) => {
       const I = b[bm.bank]
       beams[i].material.uniforms.uI.value = I
+      beams[i].material.uniforms.uTime.value = t
       beams[i].visible = I > 0.005
       snowU.uniforms.uBO.value[i].w = I
     })
@@ -1112,6 +1218,7 @@ function createVesper(canvas, { dpr, mobile }) {
     for (const [o, v] of vis) o.visible = v
   }
 
+  if (location.search.includes('vdebug')) window.__vesper = { scene, camera, root, renderer }
   return { renderer, setSize, update, render, project, warm, sizeInfo: () => ({ W, H, shiftX, shiftY }) }
 }
 
@@ -1120,18 +1227,18 @@ function createVesper(canvas, { dpr, mobile }) {
    ========================================================================== */
 
 const CAM_DESKTOP = [
-  // p, azimuth°, elevation°, distance
-  [0.0, -34, 9, 11.8],
-  [0.29, 4, 6, 11.0],
-  [0.58, 42, -2, 10.4],
-  [0.86, 30, 4, 10.9],
-  [1.0, 24, 6, 11.3],
+  // p, azimuth°, elevation°, distance (m)
+  [0.0, -40, 13, 21.5],
+  [0.29, -6, 7, 20.2],
+  [0.58, 34, 1, 19.4],
+  [0.86, 54, -3, 19.6],
+  [1.0, 47, 1, 20.4],
 ]
 const CAM_MOBILE = [
-  [0.0, -30, 8, 12.4],
-  [0.35, 10, 6, 12.0],
-  [0.65, 40, 0, 11.6],
-  [1.0, 30, 5, 12.0],
+  [0.0, -30, 10, 19.5],
+  [0.35, 2, 6, 18.8],
+  [0.65, 36, 1, 18.4],
+  [1.0, 48, 0, 18.8],
 ]
 const ACTS = [
   [0, 0.29],
@@ -1184,7 +1291,10 @@ export function init(ctx) {
   const reduced = ctx.reducedMotion
   let mobile = ctx.isMobile()
 
-  if (reduced) root.classList.add('vessel--static')
+  if (reduced) {
+    root.classList.add('vessel--static')
+    actEls.forEach((a, i) => a.classList.toggle('is-active', i === actEls.length - 1))
+  }
 
   /* ---- 2D: the plate drawing, always */
   $('.vessel__elevation').innerHTML = elevationSVG('plate')
@@ -1212,11 +1322,11 @@ export function init(ctx) {
   /* ---- callouts: DOM + leader paths */
   const SVGNS = 'http://www.w3.org/2000/svg'
   const CALLOUTS = {
-    sphere: { win: [0.07, 0.44], side: 1, rise: -0.15, run: 0.05 },
-    rated: { win: [0.15, 0.5], side: 1, rise: -0.1, run: 0.06 },
-    foam: { win: [0.37, 0.7], side: -1, rise: 0.17, run: 0.04 },
-    viewports: { win: [0.45, 0.8], side: 1, rise: 0.15, run: 0.05 },
-    lamps: { win: [0.63, 1.01], side: 1, rise: -0.17, run: 0.05 },
+    sphere: { win: [0.07, 0.42], side: 1, rise: 0.27, run: 0.04 },
+    rated: { win: [0.15, 0.4], side: 1, rise: -0.2, run: 0.05 },
+    foam: { win: [0.42, 0.72], side: 1, rise: -0.22, run: 0.04 },
+    viewports: { win: [0.48, 0.82], side: 1, rise: 0.21, run: 0.04 },
+    lamps: { win: [0.64, 1.01], side: 1, rise: -0.2, run: 0.04 },
   }
   const callouts = [...root.querySelectorAll('.vessel__callout')].map((el) => {
     const key = el.dataset.key
@@ -1231,7 +1341,19 @@ export function init(ctx) {
     leaders.append(path, halo, dot)
     return { el, key, cfg: CALLOUTS[key], path, dot, halo, v: 0, on: false, tw: null, w: 0, pt: { x: 0, y: 0, facing: 1 } }
   })
-  const measureCallouts = () => callouts.forEach((c) => (c.w = Math.max(c.el.querySelector('.vessel__callout-title').offsetWidth, c.el.querySelector('.vessel__callout-sub').offsetWidth)))
+  const bounds = { minX: 24, maxX: 1000 }
+  const measureCallouts = () => {
+    callouts.forEach((c) => {
+      c.w = Math.max(c.el.querySelector('.vessel__callout-title').offsetWidth, c.el.querySelector('.vessel__callout-sub').offsetWidth)
+      c.el.style.width = c.w + 'px'
+    })
+    const lead = copy.querySelector('.vessel__lead').getBoundingClientRect()
+    const acts = copy.querySelector('.vessel__acts').getBoundingClientRect()
+    const vr = view.getBoundingClientRect()
+    bounds.minX = Math.max(24, Math.max(lead.right, acts.right) - vr.left + 32)
+    const rail = parseFloat(getComputedStyle(copy).paddingLeft) || 24
+    bounds.maxX = vr.width - rail - (window.innerWidth >= 1024 ? 72 : 0) - 12
+  }
 
   /* ---- state */
   const S = { p: 0, target: 0, yaw: 0, yawT: 0, mx: 0, my: 0, mxT: 0, myT: 0 }
@@ -1296,10 +1418,7 @@ export function init(ctx) {
   function updateCallouts(p) {
     if (!gl || mobile) return
     const { W, H } = gl.sizeInfo()
-    const copyR = copy.querySelector('.vessel__lead').getBoundingClientRect()
-    const viewR = view.getBoundingClientRect()
-    const minX = Math.max(24, copyR.right - viewR.left + 28)
-    const maxX = W - 24 - (window.innerWidth >= 1024 ? 84 : 12)
+    const { minX, maxX } = bounds
     for (const c of callouts) {
       const on = reduced ? c.key !== 'rated' : p >= c.cfg.win[0] && p < c.cfg.win[1]
       if (on !== c.on) {
@@ -1407,7 +1526,7 @@ export function init(ctx) {
       })
     }
     // the plate drawing is traced as it comes up
-    const strokes = root.querySelectorAll('.vessel__elevation .ve-hull, .vessel__elevation .ve-cap, .vessel__elevation .ve-part, .vessel__elevation .ve-sphere, .vessel__elevation .ve-sphere-in, .vessel__elevation .ve-port, .vessel__elevation .ve-dim path')
+    const strokes = root.querySelectorAll('.vessel__elevation .ve-hull, .vessel__elevation .ve-cap, .vessel__elevation .ve-part, .vessel__elevation .ve-sphere, .vessel__elevation .ve-port, .vessel__elevation .ve-dim path')
     gsap.fromTo(
       strokes,
       { drawSVG: '0%' },
@@ -1490,5 +1609,10 @@ export function init(ctx) {
   }
   gsap.ticker.add(frame)
 
+  updateDOM(0)
+  ScrollTrigger.addEventListener('refresh', () => {
+    measureCallouts()
+    dirty = true
+  })
   if (gl) gl.warm().then(() => (dirty = true))
 }
