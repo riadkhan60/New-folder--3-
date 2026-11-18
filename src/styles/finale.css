@@ -10,6 +10,8 @@
   --fin-red-ink: color-mix(in srgb, var(--c-redlight) 62%, #fff);
   --fin-err: color-mix(in srgb, var(--c-redlight) 58%, #ffd9d4);
   position: relative;
+  /* the arriving figure is wider than the landed one: never widen the page */
+  overflow-x: clip;
 }
 
 .finale :focus-visible {
@@ -21,6 +23,7 @@
   position: relative;
   min-height: max(100vh, 680px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   cursor: crosshair;
 }
 
@@ -45,11 +48,14 @@
 
 .fin__floor {
   opacity: var(--fin-floor, 1);
+  /* the floor comes up to meet the lamps as the sub arrives */
+  transform: translate3d(0, var(--fin-rise, 0px), 0);
 }
 
 .fin__stage-inner {
   position: relative;
   z-index: 1;
+  min-width: 0;
   display: grid;
   align-content: start;
   justify-items: center;
@@ -64,8 +70,11 @@
 }
 
 .fin__figure {
+  /* landed: full pressure. The tracking opens as the type compresses, so the
+     digits read as pressed apart, never fused (finale.js animates all three) */
   --fin-wdth: 50%;
-  --fin-wght: 880;
+  --fin-wght: 820;
+  --fin-track: 0.03em;
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -99,7 +108,7 @@
 .fin__digits {
   font-stretch: var(--fin-wdth);
   font-weight: var(--fin-wght);
-  letter-spacing: 0;
+  letter-spacing: var(--fin-track);
   font-variant-numeric: lining-nums;
 }
 
@@ -113,7 +122,7 @@
 }
 
 .fin__unit {
-  margin-left: 0.07em;
+  margin-left: 0.04em;
   font-stretch: 100%;
   font-weight: 420;
   font-size: 0.24em;
@@ -143,6 +152,19 @@
   font-weight: 360;
   color: var(--c-ink-2);
   text-wrap: pretty;
+}
+
+.fin__sonar {
+  flex: none;
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+  min-width: 15.5rem;
+}
+
+/* a keyboard visitor can reach the ping before the reveal has run */
+.fin__under:focus-within [data-fin-reveal] {
+  opacity: 1 !important;
 }
 
 .fin__ping {
@@ -214,6 +236,59 @@
   animation-delay: 1.6s;
 }
 
+/* the ping's log: what came back from the floor */
+.fin__log {
+  width: 100%;
+  padding-left: calc(2.25rem + 0.8rem);
+}
+
+.fin__log[hidden] {
+  display: none;
+}
+
+.fin__log-head {
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--c-ink-3);
+}
+
+.fin__log-list {
+  display: grid;
+  margin-top: 0.35rem;
+  border-top: 1px solid rgb(255 59 47 / 0.28);
+}
+
+.fin__log-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.32rem 0;
+  border-bottom: 1px solid var(--c-line);
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  color: var(--c-ink-2);
+  animation: fin-log-in 0.7s var(--ease-out);
+}
+
+.fin__log-dist {
+  font-variant-numeric: tabular-nums lining-nums;
+  color: color-mix(in srgb, var(--fin-red) 55%, #fff);
+}
+
+@keyframes fin-log-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+    color: #fff;
+  }
+}
+
 @keyframes fin-ping {
   from {
     transform: scale(0.3);
@@ -252,11 +327,11 @@
   margin-bottom: var(--s-5);
   font-family: var(--font-display);
   font-stretch: calc(var(--wdth, 50) * 1%);
-  font-weight: var(--wght, 860);
+  font-weight: min(var(--wght, 860), 780);
   font-size: var(--fs-h2);
   line-height: 0.95;
-  letter-spacing: -0.016em;
-  word-spacing: 0.1em;
+  letter-spacing: 0.016em;
+  word-spacing: 0.06em;
   color: var(--c-ink);
 }
 
@@ -811,27 +886,25 @@
 
 /* ------------------------------------------------------- confirmation */
 .fin__done {
-  position: relative;
-  padding-top: 0.2rem;
+  /* the return rings are drawn over the whole panel */
+  position: static;
+  padding-top: var(--s-4);
 }
 
 .fin__done[hidden] {
   display: none;
 }
 
-.fin__done-mark {
-  width: 6.5rem;
-  height: 6.5rem;
-  margin: -1.4rem 0 var(--s-4) -1.4rem;
-}
-
-.fin__done-mark svg {
+.fin__return {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
+  pointer-events: none;
 }
 
-.fin__done-ring {
+.fin__return-ring {
   fill: none;
   stroke: var(--fin-red);
   stroke-width: 1;
@@ -839,21 +912,25 @@
   opacity: 0;
 }
 
-.fin__done-core {
+.fin__return-core {
   fill: var(--fin-red);
   filter: drop-shadow(0 0 6px rgb(255 59 47 / 0.9));
 }
 
+.fin__done > :not(svg) {
+  position: relative;
+}
+
 .fin__done-title {
-  max-width: 14ch;
+  max-width: 17ch;
   font-family: var(--font-display);
-  font-stretch: calc(var(--wdth, 50) * 1%);
-  font-weight: var(--wght, 860);
-  font-size: clamp(2.2rem, 4.2vw, 4.2rem);
-  line-height: 0.95;
-  letter-spacing: -0.012em;
-  word-spacing: 0.12em;
+  font-stretch: 62%;
+  font-weight: 700;
+  font-size: clamp(2.3rem, 3.7vw, 4rem);
+  line-height: 1;
+  letter-spacing: 0.012em;
   color: var(--c-ink);
+  text-wrap: balance;
 }
 
 .fin__done-title:focus {
@@ -862,6 +939,7 @@
 
 .fin__done-body {
   margin-top: var(--s-5);
+  max-width: 30ch;
   font-family: var(--font-text);
   font-size: var(--fs-lead);
   line-height: 1.42;
@@ -869,7 +947,8 @@
   color: var(--c-ink);
 }
 
-.fin__done-summary {
+.fin__done-summary,
+.fin__done-pending {
   margin-top: var(--s-3);
   max-width: 46ch;
   font-family: var(--font-text);
@@ -879,9 +958,37 @@
   color: var(--c-ink-3);
 }
 
+.fin__done-pending {
+  color: var(--fin-red-ink);
+}
+
+.fin__done-pending[hidden] {
+  display: none;
+}
+
+.fin__done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4) var(--s-6);
+  margin-top: var(--s-7);
+}
+
+.fin__surface {
+  --btn-c: var(--c-redlight);
+  padding: 1.1em 2em;
+  font-size: 0.95rem;
+  font-weight: 560;
+  color: #1c0302;
+}
+
+.finale .fin__surface:hover,
+.finale .fin__surface:focus-visible {
+  color: #1c0302;
+}
+
 .fin__again {
-  margin-top: var(--s-6);
-  padding: 0.4rem 0;
+  padding: 0.6rem 0;
   font-family: var(--font-display);
   font-stretch: 100%;
   font-weight: 460;
@@ -897,6 +1004,23 @@
 .fin__again:focus-visible {
   color: var(--c-ink);
   border-color: var(--fin-red);
+}
+
+.fin__again.is-flagged {
+  color: var(--c-ink);
+  border-color: var(--fin-red);
+  box-shadow: 0 6px 18px -8px rgb(255 59 47 / 0.9);
+}
+
+/* -------------------------------------------------- the dive from the chart */
+.fin__veil {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: radial-gradient(120% 80% at 50% 110%, #0c0101, #000 60%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ============================================================ layouts */
@@ -929,7 +1053,12 @@
     max-width: 100%;
   }
   .fin__figure {
-    font-size: 39vw;
+    /* fits the arriving (wider) figure inside the gutters down to 360 px */
+    font-size: 37vw;
+  }
+  .fin__sonar {
+    min-width: 0;
+    width: 100%;
   }
   .fin__under {
     flex-direction: column;
@@ -962,5 +1091,9 @@
   }
   .fin__submit {
     justify-content: center;
+  }
+  .fin__done-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

@@ -146,7 +146,7 @@
 .exp__log {
   position: relative;
   /* room for the lamp moment before the first day reaches the instrument */
-  margin-top: clamp(5rem, 21vh, 12rem);
+  margin-top: clamp(5rem, 21vh, 16rem);
   padding-bottom: var(--s-7);
 }
 
@@ -588,7 +588,8 @@
 
 /* ------------------------------------------------------------- tablet */
 @media (max-width: 1100px) {
-  #expedition.expedition { --exp-numw: 6.5rem; --exp-rail: 3.5rem; }
+  /* the margin columns keep their width: it keeps the tether clear of the
+     depth chip in the bottom-left corner */
   .exp__head,
   .exp__day {
     grid-template-columns: var(--exp-numw) var(--exp-rail) minmax(0, 1fr);

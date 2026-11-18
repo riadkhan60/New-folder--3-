@@ -119,7 +119,10 @@ export function init(ctx) {
   if (!log || !svg || !days.length || !plunge) return
 
   const reduced = ctx.reducedMotion
-  if (reduced) root.classList.add('is-static')
+  if (reduced) {
+    root.classList.add('is-static')
+    deep?.classList.add('is-red') // the figure's final state: the floor
+  }
 
   // Signal + readout live in the log's coordinate space.
   const signal = document.createElement('span')

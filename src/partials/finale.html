@@ -1,16 +1,17 @@
 <section id="reserve" class="finale" data-depth-start="10600" data-depth-end="10935" aria-labelledby="reserve-title">
   <!-- ============================================ the floor: touchdown -->
-  <div class="fin__stage" data-fin-stage data-depth-until>
+  <div class="fin__stage" data-fin-stage>
     <div class="fin__scene" data-fin-scene aria-hidden="true">
       <!-- static light: the lamps' haze, the trench walls, the lit sediment -->
       <canvas class="fin__floor" data-fin-floor></canvas>
-      <!-- live: silt, marine snow, sonar rings and what they reveal -->
+      <!-- live: silt, marine snow, sonar rings and the life they find -->
       <canvas class="fin__fx" data-fin-fx></canvas>
     </div>
 
     <div class="fin__stage-inner wrap">
       <div class="fin__lockup" data-fin-lockup>
-        <h2 id="reserve-title" class="fin__figure" data-fin-figure>
+        <!-- the HUD reaches 10,935 m when this figure crosses the middle of the screen -->
+        <h2 id="reserve-title" class="fin__figure" data-fin-figure data-depth-until>
           <span class="fin__digits" data-fin-digits aria-hidden="true">10,935</span><span class="fin__unit" aria-hidden="true">m</span>
           <span class="visually-hidden">10,935 metres: the floor of the Challenger Deep</span>
         </h2>
@@ -21,10 +22,17 @@
             viewport the water presses on Vesper at about 1,100 bar, a little over a tonne on every
             square centimetre. It is 2.5&nbsp;°C, and the only light is the light we brought.
           </p>
-          <button class="fin__ping" type="button" data-fin-ping data-fin-reveal>
-            <span class="fin__ping-icon" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="fin__ping-label">Send a sonar ping</span>
-          </button>
+          <div class="fin__sonar" data-fin-reveal>
+            <button class="fin__ping" type="button" data-fin-ping>
+              <span class="fin__ping-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="fin__ping-label">Send a sonar ping</span>
+            </button>
+            <div class="fin__log" data-fin-log hidden>
+              <p class="fin__log-head" aria-hidden="true">Ping <span data-fin-log-n>1</span>, contacts on the floor</p>
+              <ul class="fin__log-list" data-fin-log-list aria-hidden="true"></ul>
+              <p class="visually-hidden" data-fin-log-live aria-live="polite"></p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -106,19 +114,25 @@
       </form>
 
       <div class="fin__done" data-fin-done hidden>
-        <div class="fin__done-mark" aria-hidden="true">
-          <svg viewBox="0 0 120 120" focusable="false">
-            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
-            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
-            <circle class="fin__done-ring" cx="60" cy="60" r="20" />
-            <circle class="fin__done-core" cx="60" cy="60" r="4" />
-          </svg>
-        </div>
+        <!-- the return: sonar rings run out across the panel from the button -->
+        <svg class="fin__return" data-fin-return aria-hidden="true" focusable="false" preserveAspectRatio="none">
+          <circle class="fin__return-ring" r="4" />
+          <circle class="fin__return-ring" r="4" />
+          <circle class="fin__return-ring" r="4" />
+          <circle class="fin__return-core" r="3.5" />
+        </svg>
         <h3 class="fin__done-title" data-fin-done-title tabindex="-1">Reservation request received</h3>
         <p class="fin__done-body">A dive planner will reply within two working days.</p>
         <p class="fin__done-summary" data-fin-summary></p>
-        <button class="fin__again" type="button" data-fin-again>Change the request</button>
+        <p class="fin__done-pending" data-fin-pending hidden></p>
+        <div class="fin__done-actions">
+          <button class="btn btn--solid fin__surface" type="button" data-fin-surface>Return to the surface</button>
+          <button class="fin__again" type="button" data-fin-again>Change the request</button>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- the dive from the depth chart: the page goes dark while the HUD counts down -->
+  <div class="fin__veil" data-fin-veil aria-hidden="true"></div>
 </section>

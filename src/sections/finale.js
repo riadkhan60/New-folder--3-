@@ -1,25 +1,37 @@
 /**
  * finale.js — #reserve (10,600 → 10,935 m). The floor of the Challenger Deep.
  *
- * Signature: touchdown. "10,935 m" comes down out of the dark and settles
- * under full pressure: the digits descend and decelerate into place without
- * overshoot while the type compresses (Anybody wdth 74 → 50, wght 600 → 880).
- * At contact the lamps reach the sediment, a puff of silt lifts into the red
- * light and hangs there, and a sonar ring runs out across the floor, lighting
- * the sediment's texture as it passes.
+ * Signature: touchdown, in two movements.
+ *  1. The approach (scrubbed by scroll, from the moment the stage enters until
+ *     the figure reaches the middle of the screen, where the HUD reads
+ *     10,935): "10,935 m" sinks out of the dark towards its place, the floor
+ *     rises into the lamps, marine snow thickens and the digits begin to feel
+ *     the pressure.
+ *  2. The settle (time-based, at contact): the digits land without overshoot
+ *     and compress to full pressure (Anybody wdth 72 → 50, wght 560 → 820,
+ *     tracking opening from -0.012em to +0.03em so pressure reads as the digits
+ *     being pressed apart rather than fused), a puff of silt lifts into the red
+ *     light and hangs there, and a sonar ring runs out across the sediment.
  *
  * The floor is generated: a perspective sediment plane (relief, grain, a sea
  * cucumber's track, burrows) lit by a pool of red lamp light, the trench walls
  * rising as silhouettes against the lamps' haze. It is painted once per size
- * into a static canvas; silt, marine snow and sonar rings live on a second one
- * that only runs while the stage is on screen and the tab is visible.
+ * into a static canvas; silt, marine snow, sonar rings and the life the sonar
+ * finds live on a second canvas that only runs while the stage is on screen
+ * and the tab is visible. Sonar rings are drawn on the sediment plane (in
+ * perspective, behind the type); as a ring passes, the sediment answers and
+ * three hidden contacts light up: amphipods, a xenophyophore, and the sea
+ * cucumber at the end of its track. A visitor's ping is logged under the
+ * button.
  *
  * Emits:   ctx.emit('sonar', { x, y, strength }) at touchdown, on a click on the
  *          stage, on "Send a sonar ping", and when a reservation is sent.
  *          ctx.emit('select-profile', { id }) when the visitor changes the
  *          profile in the form (profiles.js keeps its chart in sync).
- * Listens: ctx.on('select-profile', { id }) — preselects the profile, scrolls
- *          to the form and lights the field.
+ * Listens: ctx.on('select-profile', { id }) — preselects the profile and dives
+ *          to the form: the page goes dark while the HUD counts down to the
+ *          floor, then fades up on the settled floor with the field flagged
+ *          and the keyboard focus on the form.
  * Hooks:   #reserve-form (the form block), [data-fin-*].
  */
 import '../styles/finale.css'
@@ -40,19 +52,24 @@ const PROFILES = {
 }
 const INFO_DEFAULT = 'Prices are per guest, for the whole trip.'
 
+// pressure on the figure: c = 0 (arriving) → 1 (landed, full pressure)
+const FIG = { s0: 72, s1: 50, w0: 560, w1: 820, t0: -0.012, t1: 0.03 }
+
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
+const lerp = (a, b, t) => a + (b - a) * t
 const smooth = (a, b, x) => {
   const t = clamp((x - a) / (b - a))
   return t * t * (3 - 2 * t)
 }
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 export function init(ctx) {
   const root = document.getElementById('reserve')
   if (!root) return
   const scene = createScene(ctx, root)
-  arrival(ctx, root, scene)
+  const arrive = arrival(ctx, root, scene)
   sonar(ctx, root, scene)
-  reservation(ctx, root)
+  reservation(ctx, root, arrive)
 }
 
 /* =================================================================== noise */
@@ -164,6 +181,7 @@ function createScene(ctx, root) {
   let built = false
   let lastW = 0
   let hi = null // sonar-revealed sediment
+  let walls = null // sonar-revealed contours of the trench walls
 
   const rings = []
   const silt = []
@@ -173,6 +191,8 @@ function createScene(ctx, root) {
   let last = 0
   let arrived = false
   let nextPing = 0
+  let approach = 1 // 0 → 1 while the stage scrolls in (marine snow thickens)
+  let onContact = null
 
   const dot = sprite(32, [
     [0, 'rgba(255,232,224,1)'],
@@ -182,6 +202,11 @@ function createScene(ctx, root) {
   const puff = sprite(128, [
     [0, 'rgba(255,92,72,0.5)'],
     [0.5, 'rgba(255,59,47,0.18)'],
+    [1, 'rgba(255,59,47,0)'],
+  ])
+  const blip = sprite(64, [
+    [0, 'rgba(255,200,186,0.9)'],
+    [0.3, 'rgba(255,86,66,0.35)'],
     [1, 'rgba(255,59,47,0)'],
   ])
 
@@ -195,10 +220,10 @@ function createScene(ctx, root) {
     H = Math.max(1, Math.round(r.height))
     Hs = Math.max(1, Math.round(sr.height))
     cx = W / 2
-    horizon = Hs * (mobile ? 0.7 : 0.66)
+    horizon = Hs * (mobile ? 0.7 : 0.655)
     // camera: the stage's bottom edge is 2.6 m in front of the viewport
     K = (Hs - horizon) * 2.6
-    poolY = Hs * (mobile ? 0.86 : 0.84)
+    poolY = Hs * (mobile ? 0.86 : 0.82)
     z0 = K / (poolY - horizon)
     f = Math.max(W, 900) * (mobile ? 0.13 : 0.075) * z0 // px per metre at the pool = f / z0
   }
@@ -212,8 +237,9 @@ function createScene(ctx, root) {
     return core + skirt
   }
   const heightAt = (X, z) => fbm(X * 0.55 + 40, z * 0.55 + 9) * 0.9 + vnoise(X * 2.6, z * 2.6) * 0.12
-  // a sea cucumber has ploughed a track through the pool
+  // a sea cucumber has ploughed a track through the pool; it is still at the far end of it
   const trackX = (z) => 1.25 * Math.sin(z * 0.42 + 0.6) - 0.5 + 0.18 * Math.sin(z * 1.7)
+  const trackEnd = () => (mobile ? 6.3 : 8.5)
   const BURROWS = [
     [-1.6, 4.4, 0.09],
     [1.9, 6.2, 0.07],
@@ -223,11 +249,46 @@ function createScene(ctx, root) {
     [-0.3, 8.6, 0.08],
   ]
 
+  /* The life the sonar finds. World metres: X across, z away from Vesper's
+     viewport. Placed outside the lamps' pool, so only the sonar shows them. */
+  let contacts = []
+  function placeContacts() {
+    const te = trackEnd()
+    const desk = [
+      { id: 'amphipods', name: 'Amphipods', X: 2.7, z: 4.1 },
+      { id: 'xeno', name: 'Xenophyophore', X: -3.6, z: 7.2, left: true },
+      { id: 'cucumber', name: 'Sea cucumber', X: trackX(te), z: te },
+    ]
+    const mob = [
+      { id: 'amphipods', name: 'Amphipods', X: 1.0, z: 4.0 },
+      { id: 'xeno', name: 'Xenophyophore', X: 1.6, z: 8.0, left: true },
+      { id: 'cucumber', name: 'Sea cucumber', X: trackX(te), z: te },
+    ]
+    const prev = new Map(contacts.map((c) => [c.id, c]))
+    contacts = (mobile ? mob : desk).map((c) => ({
+      ...c,
+      dist: Math.hypot(c.X, c.z),
+      lit: prev.get(c.id)?.lit ?? 0,
+      ph: Math.random() * 6.28,
+      // amphipods are a small crowd of scavengers, each a few centimetres long
+      crowd:
+        c.id === 'amphipods'
+          ? Array.from({ length: 9 }, (_, i) => ({
+              dx: (hash(i, 3) - 0.5) * 0.7,
+              dz: (hash(i, 7) - 0.5) * 0.55,
+              a: hash(i, 11) * 6.28,
+              ph: hash(i, 13) * 6.28,
+            }))
+          : null,
+    }))
+  }
+
   /* The sediment is shaded per css pixel in a time-sliced job so building it
      never blocks scrolling; relief is sampled on 2×2 blocks, grain per pixel. */
   let job = null
   function beginPaint() {
     layout()
+    placeContacts()
     const top = Math.floor(horizon) - 1
     const rows = Math.max(2, Math.ceil(H - top))
     const lit = document.createElement('canvas')
@@ -238,12 +299,12 @@ function createScene(ctx, root) {
     glow.height = rows
     const im1 = lit.getContext('2d').createImageData(W, rows)
     const im2 = glow.getContext('2d').createImageData(W, rows)
-    job = { top, rows, lit, glow, im1, im2, j: 0, W }
+    job = { top, rows, lit, glow, im1, im2, j: 0, W, te: trackEnd() }
   }
 
   const col = [0, 0, 0]
   function shadeRows(j0) {
-    const { top, rows, im1, im2 } = job
+    const { top, rows, im1, im2, te } = job
     const d1 = im1.data
     const d2 = im2.data
     const E = 0.05
@@ -270,6 +331,8 @@ function createScene(ctx, root) {
         const pxPerM = f / z
         const far = smooth(0, 1, (dy - 0.5) / 26) // fades into the dark at the horizon
         const tX = trackX(z)
+        // the track runs from under the viewport to where the animal is now
+        const tk = 1 - smooth(te - 0.35, te + 0.05, z)
         for (let di = 0; di < 2; di++) {
           const i = i0 + di
           if (i >= W) break
@@ -277,8 +340,8 @@ function createScene(ctx, root) {
           let shade = relief
           // the track: a soft groove with lifted rims
           const td = Math.abs(X - tX)
-          if (td < 0.4) {
-            shade *= 1 - 0.42 * Math.exp(-((td / 0.06) ** 2)) + 0.16 * Math.exp(-(((td - 0.13) / 0.045) ** 2))
+          if (td < 0.4 && tk > 0) {
+            shade *= 1 + tk * (-0.42 * Math.exp(-((td / 0.06) ** 2)) + 0.16 * Math.exp(-(((td - 0.13) / 0.045) ** 2)))
           }
           // burrows
           for (let b = 0; b < BURROWS.length; b++) {
@@ -420,12 +483,15 @@ function createScene(ctx, root) {
     g.fillRect(0, horizon - Hs * 0.3, W, H)
     g.globalCompositeOperation = 'source-over'
 
-    // the sonar layer: sediment + the walls' contours
+    // the sonar layers: the sediment, and the walls' contours
     hi = document.createElement('canvas')
     hi.width = W
     hi.height = H
-    const h = hi.getContext('2d')
-    h.drawImage(glow, 0, top, W, rows)
+    hi.getContext('2d').drawImage(glow, 0, top, W, rows)
+    walls = document.createElement('canvas')
+    walls.width = W
+    walls.height = Math.ceil(horizon + 4)
+    const h = walls.getContext('2d')
     const contour = (pts, a) => {
       h.beginPath()
       pts.forEach(([x, y], k) => (k ? h.lineTo(x, y) : h.moveTo(x, y)))
@@ -433,8 +499,19 @@ function createScene(ctx, root) {
       h.lineWidth = 1.2
       h.stroke()
     }
-    contour(farPts, 0.55)
-    contour(nearPts, 0.9)
+    contour(farPts, 0.42)
+    contour(nearPts, 0.7)
+    // the echo belongs to the walls at the edges of the view, not behind the type
+    const edge = h.createLinearGradient(0, 0, W, 0)
+    edge.addColorStop(0, 'rgba(0,0,0,1)')
+    edge.addColorStop(mobile ? 0.1 : 0.12, 'rgba(0,0,0,1)')
+    edge.addColorStop(mobile ? 0.26 : 0.27, 'rgba(0,0,0,0)')
+    edge.addColorStop(mobile ? 0.74 : 0.73, 'rgba(0,0,0,0)')
+    edge.addColorStop(mobile ? 0.9 : 0.88, 'rgba(0,0,0,1)')
+    edge.addColorStop(1, 'rgba(0,0,0,1)')
+    h.globalCompositeOperation = 'destination-in'
+    h.fillStyle = edge
+    h.fillRect(0, 0, W, walls.height)
 
     seedSnow()
     built = true
@@ -504,17 +581,166 @@ function createScene(ctx, root) {
     }
   }
 
-  function ring(x, y, { strength = 1, reveal = true, dur = 5.2 } = {}) {
-    if (!built) return
-    const maxR = Math.hypot(Math.max(x, W - x), Math.max(y, H - y)) * 1.04
-    rings.push({ x, y, t: 0, dur: reduced ? 1.6 : dur, maxR, strength, reveal })
-    if (reduced) {
-      rings[rings.length - 1].still = true
+  /* --------------------------------------------- sonar on the sediment */
+  const proj = (X, z) => {
+    const zz = Math.max(0.3, z)
+    return [cx + (X * f) / zz, horizon + K / zz]
+  }
+  // the floor point under a scene-space position (null above the horizon)
+  const unproject = (x, y) => {
+    if (y < horizon + 6) return null
+    const z = K / (y - horizon)
+    return { X: (x - cx) / (f / z), z }
+  }
+  // a circle of radius R metres on the sediment, in perspective
+  function circle(g, X0, Z0, R, ccw = false) {
+    const N = 96
+    for (let i = 0; i <= N; i++) {
+      const th = ((ccw ? N - i : i) / N) * Math.PI * 2
+      const [x, y] = proj(X0 + R * Math.cos(th), Z0 + R * Math.sin(th))
+      i ? g.lineTo(x, y) : g.moveTo(x, y)
     }
+    g.closePath()
+  }
+
+  // origin: a floor point {X, z}, or null for the pool under Vesper's lamps
+  function ring(origin = null, { strength = 1, reveal = true, dur = 5.2, user = false } = {}) {
+    if (!built) return
+    const o = origin || { X: 0, z: z0 }
+    rings.push({
+      X: o.X,
+      z: o.z,
+      t: 0,
+      dur: reduced ? 2.2 : dur,
+      maxR: 13,
+      strength,
+      reveal,
+      user,
+      seen: new Set(),
+      still: reduced,
+    })
     start()
   }
 
   /* ------------------------------------------------------------ frame */
+  function drawContact(g, c, t) {
+    const a = clamp(c.lit)
+    const [x, y] = proj(c.X, c.z)
+    const ppm = f / c.z
+    const S = mobile ? 1.35 : 1.6 // drawn a little larger than life, like any sonar contact
+    let bw = 10
+    let bh = 8
+    g.globalCompositeOperation = 'lighter'
+    g.globalAlpha = a * 0.55
+    const gr = Math.max(14, ppm * 0.22 * S)
+    g.drawImage(blip, x - gr, y - gr * 0.6, gr * 2, gr * 1.2)
+    g.globalAlpha = a
+    if (c.id === 'amphipods') {
+      g.strokeStyle = 'rgba(255,214,200,0.95)'
+      g.lineWidth = 1.3
+      g.lineCap = 'round'
+      let minX = 1e9
+      let maxX = -1e9
+      let minY = 1e9
+      let maxY = -1e9
+      for (const m of c.crowd) {
+        const wob = reduced ? 0 : Math.sin(t * 0.7 + m.ph) * 0.05
+        const [px, py] = proj(c.X + m.dx + wob, c.z + m.dz)
+        const L = Math.max(3.2, (0.045 * f * S) / (c.z + m.dz))
+        const ang = m.a + (reduced ? 0 : Math.sin(t * 0.5 + m.ph) * 0.3)
+        g.beginPath()
+        g.arc(px, py, L * 0.6, ang, ang + 2.2)
+        g.stroke()
+        minX = Math.min(minX, px)
+        maxX = Math.max(maxX, px)
+        minY = Math.min(minY, py)
+        maxY = Math.max(maxY, py)
+      }
+      bw = maxX - minX + 12
+      bh = maxY - minY + 10
+    } else if (c.id === 'xeno') {
+      // a giant single cell: a fragile, lumpy test of cemented grains
+      const R = Math.max(5, 0.06 * ppm * S)
+      for (let i = 0; i < 9; i++) {
+        const an = (i / 9) * 6.28 + 0.4
+        const rr = R * (0.45 + 0.35 * hash(i, 5))
+        const lx = x + Math.cos(an) * R * 0.55
+        const ly = y - R * 0.35 + Math.sin(an) * R * 0.4
+        g.fillStyle = 'rgba(255,120,98,0.32)'
+        g.beginPath()
+        g.arc(lx, ly, rr, 0, 6.28)
+        g.fill()
+      }
+      g.strokeStyle = 'rgba(255,196,180,0.85)'
+      g.lineWidth = 1
+      g.beginPath()
+      g.ellipse(x, y - R * 0.35, R * 1.05, R * 0.82, 0, 0, 6.28)
+      g.stroke()
+      g.beginPath()
+      g.moveTo(x - R * 0.7, y - R * 0.5)
+      g.quadraticCurveTo(x, y - R * 0.05, x + R * 0.75, y - R * 0.6)
+      g.moveTo(x - R * 0.3, y - R * 1.05)
+      g.quadraticCurveTo(x + R * 0.1, y - R * 0.4, x + R * 0.2, y + R * 0.2)
+      g.stroke()
+      bw = R * 2.6
+      bh = R * 2.4
+    } else {
+      // a sea cucumber, translucent, lying along the end of its own track
+      const L = Math.max(7, 0.13 * ppm * S)
+      const Wd = Math.max(2.8, 0.045 * ppm * S)
+      const [tx, ty] = proj(trackX(c.z + 0.3), c.z + 0.3)
+      const ang = Math.atan2(y - ty, x - tx)
+      g.save()
+      g.translate(x, y - Wd * 0.4)
+      g.rotate(ang)
+      const body = g.createLinearGradient(0, -Wd, 0, Wd)
+      body.addColorStop(0, 'rgba(255,150,128,0.8)')
+      body.addColorStop(1, 'rgba(255,60,44,0.3)')
+      g.fillStyle = body
+      g.beginPath()
+      g.ellipse(0, 0, L, Wd, 0, 0, 6.28)
+      g.fill()
+      g.fillStyle = 'rgba(255,214,202,0.85)'
+      for (let i = 0; i < 5; i++) {
+        g.beginPath()
+        g.arc(-L * 0.68 + i * L * 0.34, -Wd * 0.7, 0.8, 0, 6.28)
+        g.fill()
+      }
+      g.restore()
+      bw = L * 2.4
+      bh = Math.max(12, Wd * 3.4)
+    }
+    // the contact marker: four corners and a name
+    const x0 = x - bw / 2
+    const y0 = y - bh * 0.75
+    const k = 5
+    g.globalCompositeOperation = 'source-over'
+    g.strokeStyle = `rgba(255,96,74,${(a * 0.85).toFixed(3)})`
+    g.lineWidth = 1
+    g.beginPath()
+    for (const [px, py, sx, sy] of [
+      [x0, y0, 1, 1],
+      [x0 + bw, y0, -1, 1],
+      [x0, y0 + bh, 1, -1],
+      [x0 + bw, y0 + bh, -1, -1],
+    ]) {
+      g.moveTo(px + sx * k, py)
+      g.lineTo(px, py)
+      g.lineTo(px, py + sy * k)
+    }
+    g.stroke()
+    g.globalAlpha = a * 0.9
+    g.fillStyle = 'rgb(255 200 188)'
+    g.font = `500 ${mobile ? 10 : 11}px Anybody, system-ui, sans-serif`
+    g.textBaseline = 'alphabetic'
+    const label = `${c.name}  ${c.dist.toFixed(1)} m`
+    const tw = g.measureText(label).width
+    const right = x0 + bw + 6
+    const lx = (c.left && x0 - 6 - tw > 8) || right + tw > W - 8 ? x0 - 6 - tw : right
+    g.fillText(label, lx, y0 + 8)
+    g.globalAlpha = 1
+  }
+
   function drawFx(dt) {
     const g = fx
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -523,7 +749,8 @@ function createScene(ctx, root) {
     g.globalCompositeOperation = 'lighter'
     const t = performance.now() / 1000
 
-    // marine snow, sinking through the lamp light
+    // marine snow, sinking through the lamp light (thicker as the floor nears)
+    const snowK = 0.3 + 0.7 * approach
     for (let i = 0; i < snow.length; i++) {
       const p = snow[i]
       if (!reduced) {
@@ -534,8 +761,9 @@ function createScene(ctx, root) {
           p.x = Math.random() * W
         }
       }
+      if (i > snow.length * (0.45 + 0.55 * approach)) continue
       const L = light(p.x, p.y)
-      const a = 0.05 + L * 0.75
+      const a = (0.05 + L * 0.75) * snowK
       if (a < 0.03) continue
       const r = p.r * (2 + L)
       g.globalAlpha = clamp(a * (0.5 + p.z * 0.5))
@@ -569,7 +797,7 @@ function createScene(ctx, root) {
       }
     }
 
-    // sonar
+    // sonar: rings run out across the sediment, in perspective
     for (let i = rings.length - 1; i >= 0; i--) {
       const R = rings[i]
       R.t += dt
@@ -578,43 +806,68 @@ function createScene(ctx, root) {
         rings.splice(i, 1)
         continue
       }
-      const e = R.still ? 0.35 : 1 - Math.pow(1 - k, 2.6)
-      const r = 12 + e * R.maxR
-      const a = Math.pow(1 - k, 1.4) * R.strength
+      const e = R.still ? 0.62 : 1 - Math.pow(1 - k, 2.2)
+      const rad = 0.15 + e * R.maxR
+      const a = Math.pow(1 - k, 1.3) * R.strength
+      g.globalCompositeOperation = 'lighter'
       g.globalAlpha = 1
-      g.lineWidth = 1.1
-      g.strokeStyle = `rgba(255,86,66,${(a * 0.75).toFixed(3)})`
+      g.lineWidth = 1.2
+      g.strokeStyle = `rgba(255,86,66,${(a * 0.8).toFixed(3)})`
       g.beginPath()
-      g.arc(R.x, R.y, r, 0, Math.PI * 2)
+      circle(g, R.X, R.z, rad)
       g.stroke()
-      if (!R.still && r > 40) {
-        g.strokeStyle = `rgba(255,86,66,${(a * 0.22).toFixed(3)})`
+      if (!R.still && rad > 0.6) {
+        g.strokeStyle = `rgba(255,86,66,${(a * 0.24).toFixed(3)})`
         g.beginPath()
-        g.arc(R.x, R.y, r * 0.93, 0, Math.PI * 2)
+        circle(g, R.X, R.z, rad * 0.9)
         g.stroke()
       }
       // the sediment answers where the ring passes
-      if (R.reveal && hi && r > horizon - R.y - 60) {
+      if (R.reveal && hi) {
         const bands = [
-          [0, 10, 0.95],
-          [10, 34, 0.45],
-          [34, 90, 0.16],
+          [0, 0.18, 0.95],
+          [0.18, 0.6, 0.45],
+          [0.6, 1.7, 0.16],
         ]
         for (const [w0, w1, ba] of bands) {
-          const r0 = Math.max(0, r - w1)
-          const r1 = Math.max(0, r - w0)
+          const r0 = Math.max(0, rad - w1)
+          const r1 = Math.max(0, rad - w0)
           if (r1 <= 0) continue
           g.save()
           g.beginPath()
-          g.arc(R.x, R.y, r1, 0, Math.PI * 2)
-          g.arc(R.x, R.y, r0, 0, Math.PI * 2, true)
+          circle(g, R.X, R.z, r1)
+          if (r0 > 0.02) circle(g, R.X, R.z, r0, true)
           g.clip()
           g.globalAlpha = clamp(a * ba)
           g.drawImage(hi, 0, 0, W, H)
           g.restore()
         }
+        // far out, the echo comes back off the trench walls
+        const wb = smooth(4.5, 7, rad) * (1 - smooth(9, 12.5, rad))
+        if (walls && wb > 0.01) {
+          g.globalAlpha = clamp(a * wb * 0.9)
+          g.drawImage(walls, 0, 0)
+        }
+      }
+      // contacts light up as the ring reaches them
+      for (const c of contacts) {
+        if (R.seen.has(c.id)) continue
+        const d = Math.hypot(c.X - R.X, c.z - R.z)
+        if (rad >= d) {
+          R.seen.add(c.id)
+          c.lit = Math.max(c.lit, R.still ? 1.6 : 1.25 * Math.min(1, R.strength))
+          if (R.user) onContact?.(c, R)
+        }
       }
     }
+
+    // what the sonar found, fading back into the dark
+    for (const c of contacts) {
+      if (c.lit <= 0.01) continue
+      drawContact(g, c, t)
+      c.lit -= dt / (reduced ? 4.5 : 3.4)
+    }
+    g.globalCompositeOperation = 'source-over'
     g.globalAlpha = 1
   }
 
@@ -623,12 +876,11 @@ function createScene(ctx, root) {
     const dt = Math.min(0.05, (now - (last || now)) / 1000)
     last = now
     if (arrived && !reduced && now > nextPing) {
-      nextPing = now + 6500 + Math.random() * 2000
-      const c = figureCentre()
-      if (c) ring(c.x, c.y, { strength: 0.7, dur: 6 })
+      nextPing = now + 7500 + Math.random() * 2500
+      ring(null, { strength: 0.6, dur: 6 })
     }
     drawFx(dt)
-    const busy = !reduced || rings.length > 0
+    const busy = !reduced || rings.length > 0 || contacts.some((c) => c.lit > 0.01)
     if (visible && !document.hidden && busy) raf = requestAnimationFrame(loop)
   }
   function start() {
@@ -653,6 +905,11 @@ function createScene(ctx, root) {
   const toScene = (clientX, clientY) => {
     const s = sceneEl.getBoundingClientRect()
     return { x: clientX - s.left, y: clientY - s.top }
+  }
+  // where the pool under Vesper is on screen (for the global sonar event)
+  const poolClient = () => {
+    const s = sceneEl.getBoundingClientRect()
+    return { x: s.left + cx, y: s.top + poolY }
   }
 
   /* ---------------------------------------------------- build lazily */
@@ -698,22 +955,35 @@ function createScene(ctx, root) {
     build,
     start,
     ring,
+    unproject,
     figureCentre,
     toScene,
+    poolClient,
+    onContact(fn) {
+      onContact = fn
+    },
+    setApproach(v) {
+      approach = v
+    },
     touchdown(strength = 1) {
       build(true)
       spawnSilt(strength)
-      const c = figureCentre()
-      if (c) ring(c.x, c.y, { strength: 1.15, dur: 5.6 })
+      ring(null, { strength: 1.15, dur: 5.6 })
       arrived = true
-      nextPing = performance.now() + 7000
+      approach = 1
+      nextPing = performance.now() + 8000
       start()
     },
     setArrived(v) {
       arrived = v
-      if (!v) {
+      if (v) {
+        approach = 1
+        nextPing = performance.now() + 4000
+        start()
+      } else {
         silt.length = 0
         rings.length = 0
+        contacts.forEach((c) => (c.lit = 0))
       }
     },
   }
@@ -727,109 +997,195 @@ function arrival(ctx, root, scene) {
   const digits = root.querySelector('[data-fin-digits]')
   const unit = root.querySelector('.fin__unit')
   const reveals = [...root.querySelectorAll('[data-fin-reveal]')]
+  const api = { landed: true, land() {} }
 
   if (ctx.reducedMotion) {
     root.style.setProperty('--fin-floor', 1)
     scene.build()
     scene.setArrived(false)
-    return
+    return api
   }
 
   const split = new ctx.SplitText(digits, { type: 'chars', charsClass: 'fin__char' })
   digits.classList.add('is-split')
   const chars = split.chars
-  const P = { s: 74, w: 600, floor: 0.16 }
+  // how far each character is from the middle (the middle lands first)
+  const mid = (chars.length - 1) / 2
+  const dist = chars.map((_, i) => Math.abs(i - mid) / (mid || 1))
+
+  const P = { c: 0, floor: 0, rise: 0 }
   const apply = () => {
-    fig.style.setProperty('--fin-wdth', `${P.s.toFixed(2)}%`)
-    fig.style.setProperty('--fin-wght', P.w.toFixed(0))
+    const c = clamp(P.c)
+    fig.style.setProperty('--fin-wdth', `${lerp(FIG.s0, FIG.s1, c).toFixed(2)}%`)
+    fig.style.setProperty('--fin-wght', lerp(FIG.w0, FIG.w1, c).toFixed(0))
+    fig.style.setProperty('--fin-track', `${lerp(FIG.t0, FIG.t1, c).toFixed(4)}em`)
     root.style.setProperty('--fin-floor', P.floor.toFixed(3))
+    root.style.setProperty('--fin-rise', `${P.rise.toFixed(1)}px`)
   }
 
-  const reset = () => {
-    P.s = 74
-    P.w = 600
-    P.floor = 0.16
+  /* 1. the approach, scrubbed: a = 0 when the stage's top enters the screen,
+        1 when the figure's centre reaches the middle (the HUD reads 10,935) */
+  let landed = false
+  const approach = (a) => {
+    const vh = window.innerHeight
+    P.c = 0.3 * smooth(0.2, 1, a)
+    P.floor = 0.03 + 0.5 * Math.pow(a, 1.3)
+    P.rise = (1 - smooth(0, 1, a)) * vh * 0.1
     apply()
-    gsap.set(chars, { yPercent: -62, opacity: 0 })
+    // the figure sinks towards its place more slowly than the page scrolls
+    gsap.set(digits, { y: -(1 - smooth(0, 1, a)) * vh * 0.5 })
+    chars.forEach((ch, i) => {
+      const k = smooth(0, 1, (a - 0.05 - 0.22 * dist[i]) / 0.6)
+      gsap.set(ch, { opacity: 0.72 * k, yPercent: lerp(-72, -20, k) })
+    })
+    scene.setApproach(a)
+  }
+  const reset = () => {
+    landed = false
+    api.landed = false
+    tl.pause()
     gsap.set(unit, { opacity: 0 })
     gsap.set(reveals, { opacity: 0 })
     scene.setArrived(false)
+    approach(trig ? trig.progress : 0)
   }
-  reset()
 
-  let landed = false
+  /* 2. the settle, time-based, from wherever the approach left the digits */
   const touchdown = () => {
     scene.touchdown(1)
     const r = digits.getBoundingClientRect()
     ctx.emit('sonar', { x: r.left + r.width / 2, y: r.top + r.height * 0.55, strength: 1 })
   }
-
   const tl = gsap.timeline({ paused: true })
-  tl.to(chars, { opacity: 1, duration: 0.9, ease: 'power1.out', stagger: { each: 0.05, from: 'center' } }, 0)
-    // the descent: steady, then a long, soft deceleration into contact
-    .to(chars, { yPercent: 0, duration: 2.1, ease: 'power3.out', stagger: { each: 0.045, from: 'center' } }, 0)
-    // full pressure: the figure narrows and thickens as it lands
-    .to(P, { s: 50, w: 880, duration: 2.5, ease: 'power2.inOut', onUpdate: apply }, 0.05)
-    .call(touchdown, null, 1.25)
-    .to(P, { floor: 1, duration: 2.6, ease: 'power2.out', onUpdate: apply }, 1.1)
-    .to(unit, { opacity: 1, duration: 1.2, ease: 'power1.out' }, 1.6)
-    .to(reveals, { opacity: 1, duration: 1.4, ease: 'power1.out', stagger: 0.18 }, 1.9)
+  tl.to(digits, { y: 0, duration: 0.7, ease: 'power2.out' }, 0)
+    .to(chars, { opacity: 1, duration: 0.55, ease: 'power1.out', stagger: { each: 0.03, from: 'center' } }, 0)
+    // the last metre: a long, soft deceleration into contact, no overshoot
+    .to(chars, { yPercent: 0, duration: 1.1, ease: 'power3.out', stagger: { each: 0.035, from: 'center' } }, 0)
+    // full pressure: the figure narrows, thickens and its tracking opens
+    .to(P, { c: 1, duration: 1.5, ease: 'power2.inOut', onUpdate: apply }, 0)
+    .to(P, { rise: 0, duration: 0.8, ease: 'power2.out', onUpdate: apply }, 0)
+    .call(touchdown, null, 0.5)
+    .to(P, { floor: 1, duration: 2.2, ease: 'power2.out', onUpdate: apply }, 0.35)
+    .to(unit, { opacity: 1, duration: 1, ease: 'power1.out' }, 0.8)
+    .to(reveals, { opacity: 1, duration: 1.2, ease: 'power1.out', stagger: 0.15 }, 1)
 
-  ScrollTrigger.create({
-    trigger: stage,
-    start: 'top 42%',
-    onEnter: () => {
-      if (landed) return
-      landed = true
-      scene.build()
+  const land = (instant = false) => {
+    if (landed) return
+    landed = true
+    api.landed = true
+    scene.build(instant)
+    tl.invalidate()
+    if (instant) {
+      // already on the floor (e.g. after the dive from the chart): no replay off-screen
+      tl.progress(1, true)
+      scene.setArrived(true)
+    } else {
       tl.restart()
-    },
-  })
-  // once the stage is fully out of sight above-water, the next descent lands again
-  ScrollTrigger.create({
+    }
+  }
+  api.land = land
+
+  let trig = null
+  trig = ScrollTrigger.create({
     trigger: stage,
     start: 'top bottom',
-    onLeaveBack: () => {
-      landed = false
-      tl.pause(0)
-      reset()
+    endTrigger: fig,
+    end: 'center center',
+    onUpdate: (self) => {
+      if (landed) return
+      if (self.progress >= 0.999) land()
+      else approach(self.progress)
     },
+    onRefresh: (self) => {
+      if (!landed) self.progress >= 0.999 ? land() : approach(self.progress)
+    },
+    // once the stage is fully below the screen again, the next descent lands again
+    onLeaveBack: () => reset(),
   })
+  reset()
+  if (trig.progress >= 0.999) land(true)
+
+  // (a keyboard visitor who reaches the ping before the reveal has run sees it
+  // at once: finale.css lifts the reveals while focus is inside .fin__under)
+
+  return api
 }
 
 /* ================================================================== sonar */
 function sonar(ctx, root, scene) {
   const stage = root.querySelector('[data-fin-stage]')
   const btn = root.querySelector('[data-fin-ping]')
+  const logEl = root.querySelector('[data-fin-log]')
+  const listEl = root.querySelector('[data-fin-log-list]')
+  const liveEl = root.querySelector('[data-fin-log-live]')
+  let pings = 0
+  let found = []
+  let doneT = 0
+
+  const userPing = (origin, client) => {
+    pings += 1
+    found = []
+    if (listEl) {
+      listEl.innerHTML = ''
+      logEl.hidden = false
+      logEl.querySelector('[data-fin-log-n]').textContent = String(pings)
+      logEl.classList.remove('is-done')
+    }
+    scene.ring(origin, { strength: 1.1, dur: 5.4, user: true })
+    ctx.emit('sonar', { ...client, strength: 1 })
+    clearTimeout(doneT)
+    doneT = setTimeout(summarise, ctx.reducedMotion ? 300 : 2600)
+  }
+  function summarise() {
+    if (!logEl) return
+    logEl.classList.add('is-done')
+    const n = found.length
+    const list = found.map((c) => `${c.name.toLowerCase()} at ${c.dist.toFixed(1)} m`).join(', ')
+    liveEl.textContent = n
+      ? `Ping ${pings}: ${n} contact${n > 1 ? 's' : ''} on the floor: ${list}.`
+      : `Ping ${pings}: no contacts on the floor.`
+  }
+  scene.onContact((c) => {
+    if (found.some((x) => x.id === c.id)) return
+    found.push(c)
+    if (!listEl) return
+    const li = document.createElement('li')
+    li.className = 'fin__log-item'
+    li.innerHTML = `<span class="fin__log-name"></span><span class="fin__log-dist"></span>`
+    li.firstChild.textContent = c.name
+    li.lastChild.textContent = `${c.dist.toFixed(1)} m`
+    listEl.appendChild(li)
+  })
 
   stage.addEventListener('click', (e) => {
     if (e.target.closest('a, button, input, select, textarea, label')) return
     if (String(window.getSelection?.() || '').length) return
     const p = scene.toScene(e.clientX, e.clientY)
-    scene.ring(p.x, p.y, { strength: 1, dur: 5 })
-    ctx.emit('sonar', { x: e.clientX, y: e.clientY, strength: 1 })
+    userPing(scene.unproject(p.x, p.y), { x: e.clientX, y: e.clientY })
   })
 
   btn?.addEventListener('click', () => {
-    const c = scene.figureCentre()
-    if (c) scene.ring(c.x, c.y, { strength: 1.1, dur: 5.4 })
-    const d = root.querySelector('[data-fin-digits]').getBoundingClientRect()
-    ctx.emit('sonar', { x: d.left + d.width / 2, y: d.top + d.height * 0.55, strength: 1 })
+    userPing(null, scene.poolClient())
   })
 }
 
 /* ============================================================ reservation */
-function reservation(ctx, root) {
+function reservation(ctx, root, arrive) {
   const { gsap } = ctx
+  const html = document.documentElement
   const book = root.querySelector('[data-fin-book]')
   const panel = root.querySelector('[data-fin-panel]')
   const form = root.querySelector('[data-fin-form]')
   const done = root.querySelector('[data-fin-done]')
   const doneTitle = root.querySelector('[data-fin-done-title]')
   const summary = root.querySelector('[data-fin-summary]')
+  const pendingEl = root.querySelector('[data-fin-pending]')
   const again = root.querySelector('[data-fin-again]')
+  const surface = root.querySelector('[data-fin-surface]')
   const submit = root.querySelector('[data-fin-submit]')
   const info = root.querySelector('[data-fin-info]')
+  const veil = root.querySelector('[data-fin-veil]')
+  const sonarSvg = root.querySelector('[data-fin-return]')
   const select = form.elements.profile
   const fieldEl = (n) => form.querySelector(`[data-fin-field="${n}"]`)
   const ORDER = ['name', 'email', 'profile', 'month']
@@ -864,16 +1220,20 @@ function reservation(ctx, root) {
     return !msg
   }
 
-  // inline: judge a field when you leave it (if you typed), then live until it is right
+  // inline: judge a text field when you leave it (if you typed), then live until it
+  // is right. The profile and month are judged on change and on submit only, so
+  // looking through the profile picker never raises an error.
   form.addEventListener('focusout', (e) => {
-    const n = e.target.closest('[data-fin-field]')?.dataset.finField
-    if (!check[n] || n === 'month') return
-    const v = e.target.value?.trim?.() ?? ''
+    const field = e.target.closest('[data-fin-field]')
+    const n = field?.dataset.finField
+    if (!check[n] || n === 'month' || n === 'profile') return
+    if (e.relatedTarget && field.contains(e.relatedTarget)) return
+    const v = String(form.elements[n]?.value ?? '').trim()
     if (v || shown.has(n)) validate(n)
   })
   form.addEventListener('input', (e) => {
     const n = e.target.closest('[data-fin-field]')?.dataset.finField
-    if (check[n] && shown.has(n)) validate(n)
+    if (check[n] && n !== 'profile' && shown.has(n)) validate(n)
   })
 
   function updateInfo() {
@@ -894,38 +1254,101 @@ function reservation(ctx, root) {
     if (e.target.name === 'month' && shown.has('month')) validate('month')
   })
 
-  // the depth chart chose a profile: preselect it, take the visitor to the form, light it
+  /* --------------------------------------------- the dive to the floor */
+  // From the depth chart to the form: the page goes dark, the HUD counts the
+  // last metres down to 10,935, and the floor fades up already settled.
+  let flying = false
+  const yOf = (el, margin) => el.getBoundingClientRect().top + window.scrollY - margin
+  function diveTo(el, margin, after) {
+    arrive.land(true)
+    if (!ctx.lenis || !veil) {
+      window.scrollTo(0, yOf(el, margin))
+      after()
+      return
+    }
+    if (flying) return
+    flying = true
+    // take over from the chart's own smooth scroll
+    ctx.lenis.scrollTo(window.scrollY, { immediate: true, force: true })
+    html.classList.add('fin-is-diving')
+    gsap.killTweensOf(veil)
+    gsap.to(veil, { autoAlpha: 1, duration: 0.55, ease: 'power2.in' })
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
+      // the floor may have been re-measured on the way: land exactly
+      ctx.lenis.scrollTo(yOf(el, margin), { immediate: true, force: true })
+      html.classList.remove('fin-is-diving')
+      gsap.to(veil, {
+        autoAlpha: 0,
+        duration: 1.2,
+        delay: 0.12,
+        ease: 'power2.out',
+        onComplete: () => (flying = false),
+      })
+      after()
+    }
+    ctx.lenis.scrollTo(yOf(el, margin), {
+      duration: 2.1,
+      easing: easeInOut,
+      force: true,
+      lock: true,
+      onComplete: finish,
+    })
+    setTimeout(finish, 2600)
+  }
+
+  // the depth chart chose a profile: preselect it, dive to the form, light the field
   let flagT = 0
-  const flag = () => {
-    const el = fieldEl('profile')
+  const flag = (el) => {
     el.classList.remove('is-flagged')
     void el.offsetWidth
     el.classList.add('is-flagged')
     clearTimeout(flagT)
     flagT = setTimeout(() => el.classList.remove('is-flagged'), 2600)
   }
+  const firstOpen = () => {
+    if (!form.elements.name.value.trim()) return form.elements.name
+    if (!EMAIL.test(form.elements.email.value.trim())) return form.elements.email
+    if (!form.querySelector('input[name="month"]:checked')) return form.querySelector('input[name="month"]')
+    return submit
+  }
+  let pending = null
   ctx.on('select-profile', (d = {}) => {
     if (selfEmit || !PROFILES[d.id]) return
-    select.value = d.id
-    updateInfo()
-    if (shown.has('profile')) validate('profile')
-    if (form.hidden) return
+    const vh = window.innerHeight
     // after the sender's own scroll call, so this one wins
     setTimeout(() => {
-      let fired = false
-      const once = () => {
-        if (fired) return
-        fired = true
-        flag()
+      if (form.hidden) {
+        // a request is already in: say what the chart chose, offer to change it
+        pending = d.id
+        pendingEl.textContent = `You chose the ${PROFILES[d.id].name} profile on the chart. Change the request to switch to it.`
+        pendingEl.hidden = false
+        diveTo(panel, vh * 0.16, () => {
+          flag(again)
+          again.focus({ preventScroll: true })
+        })
+        return
       }
-      // (#reserve-form carries a scroll-margin-top, which Lenis honours)
-      ctx.scrollTo(book, { duration: 3, onComplete: once })
-      setTimeout(once, ctx.lenis ? 3300 : 60)
+      select.value = d.id
+      updateInfo()
+      if (shown.has('profile')) validate('profile')
+      const field = fieldEl('profile')
+      // on a phone, bring the flagged field itself to the upper part of the screen
+      const narrow = ctx.isMobile()
+      diveTo(narrow ? field : book, narrow ? vh * 0.3 : vh * 0.12, () => {
+        flag(field)
+        firstOpen().focus({ preventScroll: true })
+      })
     }, 0)
   })
 
+  /* --------------------------------------------------------- sending */
+  let sending = false
   form.addEventListener('submit', (e) => {
     e.preventDefault()
+    if (sending) return
     const bad = ORDER.filter((n) => !validate(n))
     if (bad.length) {
       const first = bad[0]
@@ -934,30 +1357,87 @@ function reservation(ctx, root) {
       target.focus({ preventScroll: false })
       return
     }
+    sending = true
+    submit.setAttribute('aria-disabled', 'true')
     sent()
   })
+
+  // the return: rings run out from the button across the panel, a few times, then rest
+  const rings = sonarSvg ? [...sonarSvg.querySelectorAll('.fin__return-ring')] : []
+  const core = sonarSvg?.querySelector('.fin__return-core')
+  let ringTl = null
+  let ringsOn = false
+  const ringsIO = new IntersectionObserver(([e]) => {
+    ringsOn = e.isIntersecting
+    if (!ringTl) return
+    ringsOn && !document.hidden ? ringTl.resume() : ringTl.pause()
+  })
+  ringsIO.observe(done)
+  document.addEventListener('visibilitychange', () => {
+    if (!ringTl) return
+    ringsOn && !document.hidden ? ringTl.resume() : ringTl.pause()
+  })
+  function playReturn(from) {
+    if (!sonarSvg) return
+    const pr = panel.getBoundingClientRect()
+    const x = from.left + from.width / 2 - pr.left
+    const y = from.top + from.height / 2 - pr.top
+    const R = Math.hypot(Math.max(x, pr.width - x), Math.max(y, pr.height - y)) * 1.15
+    sonarSvg.setAttribute('viewBox', `0 0 ${Math.round(pr.width)} ${Math.round(pr.height)}`)
+    ;[...rings, core].forEach((c) => {
+      c?.setAttribute('cx', x.toFixed(1))
+      c?.setAttribute('cy', y.toFixed(1))
+    })
+    ringTl?.kill()
+    if (ctx.reducedMotion) {
+      rings.forEach((c, i) => gsap.set(c, { attr: { r: R * (0.3 + i * 0.22) }, opacity: 0.5 - i * 0.14 }))
+      return
+    }
+    gsap.set(rings, { attr: { r: 4 }, opacity: 0 })
+    ringTl = gsap.timeline({ repeat: 2, repeatDelay: 1.6, paused: !ringsOn })
+    ringTl.to(rings, {
+      keyframes: [
+        { attr: { r: 4 }, opacity: 0.9, duration: 0.01 },
+        { attr: { r: R }, opacity: 0, duration: 3.4, ease: 'power2.out' },
+      ],
+      stagger: 0.55,
+    })
+  }
 
   function sent() {
     const email = form.elements.email.value.trim()
     const p = PROFILES[select.value].name
     const month = form.querySelector('input[name="month"]:checked').value
     summary.textContent = `We will write to ${email} about the ${p} profile in ${month}.`
+    pending = null
+    pendingEl.hidden = true
 
     const r = submit.getBoundingClientRect()
     ctx.emit('sonar', { x: r.left + r.width / 2, y: r.top + r.height / 2, strength: 1 })
 
-    const rings = [...done.querySelectorAll('.fin__done-ring')]
-    if (ctx.reducedMotion) {
+    // on wide screens the panel keeps the form's height, so nothing below it
+    // moves; on a phone it eases down to the confirmation instead of leaving a
+    // screen of empty water under it
+    const h0 = panel.offsetHeight
+    panel.style.minHeight = `${h0}px`
+    const finish = () => {
       form.hidden = true
       done.hidden = false
-      rings.forEach((c, i) => gsap.set(c, { attr: { r: 20 + i * 16 }, opacity: 0.6 - i * 0.18 }))
+      sending = false
+      submit.removeAttribute('aria-disabled')
+      const narrow = ctx.isMobile()
+      if (narrow) {
+        const h1 = done.offsetHeight
+        if (ctx.reducedMotion) panel.style.minHeight = ''
+        else gsap.fromTo(panel, { minHeight: h0 }, { minHeight: h1, duration: 1.2, ease: 'abyss', onComplete: () => (panel.style.minHeight = '') })
+      }
+      playReturn(narrow ? doneTitle.getBoundingClientRect() : r)
       doneTitle.focus({ preventScroll: true })
+    }
+    if (ctx.reducedMotion) {
+      finish()
       return
     }
-
-    const h0 = panel.offsetHeight
-    panel.style.height = `${h0}px`
-    panel.style.overflow = 'hidden'
     gsap.to(form.children, {
       opacity: 0,
       filter: 'blur(6px)',
@@ -965,51 +1445,43 @@ function reservation(ctx, root) {
       ease: 'power2.in',
       stagger: 0.05,
       onComplete: () => {
-        form.hidden = true
+        finish()
         gsap.set(form.children, { clearProps: 'opacity,filter' })
-        done.hidden = false
-        const h1 = done.offsetHeight
-        const kids = [...done.children].filter((k) => !k.classList.contains('fin__done-mark'))
-        gsap.fromTo(
-          panel,
-          { height: h0 },
-          {
-            height: h1,
-            duration: 1.1,
-            ease: 'abyss',
-            onComplete: () => {
-              panel.style.height = ''
-              panel.style.overflow = ''
-            },
-          },
-        )
-        // a return on the sonar: the contact rings, then the words
-        gsap.set(rings, { attr: { r: 6 }, opacity: 0 })
-        gsap.to(rings, {
-          keyframes: [
-            { attr: { r: 6 }, opacity: 0.95, duration: 0.01 },
-            { attr: { r: 58 }, opacity: 0, duration: 3.2, ease: 'power2.out' },
-          ],
-          stagger: { each: 1.05, repeat: -1 },
-        })
+        const kids = [...done.children].filter((k) => !k.matches('[data-fin-return]'))
         gsap.fromTo(
           kids,
-          { opacity: 0, filter: 'blur(8px)' },
-          { opacity: 1, filter: 'blur(0px)', duration: 1.3, ease: 'power2.out', stagger: 0.14, delay: 0.2, clearProps: 'filter' },
+          { opacity: 0, filter: 'blur(8px)', y: 14 },
+          { opacity: 1, filter: 'blur(0px)', y: 0, duration: 1.3, ease: 'power2.out', stagger: 0.12, delay: 0.35, clearProps: 'filter,transform' },
         )
-        doneTitle.focus({ preventScroll: true })
       },
     })
   }
 
   again.addEventListener('click', () => {
-    gsap.killTweensOf(done.querySelectorAll('.fin__done-ring'))
+    ringTl?.kill()
+    ringTl = null
     done.hidden = true
     form.hidden = false
+    panel.style.minHeight = ''
+    if (pending && PROFILES[pending]) {
+      select.value = pending
+      updateInfo()
+      selfEmit = true
+      ctx.emit('select-profile', { id: pending })
+      selfEmit = false
+      flag(fieldEl('profile'))
+    }
+    pending = null
+    pendingEl.hidden = true
     if (!ctx.reducedMotion) {
       gsap.fromTo(form.children, { opacity: 0 }, { opacity: 1, duration: 0.8, ease: 'power1.out', stagger: 0.05 })
     }
     form.elements.name.focus()
+  })
+
+  // the next step after a request: the way back up (the footer runs the ascent)
+  surface?.addEventListener('click', () => {
+    document.querySelector('[data-foot-return]')?.click()
   })
 
   updateInfo()

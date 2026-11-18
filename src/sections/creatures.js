@@ -667,6 +667,12 @@ class Squid extends Animal {
         : [Math.cos(a) * r * 26, 6 + Math.abs(Math.sin(a)) * r * 16, Math.random() * TAU]
     })
     this.arms = Array.from({ length: 8 }, () => ({ a: 0, L: 0, tx: 0, ty: 0, wx: 0, wy: 0, bx: 0, by: 0, bend: 0 }))
+    this.blotch = [
+      [-9, -70, 12],
+      [8, -40, 14],
+      [-6, -22, 10],
+      [12, -76, 8],
+    ]
     // the two retractile velar filaments, unique to Vampyroteuthis
     this.fil = [-1, 1].map((sx) => ({
       sx,
@@ -823,7 +829,15 @@ class Squid extends Animal {
     g.closePath()
     g.fillStyle = skin(0, -48, 66)
     g.fill()
-    rimLight(g, dirGrad(g, lx, ly, 56, [255, 170, 166], 0.46, 0.08), 0.85)
+    rimLight(g, dirGrad(g, lx, ly, 56, [255, 170, 166], 0.36, 0), 0.85)
+    // velvet is never even: soft darker blotches in the skin
+    for (const [bx, by, br] of this.blotch) {
+      const bgr = g.createRadialGradient(bx, by, 0, bx, by, br)
+      bgr.addColorStop(0, 'rgba(10,1,4,0.32)')
+      bgr.addColorStop(1, 'rgba(10,1,4,0)')
+      g.fillStyle = bgr
+      g.fillRect(bx - br, by - br, br * 2, br * 2)
+    }
 
     // the cloak: a web between the arms, near-black inside, thin at its edge
     const wg = g.createRadialGradient(hx * 0.5, 18 + hy * 0.5, 4, 0, 16, 84)
@@ -883,7 +897,7 @@ class Squid extends Animal {
     g.ellipse(0, 4, 27, 19, 0, 0, TAU)
     g.fillStyle = skin(0, 2, 32)
     g.fill()
-    rimLight(g, dirGrad(g, lx, ly, 26, [255, 170, 166], 0.3, 0.04), 0.7)
+    rimLight(g, dirGrad(g, lx, ly, 26, [255, 170, 166], 0.26, 0), 0.7)
 
     // eyes: proportionally the largest of any animal. Deep blue globes; the
     // cornea catches the lamp as a thin crescent, not a dot.
@@ -902,15 +916,15 @@ class Squid extends Animal {
       const ig = g.createRadialGradient(-sx * 1.5, 0, 0, 0, 0, 9)
       ig.addColorStop(0, 'rgb(2,4,10)')
       ig.addColorStop(0.5, 'rgb(4,10,24)')
-      ig.addColorStop(0.8, 'rgb(14,40,76)')
-      ig.addColorStop(0.93, 'rgb(26,66,112)')
+      ig.addColorStop(0.8, 'rgb(10,30,58)')
+      ig.addColorStop(0.93, 'rgb(20,52,92)')
       ig.addColorStop(1, 'rgb(8,14,26)')
       g.fillStyle = ig
       g.beginPath()
       g.arc(0, 0, 9, 0, TAU)
       g.fill()
       g.globalCompositeOperation = 'lighter'
-      g.strokeStyle = 'rgba(150,200,255,0.3)'
+      g.strokeStyle = 'rgba(150,200,255,0.24)'
       g.lineWidth = 0.8
       g.beginPath()
       g.arc(0, 0, 7.6, la - 0.5, la + 0.5)
@@ -2571,7 +2585,7 @@ export function init(ctx) {
     // living light the animals cast on themselves
     const an = byId.angler
     const [ex, ey] = an.luresAt()
-    selfLight(an, ex, ey, 118 * an.s, 'rgba(255,168,76,0.62)', 0.72 * an.lure * (1 - 0.6 * lightAt(ex, ey)))
+    selfLight(an, ex, ey, 86 * an.s, 'rgba(255,160,64,0.7)', 0.55 * an.lure * (1 - 0.7 * lightAt(ex, ey)))
     const dr = byId.dragon
     const [rx, ry] = dr.redAt()
     selfLight(dr, rx, ry, 46 * dr.s, 'rgba(255,40,30,0.6)', 0.42 * dr.red)
