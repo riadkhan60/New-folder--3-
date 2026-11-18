@@ -202,8 +202,8 @@ html.fin-is-diving .footer {
 .foot__mail {
   justify-self: start;
   /* a 44 px tap target, the underline still under the words */
-  margin-block: -0.6rem;
-  padding-block: 0.6rem;
+  margin-block: -0.65rem;
+  padding-block: 0.65rem;
   font-family: var(--font-text);
   font-size: clamp(1.05rem, 1.2vw, 1.2rem);
   line-height: 1.4;
@@ -434,6 +434,11 @@ html.fin-is-diving .footer {
     display: flex;
     flex-direction: column;
     gap: var(--s-7);
+  }
+  /* in the single column the ascent sits on the left edge like everything
+     else (align-self: end would push it to the right in a flex column) */
+  .foot__ascent {
+    align-self: stretch;
   }
   .foot__return {
     padding-block: 0.5rem;

@@ -21,8 +21,13 @@
  * and the tab is visible. Sonar rings are drawn on the sediment plane (in
  * perspective, behind the type); as a ring passes, the sediment answers and
  * three hidden contacts light up: amphipods, a xenophyophore, and the sea
- * cucumber at the end of its track. A visitor's ping is logged under the
- * button.
+ * cucumber at the end of its track. A visitor's ping is logged next to the
+ * button (in room reserved for it, so the stage never reflows).
+ *
+ * The confirmation: the form clears, the request is written up as a line in
+ * the dive log, the lamp sweeps across "Reservation request received" the way
+ * it reads the guests' words in #voices, and sonar returns run out from the
+ * button three times before the beacon goes out.
  *
  * Emits:   ctx.emit('sonar', { x, y, strength }) at touchdown, on a click on the
  *          stage, on "Send a sonar ping", and when a reservation is sent.
@@ -180,6 +185,7 @@ function createScene(ctx, root) {
   let poolY = 0
   let built = false
   let lastW = 0
+  let gutter = 0 // the depth ruler and its labels on the right: floor labels stay clear
   let hi = null // sonar-revealed sediment
   let walls = null // sonar-revealed contours of the trench walls
 
@@ -220,6 +226,8 @@ function createScene(ctx, root) {
     H = Math.max(1, Math.round(r.height))
     Hs = Math.max(1, Math.round(sr.height))
     cx = W / 2
+    const inst = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--instrument')) || 0
+    gutter = inst ? inst + 56 : 0
     horizon = Hs * (mobile ? 0.7 : 0.655)
     // camera: the stage's bottom edge is 2.6 m in front of the viewport
     K = (Hs - horizon) * 2.6
@@ -259,9 +267,10 @@ function createScene(ctx, root) {
       { id: 'xeno', name: 'Xenophyophore', X: -3.6, z: 7.2, left: true },
       { id: 'cucumber', name: 'Sea cucumber', X: trackX(te), z: te },
     ]
+    // on a phone the labels are the log: keep them clear of one another
     const mob = [
       { id: 'amphipods', name: 'Amphipods', X: 1.0, z: 4.0 },
-      { id: 'xeno', name: 'Xenophyophore', X: 1.6, z: 8.0, left: true },
+      { id: 'xeno', name: 'Xenophyophore', X: 2.2, z: 8.6, left: true },
       { id: 'cucumber', name: 'Sea cucumber', X: trackX(te), z: te },
     ]
     const prev = new Map(contacts.map((c) => [c.id, c]))
@@ -736,7 +745,7 @@ function createScene(ctx, root) {
     const label = `${c.name}  ${c.dist.toFixed(1)} m`
     const tw = g.measureText(label).width
     const right = x0 + bw + 6
-    const lx = (c.left && x0 - 6 - tw > 8) || right + tw > W - 8 ? x0 - 6 - tw : right
+    const lx = (c.left && x0 - 6 - tw > 8) || right + tw > W - gutter - 8 ? x0 - 6 - tw : right
     g.fillText(label, lx, y0 + 8)
     g.globalAlpha = 1
   }
@@ -1032,11 +1041,14 @@ function arrival(ctx, root, scene) {
     P.floor = 0.03 + 0.5 * Math.pow(a, 1.3)
     P.rise = (1 - smooth(0, 1, a)) * vh * 0.1
     apply()
-    // the figure sinks towards its place more slowly than the page scrolls
-    gsap.set(digits, { y: -(1 - smooth(0, 1, a)) * vh * 0.5 })
+    // the figure sinks towards its place more slowly than the page scrolls,
+    // never so far up that it ghosts through the last guest's caption (which
+    // sits closer on a phone, so there it travels less)
+    const narrow = ctx.isMobile()
+    gsap.set(digits, { y: -(1 - smooth(0, 1, a)) * vh * (narrow ? 0.2 : 0.36) })
     chars.forEach((ch, i) => {
-      const k = smooth(0, 1, (a - 0.05 - 0.22 * dist[i]) / 0.6)
-      gsap.set(ch, { opacity: 0.72 * k, yPercent: lerp(-72, -20, k) })
+      const k = smooth(0, 1, (a - 0.08 - 0.22 * dist[i]) / 0.6)
+      gsap.set(ch, { opacity: 0.72 * k, yPercent: lerp(narrow ? -44 : -72, -20, k) })
     })
     scene.setApproach(a)
   }
@@ -1118,9 +1130,13 @@ function sonar(ctx, root, scene) {
   const logEl = root.querySelector('[data-fin-log]')
   const listEl = root.querySelector('[data-fin-log-list]')
   const liveEl = root.querySelector('[data-fin-log-live]')
+  const countEl = root.querySelector('[data-fin-log-count]')
   let pings = 0
   let found = []
   let doneT = 0
+  const count = (n) => {
+    if (countEl) countEl.textContent = `${n ? n : 'no'} contact${n === 1 ? '' : 's'} on the floor`
+  }
 
   const userPing = (origin, client) => {
     pings += 1
@@ -1129,6 +1145,7 @@ function sonar(ctx, root, scene) {
       listEl.innerHTML = ''
       logEl.hidden = false
       logEl.querySelector('[data-fin-log-n]').textContent = String(pings)
+      if (countEl) countEl.textContent = 'listening for echoes'
       logEl.classList.remove('is-done')
     }
     scene.ring(origin, { strength: 1.1, dur: 5.4, user: true })
@@ -1140,6 +1157,7 @@ function sonar(ctx, root, scene) {
     if (!logEl) return
     logEl.classList.add('is-done')
     const n = found.length
+    count(n)
     const list = found.map((c) => `${c.name.toLowerCase()} at ${c.dist.toFixed(1)} m`).join(', ')
     liveEl.textContent = n
       ? `Ping ${pings}: ${n} contact${n > 1 ? 's' : ''} on the floor: ${list}.`
@@ -1148,6 +1166,7 @@ function sonar(ctx, root, scene) {
   scene.onContact((c) => {
     if (found.some((x) => x.id === c.id)) return
     found.push(c)
+    count(found.length)
     if (!listEl) return
     const li = document.createElement('li')
     li.className = 'fin__log-item'
@@ -1179,6 +1198,7 @@ function reservation(ctx, root, arrive) {
   const done = root.querySelector('[data-fin-done]')
   const doneTitle = root.querySelector('[data-fin-done-title]')
   const summary = root.querySelector('[data-fin-summary]')
+  const stamp = (k) => root.querySelector(`[data-fin-stamp="${k}"]`)
   const pendingEl = root.querySelector('[data-fin-pending]')
   const again = root.querySelector('[data-fin-again]')
   const surface = root.querySelector('[data-fin-surface]')
@@ -1377,7 +1397,9 @@ function reservation(ctx, root, arrive) {
     if (!ringTl) return
     ringsOn && !document.hidden ? ringTl.resume() : ringTl.pause()
   })
-  function playReturn(from) {
+  // `beacon`: show the pulse's source (only where it sits in clear water, not
+  // on top of the words)
+  function playReturn(from, beacon = true) {
     if (!sonarSvg) return
     const pr = panel.getBoundingClientRect()
     const x = from.left + from.width / 2 - pr.left
@@ -1389,12 +1411,20 @@ function reservation(ctx, root, arrive) {
       c?.setAttribute('cy', y.toFixed(1))
     })
     ringTl?.kill()
+    gsap.killTweensOf(core)
+    gsap.set(core, { opacity: beacon ? 1 : 0 })
     if (ctx.reducedMotion) {
       rings.forEach((c, i) => gsap.set(c, { attr: { r: R * (0.3 + i * 0.22) }, opacity: 0.5 - i * 0.14 }))
       return
     }
     gsap.set(rings, { attr: { r: 4 }, opacity: 0 })
-    ringTl = gsap.timeline({ repeat: 2, repeatDelay: 1.6, paused: !ringsOn })
+    // three returns, then the beacon goes out: nothing keeps running
+    ringTl = gsap.timeline({
+      repeat: 2,
+      repeatDelay: 1.6,
+      paused: !ringsOn,
+      onComplete: () => core && gsap.to(core, { opacity: 0, duration: 1.4, ease: 'power1.inOut' }),
+    })
     ringTl.to(rings, {
       keyframes: [
         { attr: { r: 4 }, opacity: 0.9, duration: 0.01 },
@@ -1408,7 +1438,11 @@ function reservation(ctx, root, arrive) {
     const email = form.elements.email.value.trim()
     const p = PROFILES[select.value].name
     const month = form.querySelector('input[name="month"]:checked').value
-    summary.textContent = `We will write to ${email} about the ${p} profile in ${month}.`
+    summary.textContent = `We will write to ${email}.`
+    const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    if (stamp('date')) stamp('date').textContent = date
+    if (stamp('profile')) stamp('profile').textContent = p
+    if (stamp('month')) stamp('month').textContent = month
     pending = null
     pendingEl.hidden = true
 
@@ -1431,7 +1465,16 @@ function reservation(ctx, root, arrive) {
         if (ctx.reducedMotion) panel.style.minHeight = ''
         else gsap.fromTo(panel, { minHeight: h0 }, { minHeight: h1, duration: 1.2, ease: 'abyss', onComplete: () => (panel.style.minHeight = '') })
       }
-      playReturn(narrow ? doneTitle.getBoundingClientRect() : r)
+      playReturn(narrow ? doneTitle.getBoundingClientRect() : r, !narrow)
+      // the form can be taller than the screen (always on a phone): the
+      // visitor pressed the button at its foot, so bring the answer to them
+      const vh = window.innerHeight
+      const t = doneTitle.getBoundingClientRect()
+      if (t.top < vh * 0.08 || t.top > vh * 0.6) {
+        const y = t.top + window.scrollY - vh * 0.16
+        if (ctx.lenis) ctx.lenis.scrollTo(y, { duration: 1.3, easing: easeInOut, force: true })
+        else window.scrollTo(0, y)
+      }
       doneTitle.focus({ preventScroll: true })
     }
     if (ctx.reducedMotion) {
@@ -1452,6 +1495,12 @@ function reservation(ctx, root, arrive) {
           kids,
           { opacity: 0, filter: 'blur(8px)', y: 14 },
           { opacity: 1, filter: 'blur(0px)', y: 0, duration: 1.3, ease: 'power2.out', stagger: 0.12, delay: 0.35, clearProps: 'filter,transform' },
+        )
+        // the lamp finds the confirmation and reads it, like the guests' words
+        gsap.fromTo(
+          doneTitle,
+          { '--b': '-30%' },
+          { '--b': '140%', duration: 2.4, ease: 'power1.inOut', delay: 0.55 },
         )
       },
     })

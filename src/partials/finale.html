@@ -28,7 +28,7 @@
               <span class="fin__ping-label">Send a sonar ping</span>
             </button>
             <div class="fin__log" data-fin-log hidden>
-              <p class="fin__log-head" aria-hidden="true">Ping <span data-fin-log-n>1</span>, contacts on the floor</p>
+              <p class="fin__log-head" aria-hidden="true">Ping <span data-fin-log-n>1</span>, <span data-fin-log-count>listening for echoes</span></p>
               <ul class="fin__log-list" data-fin-log-list aria-hidden="true"></ul>
               <p class="visually-hidden" data-fin-log-live aria-live="polite"></p>
             </div>
@@ -124,6 +124,12 @@
         <h3 class="fin__done-title" data-fin-done-title tabindex="-1">Reservation request received</h3>
         <p class="fin__done-body">A dive planner will reply within two working days.</p>
         <p class="fin__done-summary" data-fin-summary></p>
+        <!-- the request, as a line in the dive log -->
+        <dl class="fin__stamp" data-fin-stamp>
+          <div class="fin__stamp-row"><dt>Logged</dt><dd data-fin-stamp="date"></dd></div>
+          <div class="fin__stamp-row"><dt>Profile</dt><dd data-fin-stamp="profile"></dd></div>
+          <div class="fin__stamp-row"><dt>Preferred month</dt><dd data-fin-stamp="month"></dd></div>
+        </dl>
         <p class="fin__done-pending" data-fin-pending hidden></p>
         <div class="fin__done-actions">
           <button class="btn btn--solid fin__surface" type="button" data-fin-surface>Return to the surface</button>

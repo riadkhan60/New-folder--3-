@@ -413,3 +413,12 @@
     margin-top: var(--s-5);
   }
 }
+
+/* text lit by the beam's gradient would vanish in forced colours */
+@media (forced-colors: active) {
+  .voices__text {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+}

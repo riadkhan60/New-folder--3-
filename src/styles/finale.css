@@ -154,12 +154,26 @@
   text-wrap: pretty;
 }
 
+/* the ping and what comes back. The log's room is reserved above the button,
+   so a ping never changes the stage's height (which would shift the lead and
+   stretch the floor canvases); on a phone it hangs below the button instead */
 .fin__sonar {
+  position: relative;
   flex: none;
   display: grid;
+  grid-template-rows: minmax(6.6rem, auto) auto;
+  align-items: end;
   justify-items: start;
   gap: 0.4rem;
   min-width: 15.5rem;
+}
+
+.fin__sonar > .fin__ping {
+  grid-row: 2;
+}
+
+.fin__sonar > .fin__log {
+  grid-row: 1;
 }
 
 /* a keyboard visitor can reach the ping before the reveal has run */
@@ -249,14 +263,14 @@
 .fin__log-head {
   font-family: var(--font-text);
   font-style: italic;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  font-size: 0.86rem;
+  line-height: 1.35;
   color: var(--c-ink-3);
 }
 
 .fin__log-list {
   display: grid;
-  margin-top: 0.35rem;
+  margin-top: 0.3rem;
   border-top: 1px solid rgb(255 59 47 / 0.28);
 }
 
@@ -264,7 +278,7 @@
   display: flex;
   justify-content: space-between;
   gap: 1.5rem;
-  padding: 0.32rem 0;
+  padding: 0.28rem 0;
   border-bottom: 1px solid var(--c-line);
   font-family: var(--font-display);
   font-stretch: 100%;
@@ -922,6 +936,9 @@
 }
 
 .fin__done-title {
+  /* the lamp reads the confirmation to you: dark water ahead of the beam, a
+     hot band under it, lit words behind it (finale.js sweeps --b) */
+  --b: 140%;
   max-width: 17ch;
   font-family: var(--font-display);
   font-stretch: 62%;
@@ -929,12 +946,31 @@
   font-size: clamp(2.3rem, 3.7vw, 4rem);
   line-height: 1;
   letter-spacing: 0.012em;
-  color: var(--c-ink);
   text-wrap: balance;
+  background-image: linear-gradient(
+    100deg,
+    var(--c-ink) 0%,
+    var(--c-ink) calc(var(--b) - 24%),
+    color-mix(in srgb, var(--c-ink) 74%, var(--fin-red)) calc(var(--b) - 10%),
+    color-mix(in srgb, var(--fin-red) 34%, #fff6f2) calc(var(--b) - 3%),
+    color-mix(in srgb, var(--fin-red) 34%, #fff6f2) calc(var(--b) + 1%),
+    color-mix(in srgb, var(--fin-red) 55%, transparent) calc(var(--b) + 8%),
+    rgb(234 246 244 / 0.14) calc(var(--b) + 18%),
+    rgb(234 246 244 / 0.14) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .fin__done-title:focus {
   outline: none;
+}
+
+.fin__done-title::selection {
+  background: var(--fin-red);
+  -webkit-text-fill-color: #1a0201;
 }
 
 .fin__done-body {
@@ -959,6 +995,51 @@
 }
 
 .fin__done-pending {
+  color: var(--fin-red-ink);
+}
+
+/* the request as a line in the dive log, like the guests' logs above */
+.fin__stamp {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: var(--s-5);
+  border-top: 1px solid rgb(255 59 47 / 0.28);
+}
+
+.fin__stamp-row {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 1.25rem 0 0;
+  margin-right: 1.25rem;
+  border-right: 1px solid var(--c-line);
+}
+
+.fin__stamp-row:last-child {
+  border-right: 0;
+  margin-right: 0;
+}
+
+.fin__stamp dt {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 430;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  color: var(--c-ink-3);
+}
+
+.fin__stamp dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 520;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums lining-nums;
   color: var(--fin-red-ink);
 }
 
@@ -1059,6 +1140,24 @@
   .fin__sonar {
     min-width: 0;
     width: 100%;
+    grid-template-rows: auto;
+  }
+  .fin__sonar > .fin__ping {
+    grid-row: auto;
+  }
+  /* below the button, over the stage's bottom room (34svh): no reflow. On a
+     phone the contacts are labelled on the floor itself, so the log is one
+     line (the full list is still announced through the live region) */
+  .fin__sonar > .fin__log {
+    grid-row: auto;
+    position: absolute;
+    top: calc(100% + 0.1rem);
+    left: 0;
+    right: 0;
+    width: auto;
+  }
+  .fin__log-list {
+    display: none;
   }
   .fin__under {
     flex-direction: column;
@@ -1095,5 +1194,16 @@
   .fin__done-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* text lit by gradients would vanish in forced colours: use the system ink */
+@media (forced-colors: active) {
+  .fin__digits,
+  .fin__char,
+  .fin__done-title {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
   }
 }
