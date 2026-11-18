@@ -1,3 +1,96 @@
-<section id="life" class="creatures" data-depth-start="4000" data-depth-end="6000" aria-label="Life in the dark">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[creatures — 4000 m → 6000 m]</div>
+<section id="life" class="creatures" data-depth-start="4000" data-depth-end="6000" aria-labelledby="life-title">
+  <!-- Lights off. A sticky, near-black stage: the canvas draws only what
+       glows (photophores, lures, rings) until the sub's lamp — the pointer —
+       falls on an animal and shows its body. Every animal is also a real
+       button + fact below, so the scene works by keyboard and screen reader. -->
+  <div class="creatures__stage" data-cursor="lamp">
+    <canvas class="creatures__canvas" aria-hidden="true"></canvas>
+
+    <div class="creatures__intro wrap">
+      <h2 id="life-title" class="creatures__title t-h2">
+        <span class="creatures__base">Six lights in the&nbsp;dark</span>
+        <span class="creatures__lit" aria-hidden="true">Six lights in the&nbsp;dark</span>
+      </h2>
+      <p class="creatures__lede">
+        <span class="creatures__base">Below 1,000 metres the only light is alive. <span data-hint>Move the lamp to see who made it.</span></span>
+        <span class="creatures__lit" aria-hidden="true">Below 1,000 metres the only light is alive. <span data-hint>Move the lamp to see who made it.</span></span>
+      </p>
+    </div>
+
+    <ol class="creatures__specimens" aria-label="The six animals in the dark">
+      <li class="creatures__specimen" data-animal="atolla" style="--glow: var(--c-photophore-2)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-atolla">
+          <span class="creatures__common">Atolla jellyfish</span>
+          <span class="creatures__sci">Atolla wyvillei</span>
+        </button>
+        <p class="creatures__about" id="life-about-atolla">
+          <span class="creatures__depth">1,000–4,000 m</span>
+          <span class="creatures__fact">When something grabs it, a ring of blue light spins around its bell. The alarm may call in a bigger animal to eat the attacker.</span>
+        </p>
+      </li>
+      <li class="creatures__specimen" data-animal="siphonophore" style="--glow: var(--c-photophore-2)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-siphonophore">
+          <span class="creatures__common">Giant siphonophore</span>
+          <span class="creatures__sci">Praya dubia</span>
+        </button>
+        <p class="creatures__about" id="life-about-siphonophore">
+          <span class="creatures__depth">700–1,000 m</span>
+          <span class="creatures__fact">Not one animal but a colony of clones on a single stem, up to 50 m long. It draws prey in with blue light.</span>
+        </p>
+      </li>
+      <li class="creatures__specimen" data-animal="angler" style="--glow: var(--c-lure)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-angler">
+          <span class="creatures__common">Humpback anglerfish</span>
+          <span class="creatures__sci">Melanocetus johnsonii</span>
+        </button>
+        <p class="creatures__about" id="life-about-angler">
+          <span class="creatures__depth">200–1,500 m</span>
+          <span class="creatures__fact">The lure on her head glows with bacteria that live inside it. Small fish swim toward the light, and into her mouth.</span>
+        </p>
+      </li>
+      <li class="creatures__specimen" data-animal="squid" style="--glow: var(--c-photophore)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-squid">
+          <span class="creatures__common">Vampire squid</span>
+          <span class="creatures__sci">Vampyroteuthis infernalis</span>
+        </button>
+        <p class="creatures__about" id="life-about-squid">
+          <span class="creatures__depth">600–900 m</span>
+          <span class="creatures__fact">It has no ink. Threatened, it sheds a cloud of glowing mucus from its arm tips that can shine for nearly ten minutes.</span>
+        </p>
+      </li>
+      <li class="creatures__specimen" data-animal="dragon" style="--glow: var(--c-redlight)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-dragon">
+          <span class="creatures__common">Stoplight loosejaw</span>
+          <span class="creatures__sci">Malacosteus niger</span>
+        </button>
+        <p class="creatures__about" id="life-about-dragon">
+          <span class="creatures__depth">500–2,500 m</span>
+          <span class="creatures__fact">It hunts with red light that most deep-sea animals cannot see. To see it, it uses a pigment made from chlorophyll in its food.</span>
+        </p>
+      </li>
+      <li class="creatures__specimen" data-animal="comb" style="--glow: var(--c-ink)">
+        <button class="creatures__name" type="button" aria-describedby="life-about-comb">
+          <span class="creatures__common">Bloody-belly comb jelly</span>
+          <span class="creatures__sci">Lampocteis cruentiventer</span>
+        </button>
+        <p class="creatures__about" id="life-about-comb">
+          <span class="creatures__depth">250–1,500 m</span>
+          <span class="creatures__fact">The rainbows are your lamp, split by rows of beating cilia. Its dark red belly hides the glow of whatever it has eaten.</span>
+        </p>
+      </li>
+    </ol>
+
+    <div class="creatures__log">
+      <ol class="creatures__pips" aria-hidden="true">
+        <li class="creatures__pip" data-pip="atolla" style="--glow: var(--c-photophore-2)"></li>
+        <li class="creatures__pip" data-pip="siphonophore" style="--glow: var(--c-photophore-2)"></li>
+        <li class="creatures__pip" data-pip="angler" style="--glow: var(--c-lure)"></li>
+        <li class="creatures__pip" data-pip="squid" style="--glow: var(--c-photophore)"></li>
+        <li class="creatures__pip" data-pip="dragon" style="--glow: var(--c-redlight)"></li>
+        <li class="creatures__pip creatures__pip--comb" data-pip="comb"></li>
+      </ol>
+      <p class="creatures__count" aria-live="polite"><span data-found>0</span> of 6 found</p>
+      <p class="creatures__note" data-note>Vesper passes all six on the way down, between 200 and 4,000&nbsp;m.</p>
+    </div>
+  </div>
 </section>
