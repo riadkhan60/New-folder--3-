@@ -24,20 +24,25 @@
 }
 
 .hero__title {
-  /* local copies of the section's compression values: hero.js scrubs these */
+  /* the surface values: wide and light */
   --wdth: 150;
   --wght: 250;
+  --lh: 0.86;
+  /* --squeeze (0 → 1, scrubbed by hero.js as you leave the surface) puts
+     the title under pressure: wdth 150 → 60, wght 250 → 800, lines packed
+     tighter, tracking opened up so heavy glyphs never touch. */
+  --squeeze: 0;
   position: relative;
   margin: 0;
   text-align: center;
   /* "way down." measures 7.11em at full width: fit it to the stage */
   font-size: min(15.5rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 7.2));
-  line-height: 0.86;
-  letter-spacing: -0.04em;
+  line-height: calc(var(--lh) - 0.06 * var(--squeeze));
+  letter-spacing: calc(-0.04em + 0.034em * var(--squeeze));
   color: var(--c-ink);
-  /* --breath / --press: the intro's exhale, layered on the depth values */
-  font-stretch: calc((var(--wdth) + var(--breath, 0)) * 1%);
-  font-weight: calc(var(--wght) + var(--press, 0));
+  /* --breath / --press: the intro's exhale, layered on top */
+  font-stretch: calc((var(--wdth) - 90 * var(--squeeze) + var(--breath, 0)) * 1%);
+  font-weight: calc(var(--wght) + 550 * var(--squeeze) + var(--press, 0));
   white-space: nowrap;
   will-change: transform;
   translate: 0 -2vh;
@@ -92,10 +97,12 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
 }
 
 /* ------------------------------------------------- scroll cue + plumb */
+/* The bob comes to rest on the same baseline as the lead and the fact, and
+   the cue spans the lead's height, so it never touches the fold. */
 .hero__cue {
   position: absolute;
   left: 50%;
-  bottom: calc(-1 * clamp(1.75rem, 6vh, 3.5rem));
+  bottom: 0;
   display: grid;
   justify-items: center;
   gap: var(--s-3);
@@ -119,7 +126,7 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
 
 .hero__plumb {
   width: 14px;
-  height: clamp(72px, 12vh, 112px);
+  height: clamp(64px, 9vh, 96px);
   overflow: visible;
 }
 
@@ -149,9 +156,9 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
 
   .hero__title {
     /* "the way" is the widest phone line at 5.64em */
+    --lh: 0.9;
     font-size: min(9rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 5.75));
-    line-height: 0.9;
-    letter-spacing: -0.045em;
+    letter-spacing: calc(-0.045em + 0.038em * var(--squeeze));
     translate: 0 -4svh;
   }
 
@@ -166,7 +173,8 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
     grid-template-columns: minmax(0, 1fr);
     row-gap: var(--s-5);
     margin-top: var(--s-6);
-    padding-bottom: calc(clamp(72px, 12vh, 112px) + var(--s-7));
+    /* room for the cue: label + gap + plumb */
+    padding-bottom: calc(clamp(64px, 9vh, 96px) + var(--s-7) + var(--s-3));
   }
 
   .hero__lead,
@@ -180,9 +188,6 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
     font-size: var(--fs-small);
   }
 
-  .hero__cue {
-    bottom: calc(-1 * var(--s-5));
-  }
 }
 
 /* ------------------------------------------------------ reduced motion */

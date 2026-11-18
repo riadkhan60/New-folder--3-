@@ -5,9 +5,17 @@
  *    way things do seen through moving water — a ripple travels out from
  *    the centre, each glyph wavers, stretches and un-blurs, while the whole
  *    line breathes out to its full surface width.
- * 2. Scroll: as the visitor leaves the surface the title is put under
- *    pressure — font-stretch 150 → ~92, weight 250 → ~640 — and sinks
- *    behind the page while it dims. The site's core mechanic, first shown.
+ * 2. Scroll: the hero's exit is the first, plainest demonstration of the
+ *    site's one idea. The composition holds almost still for the first
+ *    screen of scroll (it rises at a few percent of the scroll speed and
+ *    eases into full speed), so the squeeze happens in plain view:
+ *      - the lead, the fact and the cue let go first;
+ *      - the title is put under pressure: Anybody wdth 150 → 60,
+ *        wght 250 → 800, lines packed tighter. power2.in, so the pressure
+ *        visibly builds;
+ *      - only once it is a dense, narrow block does it rise away and dim,
+ *        handing over to the manifesto.
+ *    One CSS variable (--squeeze, 0 → 1) drives every axis; hero.css maps it.
  * 3. A plumb line pays out under "Scroll to descend", slowly, on a loop.
  */
 import '../styles/hero.css'
@@ -20,6 +28,7 @@ export function init(ctx) {
   const { gsap, SplitText } = ctx
 
   const title = root.querySelector('.hero__title')
+  const stage = root.querySelector('.hero__stage')
   const foot = root.querySelector('.hero__foot')
   const reveals = [...root.querySelectorAll('[data-hero-reveal]')]
   const cord = root.querySelector('.hero__plumb-cord')
@@ -133,35 +142,55 @@ export function init(ctx) {
   }
 
   /* ---------------------------------------------- scroll: under pressure */
+  const vh = () => window.innerHeight
+
+  // 1. The hold. Exact (scrub: true) so the title never swims against the
+  //    scroll. sine.out with an amplitude of 0.6 × the range means the block
+  //    starts out rising at ~6% of the scroll speed and eases, without a
+  //    seam, into moving with the page by the end of the first screen.
+  const HOLD = 0.95 // screens
+  if (stage && foot) {
+    gsap.fromTo(
+      [stage, foot],
+      { y: 0 },
+      {
+        y: () => vh() * HOLD * 0.6,
+        ease: 'sine.out',
+        scrollTrigger: {
+          trigger: root,
+          start: 'top top',
+          end: () => `+=${Math.round(vh() * HOLD)}`,
+          scrub: true,
+          invalidateOnRefresh: true,
+        },
+      },
+    )
+  }
+
+  // 2. The squeeze and 3. the release, over one screen of scroll.
   gsap
     .timeline({
+      defaults: { ease: 'none' },
       scrollTrigger: {
         trigger: root,
         start: 'top top',
-        end: 'bottom top',
-        scrub: 0.6,
+        end: () => `+=${Math.round(vh())}`,
+        scrub: 0.5,
         invalidateOnRefresh: true,
       },
     })
-    .fromTo(
-      title,
-      { '--wdth': 150, '--wght': 250 },
-      { '--wdth': 92, '--wght': 640, ease: 'none', duration: 1 },
-      0,
-    )
-    .fromTo(
-      title,
-      { y: 0, opacity: 1 },
-      { y: () => window.innerHeight * 0.26, opacity: 0.1, ease: 'power1.in', duration: 1 },
-      0,
-    )
-    .fromTo(foot, { opacity: 1 }, { opacity: 0, ease: 'power1.in', duration: 0.45 }, 0)
+    // the small things let go first (autoAlpha: the cue leaves the tab order)
+    .fromTo(foot, { autoAlpha: 1, yPercent: 0 }, { autoAlpha: 0, yPercent: -12, ease: 'power1.in', duration: 0.26 }, 0)
+    // the pressure builds, and keeps building
+    .fromTo(title, { '--squeeze': 0 }, { '--squeeze': 1, ease: 'power2.in', duration: 0.62 }, 0)
+    // a dense, narrow block now: it rises away into the water
+    .fromTo(title, { opacity: 1 }, { opacity: 0.12, ease: 'power1.in', duration: 0.4 }, 0.6)
 
-  // only loop the plumb line while the hero is on screen
+  // only loop the plumb line while it can be seen
   const plumbST = ctx.ScrollTrigger.create({
     trigger: root,
     start: 'top bottom',
-    end: 'bottom top',
+    end: () => `top+=${Math.round(vh() * 0.26)} top`,
     onToggle: (self) => {
       if (self.isActive && introDone) plumb.play()
       else plumb.pause()

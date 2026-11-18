@@ -1,3 +1,70 @@
-<section id="voices" class="voices" data-depth-start="10000" data-depth-end="10600" aria-label="Divers in their own words">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[voices — 10000 m → 10600 m]</div>
+<section id="voices" class="voices" data-depth-start="10000" data-depth-end="10600" aria-labelledby="voices-title">
+  <div class="voices__stage" data-vo-stage>
+    <!-- the sub's red lamp: a volumetric beam that pans across each quote,
+         lighting the silt in the water as it goes -->
+    <canvas class="voices__beam" data-vo-canvas aria-hidden="true"></canvas>
+
+    <div class="voices__inner wrap">
+      <h2 id="voices-title" class="voices__title">
+        <span class="voices__lamp" aria-hidden="true"></span>Three guests on what they found at the bottom
+      </h2>
+
+      <ol class="voices__list" data-vo-list>
+        <li class="voices__item" data-vo-item>
+          <figure class="voices__figure">
+            <blockquote class="voices__quote">
+              <p class="voices__text" data-vo-text>
+                When we touched down, the silt rose around the sphere like smoke and then simply stayed
+                there, lit red by the lamps, turning very slowly. The pilot said it would take ten
+                minutes to settle. Nothing down there is in a hurry, not even the dust.
+              </p>
+            </blockquote>
+            <figcaption class="voices__cite" data-vo-cite>
+              <span class="voices__name">Leilani Kahale</span>
+              <span class="voices__who">A schoolteacher from Hilo, Hawaiʻi. She dived the Hadal profile in January 2026.</span>
+            </figcaption>
+          </figure>
+        </li>
+
+        <li class="voices__item" data-vo-item>
+          <figure class="voices__figure">
+            <blockquote class="voices__quote">
+              <p class="voices__text" data-vo-text>
+                I designed bridges for thirty years, so I knew the number: about 1,100 bar on the
+                other side of the acrylic. Then an amphipod two centimetres long walked past my
+                viewport, across the mud, as if it were crossing a kitchen floor. I still have no
+                calculation for that.
+              </p>
+            </blockquote>
+            <figcaption class="voices__cite" data-vo-cite>
+              <span class="voices__name">Tomasz Wierzbicki</span>
+              <span class="voices__who">A retired structural engineer from Kraków. He dived the Hadal profile in March 2025.</span>
+            </figcaption>
+          </figure>
+        </li>
+
+        <li class="voices__item" data-vo-item>
+          <figure class="voices__figure">
+            <blockquote class="voices__quote">
+              <p class="voices__text" data-vo-text>
+                People ask me about the dark. It was the quiet I wasn’t ready for. For one minute our
+                pilot asked us not to speak, and the loudest thing in the sphere was the three of us
+                breathing. I have played in a great many concert halls. None of them was that still.
+              </p>
+            </blockquote>
+            <figcaption class="voices__cite" data-vo-cite>
+              <span class="voices__name">Inès Marchetti</span>
+              <span class="voices__who">A cellist from Lyon. She dived the Hadal profile in December 2025.</span>
+            </figcaption>
+          </figure>
+        </li>
+      </ol>
+
+      <div class="voices__progress" aria-hidden="true">
+        <span class="voices__tick" data-vo-tick><i></i></span>
+        <span class="voices__tick" data-vo-tick><i></i></span>
+        <span class="voices__tick" data-vo-tick><i></i></span>
+      </div>
+    </div>
+  </div>
 </section>
