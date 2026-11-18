@@ -1,0 +1,116 @@
+/* ==========================================================================
+   core/cursor — a precise dot, a lagging ring, and plankton that flash
+   where the pointer disturbs the water. Fine pointers only.
+   ========================================================================== */
+
+html.has-cursor,
+html.has-cursor * { cursor: none !important; }
+/* text fields keep the native caret cursor; the custom one steps aside */
+html.has-cursor :is(input:not([type='checkbox'], [type='radio'], [type='range'], [type='submit'], [type='button']), textarea, [contenteditable='true']) {
+  cursor: text !important;
+}
+
+.cursor {
+  --cur-accent: var(--c-photophore);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-out);
+}
+.cursor.is-visible { opacity: 1; }
+.cursor[data-mode='hide'],
+.cursor[data-mode='text'] { opacity: 0; }
+
+.cursor__dot,
+.cursor__ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.cursor__dot-inner {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #f4fffd;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cur-accent) 80%, transparent);
+  transition: transform 0.45s var(--ease-out), background-color 0.4s;
+}
+
+.cursor__ring-inner {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  margin: -19px 0 0 -19px;
+  border-radius: 50%;
+  border: 1px solid rgb(234 246 244 / 0.42);
+  transition:
+    transform 0.7s var(--ease-out),
+    border-color 0.5s var(--ease-out),
+    background-color 0.5s var(--ease-out),
+    opacity 0.4s var(--ease-out),
+    box-shadow 0.5s var(--ease-out);
+}
+
+/* links and buttons: the ring opens and takes the colour of the light */
+.cursor[data-mode='link'] .cursor__ring-inner {
+  transform: scale(1.55);
+  border-color: color-mix(in srgb, var(--cur-accent) 85%, transparent);
+  background-color: color-mix(in srgb, var(--cur-accent) 7%, transparent);
+  box-shadow:
+    0 0 18px -4px color-mix(in srgb, var(--cur-accent) 55%, transparent),
+    inset 0 0 10px color-mix(in srgb, var(--cur-accent) 18%, transparent);
+}
+.cursor[data-mode='link'] .cursor__dot-inner { transform: scale(0.6); }
+
+/* drag / view: a larger lens that names the action */
+.cursor[data-mode='drag'] .cursor__ring-inner,
+.cursor[data-mode='view'] .cursor__ring-inner {
+  transform: scale(2.3);
+  border-color: rgb(234 246 244 / 0.6);
+  background-color: rgb(234 246 244 / 0.06);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.cursor[data-mode='drag'] .cursor__dot-inner,
+.cursor[data-mode='view'] .cursor__dot-inner { transform: scale(0); }
+
+/* lamp: the creatures section draws its own light, keep only a pinpoint */
+.cursor[data-mode='lamp'] .cursor__ring-inner { opacity: 0; transform: scale(0.4); }
+.cursor[data-mode='lamp'] .cursor__dot-inner { transform: scale(0.66); }
+
+.cursor.is-down .cursor__ring-inner { transform: scale(0.82); }
+.cursor.is-down[data-mode='link'] .cursor__ring-inner { transform: scale(1.3); }
+
+.cursor__label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  color: var(--c-ink);
+  opacity: 0;
+  scale: 0.7;
+  transition: opacity 0.35s var(--ease-out), scale 0.6s var(--ease-out);
+  white-space: nowrap;
+}
+.cursor[data-mode='drag'] .cursor__label,
+.cursor[data-mode='view'] .cursor__label { opacity: 1; scale: 1; }
+
+.cursor__sparks {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  mix-blend-mode: screen;
+}

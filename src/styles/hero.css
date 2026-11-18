@@ -1,0 +1,191 @@
+/* ==========================================================================
+   HERO (#surface) — just under the surface, looking up at the light.
+   Transparent: the water is depth.js, the light is the ocean canvas.
+   ========================================================================== */
+
+#surface.hero {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding-top: clamp(5.5rem, 15vh, 9.5rem);
+  padding-bottom: clamp(1.75rem, 6vh, 3.5rem);
+}
+
+/* ---------------------------------------------------------------- title */
+/* Centred on the viewport (not the instrument-offset .wrap): the light
+   falls from the middle of the surface, so the title sits under it. */
+.hero__stage {
+  display: grid;
+  align-items: center;
+  padding-inline: calc(var(--rail) + var(--instrument));
+  min-width: 0;
+}
+
+.hero__title {
+  /* local copies of the section's compression values: hero.js scrubs these */
+  --wdth: 150;
+  --wght: 250;
+  position: relative;
+  margin: 0;
+  text-align: center;
+  /* "way down." measures 7.11em at full width: fit it to the stage */
+  font-size: min(15.5rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 7.2));
+  line-height: 0.86;
+  letter-spacing: -0.04em;
+  color: var(--c-ink);
+  /* --breath / --press: the intro's exhale, layered on the depth values */
+  font-stretch: calc((var(--wdth) + var(--breath, 0)) * 1%);
+  font-weight: calc(var(--wght) + var(--press, 0));
+  white-space: nowrap;
+  will-change: transform;
+  translate: 0 -2vh;
+}
+
+/* designed line breaks: "Go all the / way down." on wide screens,
+   "Go all / the way / down." on phones */
+.hero__br--m {
+  display: none;
+}
+
+/* SplitText wrappers */
+.hero__title .hero__word {
+  white-space: nowrap;
+}
+.hero__title .hero__char {
+  transform-origin: 50% 85%;
+}
+
+/* No flash of the un-animated title before the intro takes over. */
+html.is-loading #surface.is-armed .hero__title,
+html.is-loading #surface.is-armed [data-hero-reveal] {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- foot */
+.hero__foot {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gap);
+  align-items: end;
+  margin-top: var(--s-7);
+}
+
+.hero__lead {
+  grid-column: 1 / span 5;
+  max-width: 31ch;
+  font-size: clamp(1.15rem, 1.5vw, 1.5rem);
+  line-height: 1.42;
+  text-wrap: pretty;
+}
+
+.hero__fact {
+  grid-column: 9 / span 4;
+  justify-self: end;
+  max-width: 34ch;
+  font-size: clamp(0.95rem, 1vw, 1.05rem);
+  line-height: 1.5;
+  color: var(--c-ink);
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------- scroll cue + plumb */
+.hero__cue {
+  position: absolute;
+  left: 50%;
+  bottom: calc(-1 * clamp(1.75rem, 6vh, 3.5rem));
+  display: grid;
+  justify-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4) 0;
+  color: var(--c-ink);
+  translate: -50% 0;
+}
+
+.hero__cue-label {
+  font-size: var(--fs-small);
+  color: var(--c-ink);
+  white-space: nowrap;
+  transition: color 0.5s var(--ease-out), text-shadow 0.5s var(--ease-out);
+}
+
+.hero__cue:hover .hero__cue-label,
+.hero__cue:focus-visible .hero__cue-label {
+  color: var(--c-snell);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--c-snell) 70%, transparent);
+}
+
+.hero__plumb {
+  width: 14px;
+  height: clamp(72px, 12vh, 112px);
+  overflow: visible;
+}
+
+.hero__plumb-track {
+  stroke: var(--c-line-strong);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.hero__plumb-cord {
+  stroke: var(--c-snell);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.hero__plumb-bob path {
+  fill: var(--c-snell);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c-snell) 80%, transparent));
+}
+
+/* ------------------------------------------- phones + portrait tablets */
+@media (max-width: 767px), (max-width: 1100px) and (orientation: portrait) {
+  #surface.hero {
+    padding-top: clamp(6rem, 17svh, 8rem);
+    padding-bottom: var(--s-5);
+  }
+
+  .hero__title {
+    /* "the way" is the widest phone line at 5.64em */
+    font-size: min(9rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 5.75));
+    line-height: 0.9;
+    letter-spacing: -0.045em;
+    translate: 0 -4svh;
+  }
+
+  .hero__br--d {
+    display: none;
+  }
+  .hero__br--m {
+    display: inline;
+  }
+
+  .hero__foot {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--s-5);
+    margin-top: var(--s-6);
+    padding-bottom: calc(clamp(72px, 12vh, 112px) + var(--s-7));
+  }
+
+  .hero__lead,
+  .hero__fact {
+    grid-column: 1;
+    justify-self: start;
+    max-width: 34ch;
+  }
+
+  .hero__fact {
+    font-size: var(--fs-small);
+  }
+
+  .hero__cue {
+    bottom: calc(-1 * var(--s-5));
+  }
+}
+
+/* ------------------------------------------------------ reduced motion */
+#surface.is-static .hero__title {
+  will-change: auto;
+}

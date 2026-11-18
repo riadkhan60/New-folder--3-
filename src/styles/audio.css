@@ -1,0 +1,2 @@
+/* core/audio has no visible UI of its own: the sound toggle lives in the nav
+   (.nav__sound, styled in nav.css). Kept for the module contract. */

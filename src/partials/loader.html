@@ -1,1 +1,83 @@
-<!-- loader (stub) -->
+<div class="loader" aria-hidden="true">
+  <script>
+    /* Decide before first paint whether the intro will run, so ?skipintro and
+       reduced-motion visitors never see the black overlay flash. main.js makes
+       the same decision once modules load. */
+    (function () {
+      try {
+        if (/[?&](skipintro|reduced)(=|&|$)/.test(location.search) ||
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          document.documentElement.classList.add('skip-intro')
+        }
+      } catch (e) {}
+    })()
+  </script>
+  <style>
+    /* Critical: cover the page from the first paint, before loader.css lands. */
+    .loader { position: fixed; inset: 0; z-index: 100; }
+    .loader__panel { position: absolute; inset: 0; background: #000; }
+    .loader__frame, .loader__mark { opacity: 0; }
+    html.skip-intro .loader,
+    html.is-ready .loader:not(.is-exiting) { display: none; }
+  </style>
+
+  <div class="loader__panel">
+    <div class="loader__frame">
+      <div class="loader__top">
+        <p class="loader__where">Vesper is preparing to dive.</p>
+        <p class="loader__coords">
+          <span class="loader__coords-name">Above the Challenger Deep</span>
+          <span class="loader__coords-num">11°22′ N 142°35′ E</span>
+        </p>
+      </div>
+
+      <div class="loader__bottom">
+        <ol class="loader__checks">
+          <li class="loader__check">
+            <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
+            <span class="loader__label">Hatch sealed</span>
+            <span class="loader__leader"></span>
+            <span class="loader__value">Cabin 1.01 bar</span>
+          </li>
+          <li class="loader__check">
+            <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
+            <span class="loader__label">Life support nominal</span>
+            <span class="loader__leader"></span>
+            <span class="loader__value">O₂ 20.9 %</span>
+          </li>
+          <li class="loader__check">
+            <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
+            <span class="loader__label">Ballast armed</span>
+            <span class="loader__leader"></span>
+            <span class="loader__value">2 drop weights</span>
+          </li>
+          <li class="loader__check">
+            <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
+            <span class="loader__label">Lamps tested</span>
+            <span class="loader__leader"></span>
+            <span class="loader__value">22 of 22</span>
+          </li>
+          <li class="loader__check loader__check--release">
+            <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
+            <span class="loader__label">Released from MV Lantern</span>
+            <span class="loader__leader"></span>
+            <span class="loader__value">0 m</span>
+          </li>
+        </ol>
+
+        <div class="loader__count">
+          <p class="loader__count-label"><span>Release in</span></p>
+          <p class="loader__count-num"><span class="loader__count-val">2.00</span><span class="loader__count-unit">s</span></p>
+        </div>
+      </div>
+
+      <div class="loader__progress"><span></span></div>
+    </div>
+  </div>
+
+  <canvas class="loader__water"></canvas>
+
+  <div class="loader__mark">
+    <span class="loader__word"><span class="loader__ch">N</span><span class="loader__ch">o</span><span class="loader__ch">c</span><span class="loader__ch">t</span><span class="loader__ch loader__i">ı<span class="loader__tittle"></span></span><span class="loader__ch">l</span><span class="loader__ch">u</span><span class="loader__ch">c</span><span class="loader__ch">a</span></span>
+  </div>
+</div>

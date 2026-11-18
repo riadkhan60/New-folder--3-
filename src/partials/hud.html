@@ -1,1 +1,45 @@
-<!-- hud (stub) -->
+<aside class="hud" aria-label="Dive instruments">
+  <div class="hud__readout">
+    <p class="hud__zone">
+      <span class="hud__live" aria-hidden="true"></span>
+      <span class="hud__zone-swap">
+        <span class="hud__zone-name">Sunlight zone</span>
+        <span class="hud__zone-sci">Epipelagic</span>
+      </span>
+    </p>
+
+    <p class="hud__depth">
+      <span class="hud__digits" aria-hidden="true"></span>
+      <span class="hud__unit" aria-hidden="true">m</span>
+      <span class="visually-hidden">Depth <span class="hud__depth-text">0</span> metres</span>
+    </p>
+
+    <div class="hud__band" aria-hidden="true">
+      <span class="hud__band-track"><span class="hud__band-fill"></span></span>
+      <span class="hud__band-from">0</span>
+      <span class="hud__band-to">200</span>
+    </div>
+
+    <dl class="hud__rows">
+      <div class="hud__row">
+        <dt>Pressure</dt>
+        <dd><span data-hud="pressure">1.0</span><span class="hud__u">bar</span></dd>
+      </div>
+      <div class="hud__row">
+        <dt>Water</dt>
+        <dd><span data-hud="temperature">27.5</span><span class="hud__u">°C</span></dd>
+      </div>
+      <div class="hud__row">
+        <dt>Sunlight</dt>
+        <dd><span data-hud="light">100</span><span class="hud__u" data-hud="light-unit">%</span></dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="hud__ruler" role="group" aria-label="Depth ruler">
+    <svg class="hud__scale" aria-hidden="true" focusable="false"></svg>
+    <span class="hud__track" aria-hidden="true"><span class="hud__fill"></span></span>
+    <span class="hud__needle" aria-hidden="true"><span class="hud__needle-dot"></span></span>
+    <ol class="hud__marks"></ol>
+  </div>
+</aside>

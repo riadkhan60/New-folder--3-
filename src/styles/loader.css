@@ -1,0 +1,278 @@
+/* ==========================================================================
+   core/loader — the pre-dive checklist and the release.
+   A black screen, five checks tick through, the countdown hits zero and
+   the water floods in from below, revealing the surface. The wordmark is
+   squeezed by the arriving pressure and then flies up into the nav.
+   ========================================================================== */
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-loader);
+  color: var(--c-ink);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+/* The loader must never outstay its welcome: CSS alone hides it. */
+html.skip-intro .loader,
+html.is-ready .loader:not(.is-exiting),
+.loader.is-done {
+  display: none;
+}
+.loader.is-exiting { pointer-events: none; }
+
+/* ---------------------------------------------------------- black panel */
+.loader__panel {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  will-change: clip-path;
+}
+/* the faintest bloom around the plankton dot, like a light in the dark */
+.loader__panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    38vmax 30vmax at 50% 50%,
+    rgb(108 248 232 / 0.055),
+    transparent 70%
+  );
+  opacity: var(--loader-bloom, 0);
+  pointer-events: none;
+}
+
+.loader__frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  padding: clamp(22px, 3.4vw, 44px) var(--rail) clamp(22px, 3vw, 40px);
+}
+.loader.is-running .loader__frame,
+.loader.is-running .loader__mark { opacity: 1; }
+
+/* ------------------------------------------------------------- top row */
+.loader__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-5);
+  font-family: var(--font-text);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  color: var(--c-ink-3);
+}
+.loader__where { font-style: italic; }
+.loader__coords {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+.loader__coords-name { font-style: italic; }
+.loader__coords-num {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 420;
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-ink-2);
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------- bottom row */
+.loader__bottom {
+  grid-row: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 27rem) 1fr;
+  align-items: end;
+  gap: var(--s-6);
+}
+
+.loader__checks {
+  display: grid;
+  gap: 0.15rem;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-size: 0.9375rem;
+  font-weight: 420;
+  line-height: 1.25;
+}
+.loader__check {
+  display: grid;
+  grid-template-columns: 18px auto minmax(1.5rem, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  min-height: 1.85rem;
+  color: var(--c-ink-3);
+  transition: color 0.5s var(--ease-out);
+}
+.loader__check.is-done { color: var(--c-ink); }
+
+.loader__tick {
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.loader__tick circle {
+  stroke: var(--c-line-strong);
+  stroke-width: 1;
+  transition: stroke 0.5s var(--ease-out), fill 0.5s var(--ease-out);
+}
+.loader__tick path {
+  stroke: #001a1a;
+  stroke-width: 1.6;
+}
+.loader__check.is-done .loader__tick circle {
+  stroke: var(--c-photophore);
+  fill: var(--c-photophore);
+  filter: drop-shadow(0 0 5px rgb(108 248 232 / 0.75));
+}
+
+.loader__label { white-space: nowrap; }
+.loader__leader {
+  height: 1px;
+  align-self: center;
+  margin-top: 0.15em;
+  background-image: linear-gradient(to right, var(--c-line-strong) 1px, transparent 1px);
+  background-size: 4px 1px;
+  transform-origin: left center;
+}
+.loader__value {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-micro);
+  font-weight: 400;
+  color: var(--c-ink-2);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ countdown */
+.loader__count {
+  justify-self: end;
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  text-align: right;
+}
+.loader__count-label {
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  color: var(--c-ink-3);
+  overflow: hidden;
+}
+.loader__count-label span { display: inline-block; }
+.loader__count-num {
+  display: flex;
+  align-items: baseline;
+  gap: 0.12em;
+  font-family: var(--font-display);
+  font-size: clamp(3.4rem, 8.4vw, 8rem);
+  font-stretch: 62%;
+  font-weight: 220;
+  line-height: 0.82;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  color: var(--c-ink);
+}
+.loader__count-unit {
+  font-size: 0.26em;
+  font-stretch: 100%;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--c-ink-3);
+}
+
+/* -------------------------------------------------------- progress line */
+.loader__progress {
+  grid-row: 4;
+  position: relative;
+  height: 1px;
+  margin-top: clamp(16px, 2.4vw, 28px);
+  background: var(--c-line);
+}
+.loader__progress span {
+  position: absolute;
+  inset: 0;
+  background: var(--c-photophore);
+  box-shadow: 0 0 10px rgb(108 248 232 / 0.8);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* ----------------------------------------------------- water + bubbles */
+.loader__water {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- wordmark */
+.loader__mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.loader__word {
+  --lw: 150;
+  --lg: 200;
+  --ls: -0.035;
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: clamp(3.2rem, 12.4vw, 12.5rem);
+  font-stretch: calc(var(--lw) * 1%);
+  font-weight: var(--lg);
+  letter-spacing: calc(var(--ls) * 1em);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--c-ink);
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.loader__ch { display: inline-block; }
+.loader__i { position: relative; }
+
+/* The tittle of the i is a single living plankton cell. */
+.loader__tittle {
+  position: absolute;
+  left: 50%;
+  top: 0.085em;
+  width: calc(0.075em + (var(--lg) - 200) * 0.00009em);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  translate: -50% 0;
+  background: radial-gradient(circle at 50% 50%, #f4fffd 0 22%, var(--c-photophore) 60%, rgb(108 248 232 / 0.6) 100%);
+  box-shadow:
+    0 0 0.06em rgb(244 255 253 / 0.9),
+    0 0 0.22em rgb(108 248 232 / 0.85),
+    0 0 0.7em rgb(108 248 232 / 0.45),
+    0 0 1.6em rgb(58 168 255 / 0.25);
+}
+
+/* ---------------------------------------------------------------- mobile */
+@media (max-width: 767px) {
+  .loader__top { flex-direction: column; gap: var(--s-1); }
+  .loader__coords { align-items: flex-start; text-align: left; }
+  .loader__bottom {
+    grid-template-columns: 1fr;
+    gap: var(--s-5);
+  }
+  .loader__count {
+    grid-row: 1;
+    justify-self: start;
+    justify-items: start;
+    text-align: left;
+  }
+  .loader__checks { font-size: 0.875rem; }
+  .loader__check { min-height: 1.7rem; }
+}

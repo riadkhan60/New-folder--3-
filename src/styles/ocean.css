@@ -1,0 +1,9 @@
+/* ==========================================================================
+   OCEAN — the global light layer (canvas#ocean, positioned by base.css)
+   The canvas is cleared to black and only adds light; `screen` blends it
+   with the water colour painted by depth.js, so black = untouched water.
+   ========================================================================== */
+
+#ocean {
+  mix-blend-mode: screen;
+}
