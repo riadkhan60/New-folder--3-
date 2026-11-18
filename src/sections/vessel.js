@@ -119,11 +119,11 @@ const THRUSTERS = [
   { p: [-2.02, 0.46, -0.8], d: [-1, 0, 0], s: 1.15 },
   { p: [-1.92, -0.3, 0.76], d: [-1, 0, 0], s: 1.0 },
   { p: [-1.92, -0.3, -0.76], d: [-1, 0, 0], s: 1.0 },
-  // flank pods, vertical
-  { p: [-0.78, 0.5, 0.9], d: [0, 1, 0], s: 1.0 },
-  { p: [-0.78, 0.5, -0.9], d: [0, 1, 0], s: 1.0 },
-  { p: [0.42, 0.66, 0.88], d: [0, 1, 0], s: 0.95 },
-  { p: [0.42, 0.66, -0.88], d: [0, 1, 0], s: 0.95 },
+  // vertical, recessed into the deck (y and tilt are resolved from the profile)
+  { p: [-1.36, 0, 0.24], d: [0, 1, 0], s: 0.82, deck: true },
+  { p: [-1.36, 0, -0.24], d: [0, 1, 0], s: 0.82, deck: true },
+  { p: [-0.52, 0, 0.24], d: [0, 1, 0], s: 0.82, deck: true },
+  { p: [-0.52, 0, -0.24], d: [0, 1, 0], s: 0.82, deck: true },
   // lateral tunnels, set into the side panels
   { p: [-1.38, 0.0, 0], d: [0, 0, 1], s: 0.9, side: 1 },
   { p: [-1.38, 0.0, 0], d: [0, 0, -1], s: 0.9, side: -1 },
@@ -246,6 +246,13 @@ function profileAt(x) {
   return [lo, hi]
 }
 
+/** Deck surface (after the edge round) at x: height and outward normal. */
+function deckAt(x) {
+  const y = profileAt(x)[1] + HULL.bevelS
+  const slope = (profileAt(x + 0.05)[1] - profileAt(x - 0.05)[1]) / 0.1
+  return { y, n: new Vector3(-slope, 1, 0).normalize() }
+}
+
 /* ==========================================================================
    Side elevation (SVG): the builder's plate drawing, and the no-WebGL view.
    ========================================================================== */
@@ -289,7 +296,10 @@ function elevationSVG(variant) {
     if (t.p[2] < 0 && t.d[2] === 0) continue
     const s = t.s
     if (t.d[0] !== 0) out.push(`<rect class="ve-part" x="${X(t.p[0] - 0.1 * s)}" y="${Y(t.p[1] + 0.165 * s)}" width="${(0.2 * s * K).toFixed(1)}" height="${(0.33 * s * K).toFixed(1)}" rx="3"/>`)
-    else if (t.d[1] !== 0) out.push(`<rect class="ve-part" x="${X(t.p[0] - 0.165 * s)}" y="${Y(t.p[1] + 0.1 * s)}" width="${(0.33 * s * K).toFixed(1)}" height="${(0.2 * s * K).toFixed(1)}" rx="3"/>`)
+    else if (t.deck) {
+      const dy = deckAt(t.p[0]).y
+      out.push(`<rect class="ve-part" x="${X(t.p[0] - 0.165 * s)}" y="${Y(dy + 0.05)}" width="${(0.33 * s * K).toFixed(1)}" height="${(0.06 * K).toFixed(1)}" rx="2"/>`)
+    }
     else if (t.side === 1) out.push(`<circle class="ve-part" cx="${X(t.p[0])}" cy="${Y(t.p[1])}" r="${(0.15 * s * K).toFixed(1)}"/>`)
   }
   out.push(`<path class="ve-part" d="M${X(-2.02)} ${Y(0.46)}L${X(-1.7)} ${Y(0.46)}M${X(-1.92)} ${Y(-0.3)}L${X(-1.6)} ${Y(-0.3)}"/>`)
@@ -842,7 +852,7 @@ function createVesper(canvas, { dpr, mobile }) {
         clearcoatRoughness: 0.02,
         ior: 1.49,
         specularIntensity: 1,
-        emissive: new Color('#48e6d8'),
+        emissive: new Color('#2bbdb2'),
         emissiveIntensity: 0.0,
       }),
       U,
@@ -943,11 +953,6 @@ function createVesper(canvas, { dpr, mobile }) {
   // tail bars for the aft thrusters
   satin.push(rod(new Vector3(-1.86, 0.46, -0.8), new Vector3(-1.86, 0.46, 0.8), 0.035))
   satin.push(rod(new Vector3(-1.76, -0.3, -0.76), new Vector3(-1.76, -0.3, 0.76), 0.032))
-  // flank pylons
-  for (const t of THRUSTERS.slice(4, 8)) {
-    const s = Math.sign(t.p[2])
-    satin.push(rod(new Vector3(t.p[0], t.p[1], s * (sideZ(t.p[0], t.p[1]) - 0.08)), new Vector3(t.p[0], t.p[1], t.p[2] - s * 0.15), 0.03))
-  }
   // hatch coaming on the deck above the sphere
   const deck = profileAt(SPHERE.x)[1] + HULL.bevelS
   satin.push(new CylinderGeometry(0.31, 0.33, 0.1, 48).translate(SPHERE.x, deck + 0.02, 0))
@@ -992,16 +997,26 @@ function createVesper(canvas, { dpr, mobile }) {
   const T = thrusterGeometry()
   const tSat = new InstancedMesh(T.satin, M.satin, THRUSTERS.length)
   const tDark = new InstancedMesh(T.dark, M.dark, THRUSTERS.length)
+  const throats = []
   THRUSTERS.forEach((t, i) => {
     const p = v3(t.p)
+    let dir = v3(t.d)
     if (t.side) p.z = t.side * (sideZ(p.x, p.y) - 0.06)
-    const m = new Matrix4().compose(p, aim(v3(t.d)), new Vector3(t.s, t.s, t.s))
+    if (t.deck) {
+      const dk = deckAt(p.x)
+      dir = dk.n
+      p.y = dk.y
+      p.addScaledVector(dir, -0.035 * t.s)
+      throats.push(placed(new CircleGeometry(0.128 * t.s, 32).rotateX(-Math.PI / 2), new Vector3(t.p[0], dk.y, t.p[2]).addScaledVector(dir, 0.004), aim(dir)))
+    }
+    const m = new Matrix4().compose(p, aim(dir), new Vector3(t.s, t.s, t.s))
     tSat.setMatrixAt(i, m)
     tDark.setMatrixAt(i, m)
     sliceSrc.push(T.dark.clone().applyMatrix4(m))
   })
   root.add(tSat, tDark)
   surfaces.push(tSat, tDark)
+  add(merge(throats), patch(new MeshPhysicalMaterial({ color: '#000000', roughness: 1, metalness: 0 }), U, 'void'), false)
 
   /* ---- lamps: heads, lenses (instanced, coloured per bank), flares */
   const lampBody = merge([new CylinderGeometry(0.036, 0.044, 0.08, 16), new TorusGeometry(0.034, 0.006, 6, 20).rotateX(Math.PI / 2).translate(0, 0.04, 0)])
@@ -1012,6 +1027,7 @@ function createVesper(canvas, { dpr, mobile }) {
   const flarePos = new Float32Array(LAMPS.length * 3)
   const flareBank = new Float32Array(LAMPS.length)
   const dim = new Color('#0c1f24')
+  const WHITE = new Color(1, 1, 1)
   LAMPS.forEach((l, i) => {
     const m = new Matrix4().compose(l.p, aim(l.d), new Vector3(1, 1, 1))
     lamps.setMatrixAt(i, m)
@@ -1096,6 +1112,18 @@ function createVesper(canvas, { dpr, mobile }) {
     lamps: { p: LAMPS[7].p.clone(), n: new Vector3(0.75, -0.2, 0.6).normalize() },
   }
 
+  /* ---- points on the silhouette, for laying callouts out around her */
+  const silo = []
+  offsetOutline(hullOutline(), HULL.bevelS).forEach((q, i) => {
+    if (i % 10 === 0) silo.push(new Vector3(q.x, q.y, 0))
+  })
+  hullOutline().forEach((q, i) => {
+    if (i % 14 === 0) for (const sd of [1, -1]) silo.push(new Vector3(q.x, q.y, sd * sideZ(q.x, q.y)))
+  })
+  for (const sd of [1, -1]) for (const k of SKID) silo.push(new Vector3(k[0], k[1] - 0.05, sd * SKID_Z))
+  silo.push(mastB.clone().add(new Vector3(0, 0.12, 0)), new Vector3(SPHERE.x, deck + 0.14, 0), v3(ARM[2]).add(new Vector3(0.06, -0.16, 0)))
+  for (const t of THRUSTERS.slice(0, 4)) for (const dy of [0.2, -0.2]) silo.push(new Vector3(t.p[0], t.p[1] + dy, t.p[2]))
+
   /* ---- state */
   const tmp = new Vector3()
   const tmp2 = new Vector3()
@@ -1153,7 +1181,7 @@ function createVesper(canvas, { dpr, mobile }) {
     lineMat.uniforms.uDraw.value = s.draw
     lineMat.uniforms.uAlpha.value = s.wire
     lines.visible = s.draw > 0.001 && s.wire > 0.003
-    M.acrylic.emissiveIntensity = 0.04 + s.cabin * 0.55
+    M.acrylic.emissiveIntensity = 0.03 + s.cabin * 0.15
 
     const b = s.banks
     let any = 0
@@ -1166,7 +1194,7 @@ function createVesper(canvas, { dpr, mobile }) {
     if (any) {
       LAMPS.forEach((l, i) => {
         const I = banksNow[l.bank]
-        lensColor.copy(dim).lerp(new Color(1, 1, 1), clamp(I)).multiplyScalar(1 + 1.6 * clamp(I))
+        lensColor.copy(dim).lerp(WHITE, clamp(I)).multiplyScalar(1 + 1.6 * clamp(I))
         lenses.setColorAt(i, lensColor)
       })
       lenses.instanceColor.needsUpdate = true
@@ -1202,6 +1230,22 @@ function createVesper(canvas, { dpr, mobile }) {
     return out
   }
 
+  /** Screen-space box around the silhouette. */
+  function screenBox(out) {
+    out.l = out.t = Infinity
+    out.r = out.b = -Infinity
+    for (const q of silo) {
+      tmp.copy(q).applyMatrix4(root.matrixWorld).project(camera)
+      const x = (tmp.x * 0.5 + 0.5) * W
+      const y = (-tmp.y * 0.5 + 0.5) * H
+      if (x < out.l) out.l = x
+      if (x > out.r) out.r = x
+      if (y < out.t) out.t = y
+      if (y > out.b) out.b = y
+    }
+    return out
+  }
+
   /** Compile every program up front so nothing hitches mid-scroll. */
   async function warm() {
     const vis = []
@@ -1218,8 +1262,7 @@ function createVesper(canvas, { dpr, mobile }) {
     for (const [o, v] of vis) o.visible = v
   }
 
-  if (location.search.includes('vdebug')) window.__vesper = { scene, camera, root, renderer }
-  return { renderer, setSize, update, render, project, warm, sizeInfo: () => ({ W, H, shiftX, shiftY }) }
+  return { renderer, setSize, update, render, project, screenBox, warm, sizeInfo: () => ({ W, H, shiftX, shiftY }) }
 }
 
 /* ==========================================================================
@@ -1322,11 +1365,11 @@ export function init(ctx) {
   /* ---- callouts: DOM + leader paths */
   const SVGNS = 'http://www.w3.org/2000/svg'
   const CALLOUTS = {
-    sphere: { win: [0.07, 0.42], side: 1, rise: 0.27, run: 0.04 },
-    rated: { win: [0.15, 0.4], side: 1, rise: -0.2, run: 0.05 },
-    foam: { win: [0.42, 0.72], side: 1, rise: -0.22, run: 0.04 },
-    viewports: { win: [0.48, 0.82], side: 1, rise: 0.21, run: 0.04 },
-    lamps: { win: [0.64, 1.01], side: 1, rise: -0.2, run: 0.04 },
+    sphere: { win: [0.07, 0.42], side: 1, place: 'below', run: 0.035 },
+    rated: { win: [0.15, 0.4], side: 1, place: 'above', run: 0.04 },
+    foam: { win: [0.42, 0.72], side: 1, place: 'above', run: 0.035 },
+    viewports: { win: [0.48, 0.82], side: 1, place: 'below', run: 0.035 },
+    lamps: { win: [0.64, 1.01], side: 1, place: 'above', run: 0.035 },
   }
   const callouts = [...root.querySelectorAll('.vessel__callout')].map((el) => {
     const key = el.dataset.key
@@ -1415,12 +1458,15 @@ export function init(ctx) {
   }
 
   const pt = { x: 0, y: 0, facing: 1 }
+  const box = { l: 0, r: 0, t: 0, b: 0 }
   function updateCallouts(p) {
     if (!gl || mobile) return
     const { W, H } = gl.sizeInfo()
     const { minX, maxX } = bounds
+    gl.screenBox(box)
+    const taken = []
     for (const c of callouts) {
-      const on = reduced ? c.key !== 'rated' : p >= c.cfg.win[0] && p < c.cfg.win[1]
+      const on = reduced ? c.key !== 'rated' && c.key !== 'foam' : p >= c.cfg.win[0] && p < c.cfg.win[1]
       if (on !== c.on) {
         c.on = on
         c.tw?.kill()
@@ -1440,10 +1486,23 @@ export function init(ctx) {
       let side = c.cfg.side
       const run = c.cfg.run * W
       let ex = ax + side * run
-      const ey = clamp(ay + c.cfg.rise * H, 70, H - 60)
+      const up = c.cfg.place === 'above'
+      let ey = up ? Math.min(ay, box.t) - 46 : Math.max(ay, box.b) + 40
       if (side > 0 && ex + c.w + 12 > maxX) side = -1
       if (side < 0 && ex - c.w - 12 < minX) side = 1
       ex = ax + side * run
+      // keep labels that are on at the same time from landing on each other
+      const lx0 = side > 0 ? ex : ex - c.w - 14
+      const lx1 = lx0 + c.w + 14
+      if (c.on) {
+        for (let k = 0; k < 4; k++) {
+          const hit = taken.find((q) => lx0 < q.x1 + 16 && lx1 > q.x0 - 16 && Math.abs(ey - q.y) < 56)
+          if (!hit) break
+          ey = up ? hit.y - 58 : hit.y + 58
+        }
+        taken.push({ x0: lx0, x1: lx1, y: ey })
+      }
+      ey = clamp(ey, 84, H - 56)
       const end = ex + side * (c.w + 14)
       const d = `M${ax.toFixed(1)} ${ay.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}L${end.toFixed(1)} ${ey.toFixed(1)}`
       c.path.setAttribute('d', d)
@@ -1520,8 +1579,8 @@ export function init(ctx) {
     } else {
       ScrollTrigger.create({
         trigger: view,
-        start: 'top 80%',
-        end: 'bottom 30%',
+        start: 'top 78%',
+        end: 'bottom 62%',
         onUpdate: (self) => (S.target = self.progress),
       })
     }
@@ -1541,6 +1600,7 @@ export function init(ctx) {
   })
 
   /* ---- pointer: a little parallax, and drag to turn her (desktop only) */
+  if (reduced || ctx.isTouch || !gl) view.removeAttribute('data-cursor')
   if (!reduced && !ctx.isTouch) {
     window.addEventListener(
       'pointermove',
@@ -1573,6 +1633,25 @@ export function init(ctx) {
     view.addEventListener('pointercancel', release)
   }
 
+  /* ---- adaptive resolution: step down if frames run long */
+  const baseDpr = mobile ? Math.min(ctx.dpr, 1.25) : ctx.dpr
+  let dprNow = baseDpr
+  let slow = 0
+  let frames = 0
+  const watchFrame = (dt) => {
+    if (reduced || dprNow <= 1) return
+    frames++
+    if (dt > 1 / 40) slow++
+    if (frames >= 90) {
+      if (slow > 45) {
+        dprNow = Math.max(1, dprNow - 0.25)
+        gl?.renderer.setPixelRatio(dprNow)
+        resize()
+      }
+      frames = slow = 0
+    }
+  }
+
   /* ---- frame loop */
   let last = performance.now()
   const frame = () => {
@@ -1598,6 +1677,7 @@ export function init(ctx) {
     st.cam[1] += -S.my * 2
     gl.update(st, time)
     gl.render()
+    watchFrame(dt)
     updateCallouts(p)
 
     if (!sonarDone && !reduced && p >= SONAR_AT) {
