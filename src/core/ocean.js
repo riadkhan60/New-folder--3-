@@ -20,6 +20,13 @@
  *   3. Bioluminescent sparks from ~200 m — brief, scattered flashes, some in
  *      siphonophore-like chains — tinted red in the hadal zone.
  *
+ * Intro: the light comes up WITH the loader's flood (bus 'intro:flood', or
+ * the loader gaining .is-exiting), so the rising waterline uncovers a sun
+ * window that is already shimmering. The water it brings is stirred: the
+ * surface ripples harder and the caustics flare, then settle over ~3 s, and
+ * the snow rushes up past the lens as we go under. Without the loader
+ * (?skipintro) the light simply rises on ctx.ready.
+ *
  * Listens: ctx.on('sonar', { x, y, strength }) → a ring passes through the
  * snow and lights it up.  Never throws: if WebGL is missing, it does nothing.
  */
@@ -101,6 +108,7 @@ uniform vec2 uVP;
 uniform float uRayFreq;
 uniform float uRays;
 uniform float uWin;
+uniform float uStir;
 ${COMMON}
 
 vec3 camDir(vec2 ndc) {
@@ -167,7 +175,7 @@ void main() {
     float invY = 1.0 / d.y;
     vec2 P = d.xz * uH * invY;
     float lod = exp(-uH * invY * 0.055);           // far ripples are sub-pixel: calm them
-    vec2 g = waveGrad(P, uTime) * lod;
+    vec2 g = waveGrad(P, uTime) * lod * (1.0 + 1.5 * uStir);   // freshly stirred water
     vec3 n = normalize(vec3(g.x, -1.0, g.y));       // surface normal, facing down
     float cosI = -dot(n, d);
     // Three wavelengths → a hint of dispersion right at the rim.
@@ -181,7 +189,7 @@ void main() {
     vec3 att = exp(-uHK * invY * vec3(1.9, 0.82, 0.66));
     // the moving surface focuses the sky into a faint bright network
     float net = causticWeb(P * 0.21 + vec2(0.0, uTime * 0.01), uTime * 0.45);
-    col += skyc * tr * att * uWin * (0.84 + 0.55 * net);
+    col += skyc * tr * att * uWin * (0.84 + 0.55 * net * (1.0 + 1.3 * uStir));
     // outside the window: total internal reflection of the dim water below,
     // broken up by the ripples
     float slope = length(g);
@@ -204,7 +212,7 @@ void main() {
   // ---- Caustic web drifting through the upper water
   vec2 cp = sp * 0.95 + vec2(uTime * 0.011, uTime * 0.017);
   float c = causticWeb(cp, uTime * 0.32);
-  col += vec3(0.6, 0.96, 1.0) * c * (0.05 + 0.3 * r) * topFade * uRays;
+  col += vec3(0.6, 0.96, 1.0) * c * (0.05 + 0.3 * r) * (1.0 + 1.6 * uStir) * topFade * uRays;
 
   // a dome-port style falloff along the top edge keeps the glare off the nav
   col *= 1.0 - 0.38 * smoothstep(0.74, 1.0, ndc.y);
@@ -432,8 +440,10 @@ function createOcean(ctx, canvas) {
 
   // ---- sizes / quality
   const mobile = ctx.isMobile()
-  let pr = Math.min(ctx.dpr, mobile ? 1.5 : 1.5)
-  let lightScale = mobile ? 0.7 : 0.55
+  // Phones: lower pixel ratio (soft light and motes survive it well) and a
+  // light pass of ~95k px against ~390k on a 1440×900 laptop.
+  let pr = Math.min(ctx.dpr, mobile ? 1.25 : 1.5)
+  let lightScale = mobile ? 0.6 : 0.55
   let W = window.innerWidth
   let H = window.innerHeight
   let stableVh = H
@@ -469,6 +479,7 @@ function createOcean(ctx, canvas) {
     uRayFreq: { value: 1 },
     uRays: { value: 1 },
     uWin: { value: 1 },
+    uStir: { value: 0 },
   }
   const lightScene = new Scene()
   const lightMesh = new Mesh(
@@ -651,7 +662,11 @@ function createOcean(ctx, canvas) {
   let lastY = window.scrollY
   let vel = 0
   let dirty = true
-  let intro = ctx.reducedMotion ? 1 : 0
+  let drawnY = -1
+  // intro: light 0 → 1; stir: freshly flooded water, 1 → 0; rush: extra
+  // upward flow of the snow (screens) as we go under
+  const fx = { intro: ctx.reducedMotion ? 1 : 0, stir: 0, rush: 0 }
+  let lastRush = 0
   let lastDepth = -1
   const depthState = { depth: 0, sun: 1, hadal: 0 }
 
@@ -663,17 +678,35 @@ function createOcean(ctx, canvas) {
     lastDepth = s.depth
   })
 
-  // The light comes up as the page hands over from the intro.
+  // The light comes up with the flood (or, without the loader, as the page
+  // hands over). Whichever arrives first wins; the rest are no-ops.
+  let offFlood = null
+  let floodObs = null
   if (!ctx.reducedMotion) {
-    const proxy = { v: 0 }
-    ctx.ready.then(() => {
-      gsap.to(proxy, {
-        v: 1,
-        duration: 3.2,
-        ease: 'power2.out',
-        onUpdate: () => (intro = proxy.v),
+    let raised = false
+    const raise = (flood) => {
+      if (raised) return
+      raised = true
+      offFlood?.()
+      floodObs?.disconnect()
+      if (!flood) {
+        gsap.to(fx, { intro: 1, duration: 3.2, ease: 'power2.out' })
+        return
+      }
+      // the waterline takes 1.2 s to cross the screen (loader T.floodDur)
+      gsap.to(fx, { intro: 1, duration: 1.5, ease: 'power2.out', delay: 0.05 })
+      gsap.fromTo(fx, { stir: 1 }, { stir: 0, duration: 3.4, ease: 'power2.out' })
+      gsap.to(fx, { rush: 0.34, duration: 2.2, ease: 'power3.out' })
+    }
+    offFlood = ctx.on('intro:flood', () => raise(true))
+    const loaderEl = ctx.skipIntro ? null : document.querySelector('.loader')
+    if (loaderEl && typeof MutationObserver !== 'undefined') {
+      floodObs = new MutationObserver(() => {
+        if (loaderEl.classList.contains('is-exiting')) raise(true)
       })
-    })
+      floodObs.observe(loaderEl, { attributes: true, attributeFilter: ['class'] })
+    }
+    ctx.ready.then(() => raise(false))
   }
 
   // ---- adaptive quality (skipped with ?hq). Measured only once the page
@@ -742,15 +775,18 @@ function createOcean(ctx, canvas) {
     const sunAmt = Math.pow(clamp(sun), 1.15)
     lightU.uWin.value = 1 - smooth(0.55, 1, rise)
     lightU.uRays.value = lerp(1, 0.7, rise)
-    lightU.uAmt.value = sunAmt * intro
+    lightU.uAmt.value = sunAmt * fx.intro
+    lightU.uStir.value = fx.stir
     lightU.uTime.value = time
     compU.uTime.value = time
 
     // descent velocity in screens / second, smoothed
     if (!ctx.reducedMotion) {
-      const v = clamp(((y - lastY) / stableVh) / Math.max(dt, 1 / 240), -10, 10)
+      const dRush = fx.rush - lastRush
+      lastRush = fx.rush
+      const v = clamp(((y - lastY) / stableVh + dRush) / Math.max(dt, 1 / 240), -10, 10)
       vel += (v - vel) * (1 - Math.exp(-dt * 7))
-      snowU.uFlow.value = y / stableVh
+      snowU.uFlow.value = y / stableVh + fx.rush
     }
     lastY = y
     snowU.uVel.value = ctx.reducedMotion ? 0 : vel
@@ -767,8 +803,8 @@ function createOcean(ctx, canvas) {
       lerp(lerp(lamp[1], lit[1], sun), red[1], hadal * 0.8),
       lerp(lerp(lamp[2], lit[2], sun), red[2], hadal * 0.8),
     )
-    snowU.uAmt.value = lerp(0.62, 1, sun) * lerp(0.35, 1, intro)
-    snowU.uLight.value = sunAmt * intro
+    snowU.uAmt.value = lerp(0.62, 1, sun) * lerp(0.35, 1, fx.intro)
+    snowU.uLight.value = sunAmt * fx.intro
 
     mouseTarget = fine ? mouseTarget : 0
     snowU.uMouse.value.lerp(mouse, 1 - Math.exp(-dt * 6))
@@ -797,9 +833,13 @@ function createOcean(ctx, canvas) {
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
     if (ctx.reducedMotion) {
-      // Static water: only redraw when the depth (or size) changed.
-      if (!dirty) return
+      // Static water: only redraw when the depth, the size or the scroll
+      // through the first screen (which tilts the view away from the sun)
+      // changed.
+      const sy = window.scrollY
+      if (!dirty && (sy > stableVh * 1.05 || Math.abs(sy - drawnY) < 2)) return
       dirty = false
+      drawnY = sy
       update(1 / 60)
       render()
       return
@@ -828,6 +868,8 @@ function createOcean(ctx, canvas) {
   return () => {
     gsap.ticker.remove(tick)
     offSonar?.()
+    offFlood?.()
+    floodObs?.disconnect()
     window.removeEventListener('resize', onResize)
     document.removeEventListener('visibilitychange', onVis)
     window.removeEventListener('pointermove', onMove)

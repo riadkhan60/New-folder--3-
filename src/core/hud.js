@@ -1,10 +1,20 @@
 /**
  * core/hud — the dive computer.
  *
- * Readout (bottom-left): zone + scientific name, a mechanical odometer for
- * depth (digits roll and carry like a real counter, and the figure itself is
- * squeezed by pressure as you descend), a band showing progress through the
- * current zone, then pressure, water temperature and sunlight.
+ * Readout (bottom-left, on the content column): zone + scientific name, a
+ * mechanical odometer for depth (digits roll and carry like a real counter,
+ * and the figure itself is squeezed by pressure as you descend), a band
+ * showing progress through the current zone, then pressure, water
+ * temperature and sunlight.
+ *
+ * The readout never prints over the page. Two IntersectionObservers watch
+ * the page's text and drawings against the readout's footprint:
+ *  - when anything visible enters the full instrument's footprint, it
+ *    folds into a slim glass chip (FLIP: the odometer flies down into it);
+ *    in open water it unfolds again;
+ *  - when something sits under the chip itself and the visitor stops to
+ *    read, the chip tucks away, and comes back as soon as the dive resumes.
+ * Short or narrow screens and touch devices always get the chip.
  *
  * Ruler (right edge, ≥ 1024 px): a scale for the whole page. Ticks sit at
  * the scroll positions where depth.js reaches each depth, so the spacing
@@ -29,6 +39,9 @@ const MARKS = [
 const C_PHOTO = [108, 248, 232]
 const C_RED = [255, 59, 47]
 
+// screens that always get the slim chip instead of the full instrument
+const CHIP_ONLY = '(max-width: 1023px), (max-height: 700px), (hover: none) and (pointer: coarse)'
+
 /** Sunlight as a share of what reaches the surface. */
 export function formatLight(depth, light) {
   if (depth >= 1000) return { v: 'none', u: '' }
@@ -45,6 +58,13 @@ export function init(ctx) {
   const { gsap, depth: D } = ctx
   const reduced = ctx.reducedMotion
   const $ = (s) => hud.querySelector(s)
+
+  // Fixed, so its place in the DOM is invisible — but last in the tab order:
+  // keyboard users reach the page before the instruments.
+  const main = document.querySelector('main')
+  if (main && hud.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING) {
+    document.body.appendChild(hud)
+  }
 
   /* ------------------------------------------------------- odometer */
   const digitsEl = $('.hud__digits')
@@ -117,6 +137,7 @@ export function init(ctx) {
   }
 
   /* --------------------------------------------------------- fields */
+  const readout = $('.hud__readout')
   const depthText = $('.hud__depth-text')
   const fields = {
     pressure: $('[data-hud="pressure"]'),
@@ -127,12 +148,17 @@ export function init(ctx) {
   const setText = (el, v) => {
     if (el && el.textContent !== v) el.textContent = v
   }
+  const band = $('.hud__band')
+  const rows = $('.hud__rows')
   const bandFill = $('.hud__band-fill')
   const bandFrom = $('.hud__band-from')
   const bandTo = $('.hud__band-to')
+  const zoneRow = $('.hud__zone')
   const zoneSwap = $('.hud__zone-swap')
   const zoneName = $('.hud__zone-name')
   const zoneSci = $('.hud__zone-sci')
+  const unitEl = $('.hud__unit')
+  const dirEl = $('.hud__dir')
 
   /* ------------------------------------------------------ zone swap */
   let zoneId = null
@@ -177,7 +203,278 @@ export function init(ctx) {
     ready = true
     hud.classList.add('is-ready')
     measure()
-    update(D.get())
+    update(D.get(), true)
+    watch()
+  })
+
+  /* ================================================ full ⇄ chip ==== */
+  const chipMQ = window.matchMedia(CHIP_ONLY)
+  let chipOnly = chipMQ.matches
+  let compact = chipOnly
+  hud.classList.toggle('is-chip-only', chipOnly)
+  hud.classList.toggle('is-compact', compact)
+
+  // FLIP: the zone line and the odometer fly between the two layouts
+  const flips = [
+    { el: zoneRow, ref: zoneName },
+    { el: digitsEl, ref: digitsEl },
+    { el: unitEl, ref: unitEl },
+    { el: dirEl, ref: dirEl },
+  ]
+  const flipEls = flips.map((f) => f.el)
+
+  function setCompact(v, animate = true) {
+    if (v === compact) return
+    compact = v
+    const motion = animate && !reduced && on && !chipOnly && !document.hidden
+    if (!motion) {
+      gsap.killTweensOf(flipEls)
+      gsap.set(flipEls, { clearProps: 'transform' })
+      hud.classList.toggle('is-compact', v)
+      updateTuck()
+      return
+    }
+    const first = flips.map((f) => [f.el.getBoundingClientRect(), f.ref.getBoundingClientRect()])
+    // the rows and band fade where they were, rather than blinking out
+    const ghosts = v
+      ? [band, rows]
+          .filter((el) => el.offsetParent)
+          .map((el) => {
+            const r = el.getBoundingClientRect()
+            const g = el.cloneNode(true)
+            g.classList.add('hud__ghost')
+            Object.assign(g.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px` })
+            g.setAttribute('aria-hidden', 'true')
+            hud.appendChild(g)
+            return g
+          })
+      : []
+    gsap.killTweensOf(flipEls)
+    gsap.set(flipEls, { clearProps: 'transform' })
+    hud.classList.toggle('is-compact', v)
+    updateTuck()
+    flips.forEach((f, i) => {
+      const l = f.el.getBoundingClientRect()
+      const lr = f.ref.getBoundingClientRect()
+      const [fr, frr] = first[i]
+      if (!l.width || !fr.width || !lr.height) return
+      const s = frr.height / lr.height
+      gsap.fromTo(
+        f.el,
+        { x: fr.left - l.left, y: fr.top - l.top, scale: s, transformOrigin: '0 0' },
+        { x: 0, y: 0, scale: 1, duration: v ? 0.8 : 1.0, ease: 'expo.out', clearProps: 'transform' },
+      )
+    })
+    if (ghosts.length) {
+      gsap.to(ghosts, {
+        opacity: 0,
+        y: 10,
+        filter: 'blur(3px)',
+        duration: 0.4,
+        ease: 'power2.out',
+        stagger: 0.04,
+        onComplete: () => ghosts.forEach((g) => g.remove()),
+      })
+    }
+  }
+
+  /* ----------------------------------------------- what's underneath */
+  // Every block that sets a line of text, plus drawings and panels.
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'OPTION'])
+  function collectTargets() {
+    const roots = [main, document.getElementById('footer') || document.querySelector('body > footer')].filter(Boolean)
+    const found = new Set()
+    const art = new Set()
+    const disp = new Map()
+    const display = (el) => {
+      let d = disp.get(el)
+      if (d === undefined) {
+        d = getComputedStyle(el).display
+        disp.set(el, d)
+      }
+      return d
+    }
+    for (const root of roots) {
+      const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => (/\S/.test(n.data) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+      })
+      let n
+      while ((n = tw.nextNode())) {
+        let el = n.parentElement
+        if (!el || SKIP.has(el.tagName)) continue
+        if (el.closest('.visually-hidden, [hidden]')) continue
+        // climb out of inline runs (words, split characters) to the block
+        // that owns the line box
+        for (let hops = 0; hops < 8 && el !== root && el.parentElement; hops++) {
+          if (!display(el).startsWith('inline')) break
+          el = el.parentElement
+        }
+        found.add(el)
+      }
+      root
+        .querySelectorAll('svg, canvas, img, video, [data-hud-avoid], .vessel__specplate')
+        .forEach((el) => {
+          if (!el.parentElement?.closest('svg') && !found.has(el)) art.add(el)
+        })
+    }
+    return { text: found, art }
+  }
+
+  const expHits = new Set()
+  const chipHits = new Set()
+  let expIO = null
+  let chipIO = null
+
+  // where the readout sits in a given layout (offsets ignore transforms)
+  function footprint(asCompact) {
+    const was = hud.classList.contains('is-compact')
+    hud.classList.add('is-measuring')
+    if (was !== asCompact) hud.classList.toggle('is-compact', asCompact)
+    const r = {
+      left: readout.offsetLeft,
+      top: readout.offsetTop,
+      width: readout.offsetWidth,
+      height: readout.offsetHeight,
+    }
+    if (was !== asCompact) hud.classList.toggle('is-compact', was)
+    void readout.offsetWidth
+    hud.classList.remove('is-measuring')
+    return r
+  }
+
+  // pv: breathing room above/below; ph: left/right (negative: things that
+  // merely touch the edge, like the manifesto's tape, don't count)
+  function rootMargin(r, pv, ph) {
+    const vw = document.documentElement.clientWidth
+    const vh = window.innerHeight
+    const m = (v) => `${Math.min(0, Math.round(-v))}px`
+    return [r.top - pv, vw - (r.left + r.width) - ph, vh - (r.top + r.height) - pv, r.left - ph].map(m).join(' ')
+  }
+
+  function observer(hits, r, pv, ph) {
+    if (!r.width || !r.height) return null
+    return new IntersectionObserver(
+      (entries) => {
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        for (const e of entries) {
+          const b = e.boundingClientRect
+          // full-bleed canvases and backdrops are the water, not content
+          const backdrop = b.width > vw * 0.75 && b.height > vh * 0.6
+          if (e.isIntersecting && !backdrop) hits.add(e.target)
+          else hits.delete(e.target)
+        }
+        schedule()
+      },
+      { rootMargin: rootMargin(r, pv, ph), threshold: 0 },
+    )
+  }
+
+  function watch() {
+    if (!('IntersectionObserver' in window)) return
+    expIO?.disconnect()
+    chipIO?.disconnect()
+    expHits.clear()
+    chipHits.clear()
+    const { text, art } = collectTargets()
+    expIO = chipOnly ? null : observer(expHits, footprint(false), 14, -2)
+    chipIO = observer(chipHits, footprint(true), 4, -2)
+    // the full instrument steps out of the way of text and drawings alike;
+    // the glass chip only gives way to text someone is reading
+    for (const el of text) {
+      expIO?.observe(el)
+      chipIO?.observe(el)
+    }
+    for (const el of art) expIO?.observe(el)
+  }
+
+  if (import.meta.env?.DEV) window.__noctilucaHud = { expHits, chipHits } // QA
+
+  const visible = (el) =>
+    el.isConnected && (!el.checkVisibility || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
+  const covered = (hits) => {
+    for (const el of hits) if (visible(el)) return true
+    return false
+  }
+
+  let foldT = 0
+  let unfoldT = 0
+  let chipCovered = false
+  function evaluate() {
+    if (!ready) return
+    if (!chipOnly) {
+      if (covered(expHits)) {
+        clearTimeout(unfoldT)
+        unfoldT = 0
+        if (!compact && !foldT) {
+          foldT = setTimeout(() => {
+            foldT = 0
+            if (covered(expHits)) setCompact(true)
+          }, 40)
+        }
+      } else {
+        clearTimeout(foldT)
+        foldT = 0
+        // open water: unfold, but only once it has stayed clear for a beat
+        if (compact && !unfoldT) {
+          unfoldT = setTimeout(() => {
+            unfoldT = 0
+            if (!covered(expHits)) setCompact(false)
+          }, 650)
+        }
+      }
+    }
+    chipCovered = covered(chipHits)
+    updateTuck()
+  }
+  let evQ = 0
+  function schedule() {
+    if (!evQ) {
+      evQ = requestAnimationFrame(() => {
+        evQ = 0
+        evaluate()
+      })
+    }
+  }
+  // reveals that happen without scrolling (tweens, pins settling)
+  setInterval(() => {
+    if (ready && !document.hidden && (expHits.size || chipHits.size || compact)) schedule()
+  }, 450)
+
+  // the chip steps aside while the visitor reads what is under it
+  let idle = true
+  let idleT = 0
+  let tucked = false
+  function updateTuck() {
+    const t = compact && chipCovered && idle
+    if (t !== tucked) {
+      tucked = t
+      hud.classList.toggle('is-tucked', t)
+    }
+  }
+  let lastEvalAt = 0
+  function activity() {
+    if (idle) {
+      idle = false
+      updateTuck()
+    }
+    clearTimeout(idleT)
+    idleT = setTimeout(() => {
+      idle = true
+      schedule()
+    }, 1000)
+    const now = performance.now()
+    if (now - lastEvalAt > 90) {
+      lastEvalAt = now
+      schedule()
+    }
+  }
+
+  chipMQ.addEventListener?.('change', () => {
+    chipOnly = chipMQ.matches
+    hud.classList.toggle('is-chip-only', chipOnly)
+    if (chipOnly) setCompact(true, false)
+    remeasure()
   })
 
   /* ------------------------------------------------------- the ruler */
@@ -192,6 +489,7 @@ export function init(ctx) {
   marksEl.innerHTML = MARKS.map(
     (m, i) =>
       `<li><button class="hud__mark" type="button" data-i="${i}">` +
+      `<span class="visually-hidden">Go to </span>` +
       `<span class="hud__mark-num">${m.text}<span class="visually-hidden">${m.d === 0 ? '' : ' m'},</span></span>` +
       `<span class="hud__tip">${m.tip}</span></button></li>`,
   ).join('')
@@ -201,6 +499,9 @@ export function init(ctx) {
     const vh = window.innerHeight
     const sy = window.scrollY
     const maxScroll = Math.max(1, document.documentElement.scrollHeight - vh)
+    // depth.js knows the exact mapping (incl. sections that reach their end
+    // depth early via [data-depth-until]); fall back to the linear one
+    if (typeof D.scrollYForDepth === 'function') return { yFor: (d) => D.scrollYForDepth(d), maxScroll }
     const sections = [...document.querySelectorAll('[data-depth-start]')].map((el) => {
       const p = el.parentElement
       const box = p && p.classList.contains('pin-spacer') ? p : el
@@ -253,7 +554,7 @@ export function init(ctx) {
     markBtns.forEach((b, i) => {
       const y = py(MARKS[i].d)
       b.style.top = `${y.toFixed(1)}px`
-      const crowded = y - prev < 16
+      const crowded = y - prev < 18
       b.classList.toggle('is-crowded', crowded && i < MARKS.length - 1)
       if (!crowded) prev = y
     })
@@ -273,6 +574,7 @@ export function init(ctx) {
     mT = setTimeout(() => {
       measure()
       update(D.get(), true)
+      if (ready) watch()
     }, 180)
   }
   ctx.ScrollTrigger.addEventListener('refresh', remeasure)
@@ -336,11 +638,11 @@ export function init(ctx) {
     }
 
     const z = s.zone
-    const band = clamp((s.depth - z.from) / (z.to - z.from))
-    if (Math.abs(band - lastBand) > 0.001 || force) {
-      lastBand = band
-      bandFill.style.transform = `scaleX(${band.toFixed(4)})`
-      bandFill.style.setProperty('--inv', band > 0.01 ? (1 / band).toFixed(3) : 1)
+    const bandP = clamp((s.depth - z.from) / (z.to - z.from))
+    if (Math.abs(bandP - lastBand) > 0.001 || force) {
+      lastBand = bandP
+      bandFill.style.transform = `scaleX(${bandP.toFixed(4)})`
+      bandFill.style.setProperty('--inv', bandP > 0.01 ? (1 / bandP).toFixed(3) : 1)
     }
 
     setText(fields.pressure, s.pressure < 99.95 ? s.pressure.toFixed(1) : fmt(s.pressure))
@@ -397,6 +699,10 @@ export function init(ctx) {
 
   measure()
   D.onChange((s) => update(s))
-  if (ctx.lenis) ctx.lenis.on('scroll', () => updateScroll())
-  else window.addEventListener('scroll', () => updateScroll(), { passive: true })
+  const onScroll = () => {
+    updateScroll()
+    activity()
+  }
+  if (ctx.lenis) ctx.lenis.on('scroll', onScroll)
+  else window.addEventListener('scroll', onScroll, { passive: true })
 }

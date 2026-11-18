@@ -1,20 +1,28 @@
 /**
  * zones.js — #zones (200 → 1,000 m). The five layers.
  *
- * Desktop: the section pins and the five layers pass sideways under a
- * fixed playhead at the centre of the screen.
- *  - Each panel's depth range is set in Anybody at the pressure of its own
- *    layer, and is squeezed live while it crosses the playhead: wdth/wght
- *    follow ctx.depth.compression() from the layer's top to its bottom, so
- *    the numbers narrow and thicken all the way from 0 m to 10,935 m.
- *  - A tape of depth runs under all five panels (ticks get denser as each
- *    layer gets thicker) and lights up to the playhead as you travel.
- *  - Behind the panels, each layer's own water colour (depth.colorAt) is
- *    laid side by side, darkening left to right.
- *  - Every panel has a visual drawn from its subject: sunlight shafts and a
- *    light meter; the nightly migration of the twilight zone; living light
- *    in the midnight zone (and one anglerfish lure); marine snow settling
- *    on the abyssal plain; a sonar sweep surveying the trench.
+ * The visitor is in the twilight zone the whole time (the HUD says so). The
+ * five layers are shown as windows up and down the water column: each panel
+ * holds a soft-edged column of *that* layer's water (depth.colorAt), with a
+ * scale of its own depths, and a note saying where it is from here: above
+ * you, around you, below you. The page water around the windows stays the
+ * honest colour of 200–1,000 m, so nothing ever looks deeper than the HUD.
+ *
+ * Desktop: the section pins and the panels pass sideways. As each window
+ * crosses the centre of the screen, Vesper's sonar pings (ctx 'sonar') and a
+ * ring runs down through it; its depth range is squeezed live by pressure
+ * (wdth/wght follow ctx.depth.compression from the layer's top to bottom).
+ * Every scene is scrubbed by its own progress across the screen:
+ *  - sunlight: shafts and plankton thinning tenfold every 100 m, a school
+ *    of small fish turning in the light;
+ *  - twilight: one night of the vertical migration in time-lapse, with the
+ *    clock: the swarm rises at dusk and sinks at dawn as you scroll;
+ *  - midnight: an anglerfish lit only by its own lure, which brightens as
+ *    it reaches the centre;
+ *  - abyss: sediment ripples, a sea cucumber's glow and its feeding trail, a
+ *    tripod fish standing in the current, marine snow settling;
+ *  - hadal: the trench in section, surveyed by a sonar sweep, amphipods
+ *    scavenging at 10,935 m.
  * Phones and reduced motion: no pin, the panels stack; scenes render only
  * while on screen, and as a single still under reduced motion.
  */
@@ -26,7 +34,6 @@ const smooth = (a, b, x) => {
   return t * t * (3 - 2 * t)
 }
 const TAU = Math.PI * 2
-const SVGNS = 'http://www.w3.org/2000/svg'
 const fmt = (m) => Math.round(m).toLocaleString('en-US')
 
 function rng(seed) {
@@ -49,18 +56,18 @@ function sprite(stops, size = 64) {
   return c
 }
 
-// tape ticks per layer: minor step, and the depths that get a small label
-const TAPE = {
-  sunlight: { step: 10, labels: [100] },
-  twilight: { step: 50, labels: [500] },
-  midnight: { step: 100, labels: [2000, 3000] },
-  abyss: { step: 100, labels: [5000] },
-  hadal: { step: 250, labels: [8000, 10000] },
+const bez = (p0, p1, p2, p3, s) => {
+  const u = 1 - s
+  return [
+    u * u * u * p0[0] + 3 * u * u * s * p1[0] + 3 * u * s * s * p2[0] + s * s * s * p3[0],
+    u * u * u * p0[1] + 3 * u * u * s * p1[1] + 3 * u * s * s * p2[1] + s * s * s * p3[1],
+  ]
 }
 
 /* =================================================================== scenes
-   Each scene draws in canvas CSS pixels. `f` is the focus rect (where the
-   panel's diagram lives); the scene may use the whole canvas around it.  */
+   Each scene draws in its window's CSS pixels (w × h). `f` is the band the
+   window's scale covers (the layer's top to its bottom); `k` is the window's
+   progress across the screen, 0 (entering) → 0.5 (centre) → 1 (leaving).  */
 
 const SPR = {}
 function sprites() {
@@ -80,10 +87,10 @@ function sprites() {
   ])
   SPR.lure = sprite(
     [
-      [0, 'rgba(255,246,226,1)'],
-      [0.08, 'rgba(255,214,150,0.95)'],
-      [0.24, 'rgba(255,176,84,0.42)'],
-      [0.55, 'rgba(255,176,84,0.08)'],
+      [0, 'rgba(255,248,232,1)'],
+      [0.06, 'rgba(255,222,160,0.95)'],
+      [0.2, 'rgba(255,176,84,0.45)'],
+      [0.5, 'rgba(255,176,84,0.09)'],
       [1, 'rgba(255,176,84,0)'],
     ],
     128,
@@ -91,48 +98,80 @@ function sprites() {
   return SPR
 }
 
+/* ------------------------------------------------------------- sunlight */
 function sunlightScene() {
   let rays = []
-  let specks = []
+  let motes = []
+  let fish = []
+  // share of the surface light at a given y: 100% at the top of the scale,
+  // 10% half way, 1% at the bottom (200 m)
+  const lightAt = (y, f) => Math.pow(10, -2 * clamp((y - f.y) / f.h, -0.25, 1.4))
   return {
-    setup(w, h) {
+    setup(w, h, f) {
       const r = rng(7)
-      rays = Array.from({ length: 8 }, (_, i) => ({
-        x: (i + 0.2 + r() * 0.6) / 8,
-        top: 16 + r() * 50,
-        bot: 70 + r() * 170,
+      rays = Array.from({ length: 9 }, (_, i) => ({
+        x: (i + 0.15 + r() * 0.7) / 9,
+        top: 8 + r() * 30,
+        bot: 50 + r() * 120,
         ph: r() * TAU,
-        sp: 0.09 + r() * 0.12,
+        sp: 0.07 + r() * 0.1,
         a: 0.45 + r() * 0.55,
       }))
-      const n = Math.round(clamp((w * h) / 7000, 40, 180))
-      specks = Array.from({ length: n }, () => ({
+      const n = Math.round(clamp((w * h) / 1900, 80, 260))
+      motes = Array.from({ length: n }, () => ({
         x: r() * w,
-        y: Math.pow(r(), 1.4) * h,
-        s: 0.6 + r() * 1.3,
-        v: 2 + r() * 7,
+        u: Math.pow(r(), 1.9) * 1.15 - 0.08, // crowded near the light
+        s: 0.6 + r() * 1.5,
+        v: 2 + r() * 6,
         ph: r() * TAU,
-        a: 0.3 + r() * 0.6,
+        a: 0.35 + r() * 0.65,
+        green: r() < 0.6,
+      }))
+      const m = Math.round(clamp((w * h) / 2600, 80, 170))
+      fish = Array.from({ length: m }, () => ({
+        a: r() * TAU,
+        sp: 0.32 + r() * 0.22,
+        rx: 0.45 + r() * 0.6,
+        ry: 0.35 + r() * 0.6,
+        wob: r() * TAU,
+        len: 4.5 + r() * 4,
+        ph: r() * TAU,
       }))
     },
-    draw(c, t, dt, w, h) {
-      const top = c.createLinearGradient(0, 0, 0, h * 0.8)
-      top.addColorStop(0, 'rgba(217,251,255,0.17)')
-      top.addColorStop(0.45, 'rgba(217,251,255,0.04)')
-      top.addColorStop(1, 'rgba(217,251,255,0)')
-      c.fillStyle = top
-      c.fillRect(0, 0, w, h * 0.8)
+    draw(c, t, dt, w, h, f, out, k) {
+      // the underside of the surface: a bright, moving skin of light
+      const sky = c.createLinearGradient(0, 0, 0, f.y + f.h * 0.35)
+      sky.addColorStop(0, 'rgba(217,251,255,0.30)')
+      sky.addColorStop(0.45, 'rgba(217,251,255,0.08)')
+      sky.addColorStop(1, 'rgba(217,251,255,0)')
+      c.fillStyle = sky
+      c.fillRect(0, 0, w, f.y + f.h * 0.35)
 
       c.globalCompositeOperation = 'lighter'
-      const len = h * 1.02
-      const slant = h * 0.16
+      c.lineWidth = 1
+      for (let j = 0; j < 3; j++) {
+        c.strokeStyle = `rgba(217,251,255,${(0.22 - j * 0.05).toFixed(3)})`
+        c.beginPath()
+        for (let x = -4; x <= w + 4; x += 8) {
+          const y = f.y * (0.55 + j * 0.18) + Math.sin(x * 0.021 + t * (0.7 + j * 0.2) + j) * 3 + Math.sin(x * 0.053 - t * 1.2 + j * 2) * 1.6
+          if (x === -4) c.moveTo(x, y)
+          else c.lineTo(x, y)
+        }
+        c.stroke()
+      }
+
+      // shafts of sunlight, dimming tenfold every 100 m
+      const len = f.y + f.h * 1.08
+      const slant = h * 0.14
+      const par = (0.5 - k) * w * 0.1
       for (const ray of rays) {
-        const sway = Math.sin(t * ray.sp + ray.ph) * 30
-        const x0 = ray.x * w * 1.15 - w * 0.12 + sway
-        const k = (0.5 + 0.5 * Math.sin(t * ray.sp * 2.6 + ray.ph * 2)) * ray.a
+        const sway = Math.sin(t * ray.sp + ray.ph) * 22
+        const x0 = ray.x * w * 1.2 - w * 0.12 + sway + par
+        const q = (0.55 + 0.45 * Math.sin(t * ray.sp * 2.6 + ray.ph * 2)) * ray.a
         const g = c.createLinearGradient(0, 0, 0, len)
-        g.addColorStop(0, `rgba(217,251,255,${(0.16 * k).toFixed(3)})`)
-        g.addColorStop(0.45, `rgba(217,251,255,${(0.045 * k).toFixed(3)})`)
+        g.addColorStop(0, `rgba(217,251,255,${(0.2 * q).toFixed(3)})`)
+        g.addColorStop(clamp(f.y / len), `rgba(217,251,255,${(0.17 * q).toFixed(3)})`)
+        g.addColorStop(clamp((f.y + f.h * 0.5) / len), `rgba(217,251,255,${(0.045 * q).toFixed(3)})`)
         g.addColorStop(1, 'rgba(217,251,255,0)')
         c.fillStyle = g
         c.beginPath()
@@ -143,78 +182,271 @@ function sunlightScene() {
         c.closePath()
         c.fill()
       }
-      for (const p of specks) {
+
+      // phytoplankton: thick where the light is, almost none at 200 m
+      for (const p of motes) {
         p.x += p.v * dt
         if (p.x > w + 4) p.x = -4
-        const y = p.y + Math.sin(t * 0.55 + p.ph) * 5
-        const light = Math.exp((-y / h) * 2.3)
-        c.fillStyle = `rgba(217,251,255,${(p.a * (0.2 + 0.8 * light)).toFixed(3)})`
+        const y = f.y + p.u * f.h + Math.sin(t * 0.5 + p.ph) * 4
+        const L = lightAt(y, f)
+        const a = p.a * clamp(0.08 + Math.pow(L, 0.42))
+        if (a < 0.02) continue
+        c.fillStyle = p.green ? `rgba(196,255,226,${a.toFixed(3)})` : `rgba(217,251,255,${a.toFixed(3)})`
         c.fillRect(p.x, y, p.s, p.s)
+      }
+
+      // a school of small fish, turning in the light; their flanks flash
+      const R = Math.min(w * 0.3, f.h * 0.32)
+      const cx = w * (0.56 + 0.05 * Math.sin(t * 0.11)) + (0.5 - k) * w * 0.22
+      const cy = f.y + f.h * 0.3 + Math.sin(t * 0.17) * f.h * 0.03
+      c.lineCap = 'round'
+      for (const p of fish) {
+        p.a += p.sp * dt
+        const a = p.a
+        const y0 = Math.sin(a * 2 + p.wob) * R * 0.08
+        const x = cx + Math.cos(a) * R * p.rx
+        const y = cy + Math.sin(a) * R * p.ry * 0.42 + y0
+        const vx = -Math.sin(a) * p.rx
+        const vy = Math.cos(a) * p.ry * 0.42
+        const vl = Math.hypot(vx, vy) || 1
+        const near = 0.75 + 0.35 * Math.sin(a) // the near side of the ball
+        const flash = Math.max(0, Math.cos(a * 1 + p.ph + t * 0.3)) ** 10
+        const L = lightAt(y, f)
+        const al = (0.22 + 0.7 * flash) * clamp(0.35 + L) * near
+        const l = p.len * near
+        c.strokeStyle = `rgba(232,250,255,${clamp(al).toFixed(3)})`
+        c.lineWidth = 1.3 + 0.9 * near
+        c.beginPath()
+        c.moveTo(x - (vx / vl) * l * 0.5, y - (vy / vl) * l * 0.5)
+        c.lineTo(x + (vx / vl) * l * 0.5, y + (vy / vl) * l * 0.5)
+        c.stroke()
+      }
+      c.lineCap = 'butt'
+      c.globalCompositeOperation = 'source-over'
+    },
+  }
+}
+
+/* ------------------------------------------------------------- twilight */
+// one night, in time-lapse: k 0 → 1 is 14:00 → 10:00 the next morning.
+// cloud: 0 = the top of the scale (200 m) … 1 = the bottom (1,000 m)
+const nightHours = (k) => 20 * clamp(k)
+const cloudAt = (k) => {
+  const s = nightHours(k)
+  return 0.74 - 0.7 * (smooth(3.5, 6.8, s) - smooth(14.2, 17.6, s))
+}
+function twilightScene() {
+  let fish = []
+  let lastCloud = null
+  let vel = 0
+  return {
+    setup(w, h, f) {
+      const r = rng(11)
+      const n = Math.round(clamp((w * f.h) / 900, 110, 320))
+      fish = Array.from({ length: n }, () => {
+        const kind = r()
+        return {
+          fx: r(),
+          oy: (r() + r() + r() - 1.5) * 0.17,
+          lag: r() * 0.045,
+          ph: r() * TAU,
+          s: 0.5 + r() * 0.8,
+          kind: kind < 0.42 ? 'lantern' : kind < 0.93 ? 'krill' : 'squid',
+          blue: r() < 0.35,
+        }
+      })
+      lastCloud = null
+    },
+    draw(c, t, dt, w, h, f, out, k) {
+      const S = sprites()
+      const s = nightHours(k)
+      const day = 1 - (smooth(3, 6.5, s) - smooth(14.5, 18, s))
+      // the last daylight from above, gone at night
+      const g = c.createLinearGradient(0, 0, 0, f.y + f.h * 0.6)
+      g.addColorStop(0, `rgba(58,168,255,${(0.04 + 0.12 * day).toFixed(3)})`)
+      g.addColorStop(1, 'rgba(58,168,255,0)')
+      c.fillStyle = g
+      c.fillRect(0, 0, w, f.y + f.h * 0.6)
+
+      const cloud = cloudAt(k)
+      out.cloud = cloud
+      out.hour = (14 + s) % 24
+      if (lastCloud !== null) vel += ((cloud - lastCloud) / Math.max(dt, 1 / 120) - vel) * Math.min(1, dt * 6)
+      lastCloud = cloud
+      const x0 = w * 0.2
+      const xw = w * 0.74
+      c.globalCompositeOperation = 'lighter'
+      c.lineWidth = 1
+      for (const p of fish) {
+        const cy = cloudAt(k - p.lag * Math.sign(vel || 1))
+        const y = f.y + f.h * (cy + p.oy * (0.8 + 0.4 * (1 - day)))
+        const x = x0 + p.fx * xw + Math.sin(t * 0.3 + p.ph) * 6
+        const streak = 1.2 + Math.min(16, Math.abs(vel) * 9 * p.s)
+        const dir = vel > 0 ? -1 : 1 // trail behind the direction of travel
+        if (p.kind === 'krill') {
+          c.fillStyle = `rgba(234,246,244,${(0.28 * p.s).toFixed(3)})`
+          c.fillRect(x, y, 1.2, 1.2 + streak * 0.4)
+          continue
+        }
+        c.strokeStyle = `rgba(234,246,244,${(0.34 * p.s).toFixed(3)})`
+        c.beginPath()
+        c.moveTo(x, y)
+        c.lineTo(x - 2, y + dir * streak * (p.kind === 'squid' ? 1.4 : 1))
+        c.stroke()
+        // lanternfish carry rows of photophores
+        const tw = 0.6 + 0.4 * Math.sin(t * 2.2 + p.ph * 3)
+        const sz = p.kind === 'squid' ? 7 + 4 * p.s : 4 + 3.5 * p.s
+        c.globalAlpha = 0.8 * tw
+        c.drawImage(p.blue ? S.blue : S.glow, x - sz, y - sz, sz * 2, sz * 2)
+        c.globalAlpha = 1
       }
       c.globalCompositeOperation = 'source-over'
     },
   }
 }
 
-function twilightScene() {
-  const P = 20 // seconds per day, for the diagram
-  // 0 = near the top (night) … 1 = deep (day)
-  const depthAt = (ph) => smooth(0.26, 0.5, ph) - smooth(0.76, 1, ph)
-  let fish = []
-  return {
-    setup(w, h, f) {
-      const r = rng(11)
-      const n = Math.round(clamp((f.w * f.h) / 900, 90, 280))
-      fish = Array.from({ length: n }, () => ({
-        fx: r(),
-        oy: (r() + r() + r() - 1.5) * 0.2,
-        lag: r() * 0.08,
-        ph: r() * TAU,
-        s: 0.5 + r() * 0.8,
-        glow: r() < 0.4,
-        blue: r() < 0.3,
-      }))
-    },
-    draw(c, t, dt, w, h, f, out) {
-      const S = sprites()
-      // the last of the daylight: faint blue from above
-      const g = c.createLinearGradient(0, 0, 0, h * 0.6)
-      g.addColorStop(0, 'rgba(58,168,255,0.07)')
-      g.addColorStop(1, 'rgba(58,168,255,0)')
-      c.fillStyle = g
-      c.fillRect(0, 0, w, h * 0.6)
+/* ------------------------------------------------------------- midnight */
+const ESCA = [-128, -31]
+function anglerBody(c) {
+  c.beginPath()
+  c.moveTo(-96, -14)
+  c.bezierCurveTo(-94, -44, -66, -70, -28, -68)
+  c.bezierCurveTo(8, -66, 36, -56, 52, -40)
+  c.bezierCurveTo(62, -30, 70, -20, 78, -13)
+  c.quadraticCurveTo(96, -30, 118, -33)
+  c.quadraticCurveTo(110, -15, 112, -1)
+  c.quadraticCurveTo(110, 14, 121, 30)
+  c.quadraticCurveTo(96, 28, 78, 12)
+  c.bezierCurveTo(66, 36, 34, 62, -6, 64)
+  c.bezierCurveTo(-44, 66, -82, 48, -104, 14)
+  c.bezierCurveTo(-90, 16, -64, 14, -48, 4)
+  c.bezierCurveTo(-64, -4, -84, -10, -96, -14)
+  c.closePath()
+}
+const LIP_LO = [[-104, 14], [-90, 16], [-64, 14], [-48, 4]]
+const LIP_UP = [[-48, 4], [-64, -4], [-84, -10], [-96, -14]]
+const TEETH = [
+  ...[0.05, 0.18, 0.32, 0.47, 0.63].map((s, i) => ({ p: bez(...LIP_LO, s), dx: 2.5, dy: -[14, 12, 10, 7.5, 5][i] })),
+  ...[0.4, 0.58, 0.74, 0.88, 0.98].map((s, i) => ({ p: bez(...LIP_UP, s), dx: -1, dy: [5, 7, 9, 11, 12][i] })),
+]
 
-      const top = f.y + f.h * 0.1
-      const bot = f.y + f.h * 0.9
-      const base = (t / P + 0.7) % 1 // arrive at dusk, as the cloud starts to rise
-      out.cloud = 0.1 + 0.8 * depthAt(base)
-      const x0 = f.x + f.w * 0.16
-      const xw = f.w * 0.8
-      c.globalCompositeOperation = 'lighter'
-      c.lineWidth = 1
-      for (const p of fish) {
-        const ph = (base - p.lag + 1) % 1
-        const cy = depthAt(ph)
-        const v = depthAt((ph + 0.004) % 1) - cy
-        const y = top + (bot - top) * (cy + p.oy)
-        const x = x0 + p.fx * xw + Math.sin(t * 0.35 + p.ph) * 7
-        const streak = 1.5 + Math.min(14, Math.abs(v) * 1400)
-        c.strokeStyle = `rgba(234,246,244,${(0.3 * p.s).toFixed(3)})`
-        c.beginPath()
-        c.moveTo(x, y)
-        c.lineTo(x - 2.5, y - Math.sign(v || 1) * streak)
-        c.stroke()
-        if (p.glow) {
-          const tw = 0.6 + 0.4 * Math.sin(t * 2.2 + p.ph * 3)
-          const s = 5 + 4 * p.s
-          c.globalAlpha = 0.85 * tw
-          c.drawImage(p.blue ? S.blue : S.glow, x - s, y - s, s * 2, s * 2)
-          c.globalAlpha = 1
-        }
-      }
-      c.globalCompositeOperation = 'source-over'
-    },
+function drawAngler(c, cx, cy, S, lit, pulse, t) {
+  const ex = ESCA[0] + Math.sin(t * 0.9) * 3
+  const ey = ESCA[1] + Math.cos(t * 0.7) * 2.4
+  const on = lit * pulse
+  c.save()
+  c.translate(cx, cy)
+  c.scale(S, S)
+  const lw = 1 / S
+
+  // the body is darker than the water: a shape seen only where light lands
+  anglerBody(c)
+  c.fillStyle = 'rgba(1,5,12,0.94)'
+  c.fill()
+  // the gape
+  c.beginPath()
+  c.moveTo(...LIP_LO[0])
+  c.bezierCurveTo(...LIP_LO[1], ...LIP_LO[2], ...LIP_LO[3])
+  c.bezierCurveTo(...LIP_UP[1], ...LIP_UP[2], ...LIP_UP[3])
+  c.closePath()
+  c.fillStyle = 'rgba(0,0,0,0.9)'
+  c.fill()
+
+  // the lure lights the face: a falloff across the skin…
+  c.save()
+  anglerBody(c)
+  c.clip()
+  c.globalCompositeOperation = 'lighter'
+  const skin = c.createRadialGradient(ex, ey, 0, ex, ey, 170)
+  skin.addColorStop(0, `rgba(255,176,84,${(0.34 * on).toFixed(3)})`)
+  skin.addColorStop(0.3, `rgba(255,150,70,${(0.12 * on).toFixed(3)})`)
+  skin.addColorStop(1, 'rgba(255,150,70,0)')
+  c.fillStyle = skin
+  c.fillRect(-140, -90, 270, 170)
+  c.restore()
+
+  // …and catches its edges: jaw, head, belly, then nothing
+  c.globalCompositeOperation = 'lighter'
+  const rim = c.createRadialGradient(ex, ey, 0, ex, ey, 215)
+  rim.addColorStop(0, `rgba(255,226,170,${(0.95 * on).toFixed(3)})`)
+  rim.addColorStop(0.35, `rgba(255,176,84,${(0.42 * on).toFixed(3)})`)
+  rim.addColorStop(0.75, `rgba(255,176,84,${(0.06 * on).toFixed(3)})`)
+  rim.addColorStop(1, 'rgba(255,176,84,0)')
+  c.strokeStyle = rim
+  c.lineWidth = 1.25 * lw
+  c.lineJoin = 'round'
+  anglerBody(c)
+  c.stroke()
+  // a faint cold rim on the far side, so the shape exists at all
+  c.strokeStyle = `rgba(150,200,255,${(0.05 + 0.04 * lit).toFixed(3)})`
+  c.lineWidth = lw
+  c.stroke()
+
+  // pectoral fin
+  c.strokeStyle = rim
+  c.lineWidth = 0.9 * lw
+  c.beginPath()
+  for (const [x, y] of [[24, 30], [29, 20], [26, 9]]) {
+    c.moveTo(2, 12)
+    c.lineTo(x, y)
   }
+  c.stroke()
+
+  // teeth: needles, brightest nearest the lure
+  const tooth = c.createRadialGradient(ex, ey, 0, ex, ey, 120)
+  tooth.addColorStop(0, `rgba(255,246,228,${(0.95 * on).toFixed(3)})`)
+  tooth.addColorStop(0.6, `rgba(255,214,160,${(0.55 * on).toFixed(3)})`)
+  tooth.addColorStop(1, `rgba(255,190,120,${(0.08 * on).toFixed(3)})`)
+  c.fillStyle = tooth
+  c.beginPath()
+  for (const tt of TEETH) {
+    const [x, y] = tt.p
+    c.moveTo(x - 1.5, y)
+    c.lineTo(x + 1.5, y)
+    c.lineTo(x + tt.dx, y + tt.dy)
+    c.closePath()
+  }
+  c.fill()
+
+  // the eye: tiny, with one glint of the lure in it
+  c.globalCompositeOperation = 'source-over'
+  c.fillStyle = 'rgba(0,0,0,0.95)'
+  c.beginPath()
+  c.arc(-62, -31, 3.6, 0, TAU)
+  c.fill()
+  c.globalCompositeOperation = 'lighter'
+  c.fillStyle = `rgba(255,220,170,${(0.85 * on).toFixed(3)})`
+  c.beginPath()
+  c.arc(-63.4, -32.2, 1, 0, TAU)
+  c.fill()
+
+  // the illicium: a rod from the forehead, lit toward its tip
+  const rod = c.createLinearGradient(-44, -66, ex, ey)
+  rod.addColorStop(0, `rgba(255,176,84,${(0.12 * lit).toFixed(3)})`)
+  rod.addColorStop(1, `rgba(255,226,170,${(0.85 * on).toFixed(3)})`)
+  c.strokeStyle = rod
+  c.lineWidth = 1.1 * lw
+  c.beginPath()
+  c.moveTo(-44, -66)
+  c.bezierCurveTo(-62, -114, -120, -106, ex, ey - 3)
+  c.stroke()
+  c.restore()
+
+  // the esca, in screen space
+  const S2 = sprites()
+  const x = cx + ex * S
+  const y = cy + ey * S
+  c.globalCompositeOperation = 'lighter'
+  const ls = 62 * S * (0.86 + 0.14 * pulse)
+  c.globalAlpha = clamp(0.45 + 0.55 * lit) * pulse
+  c.drawImage(S2.lure, x - ls, y - ls, ls * 2, ls * 2)
+  c.globalAlpha = 1
+  c.fillStyle = `rgba(255,250,236,${(0.6 + 0.4 * pulse).toFixed(3)})`
+  c.beginPath()
+  c.arc(x, y, 1.8 * Math.max(1, S * 0.7), 0, TAU)
+  c.fill()
+  c.globalCompositeOperation = 'source-over'
+  return [x, y]
 }
 
 function midnightScene() {
@@ -222,32 +454,29 @@ function midnightScene() {
   let snow = []
   let ambient = []
   let next = 0
-  let nextChain = 1.2
+  let nextChain = 1.6
   let r = rng(23)
   return {
     setup(w, h, f) {
       r = rng(23)
       flashes = []
       next = 0
-      nextChain = 1.2
-      const n = Math.round(clamp((w * h) / 22000, 20, 70))
-      snow = Array.from({ length: n }, () => ({ x: r() * w, y: r() * h, v: 4 + r() * 7, s: 0.6 + r(), a: 0.08 + r() * 0.14 }))
+      nextChain = 1.6
+      const n = Math.round(clamp((w * h) / 9000, 24, 80))
+      snow = Array.from({ length: n }, () => ({ x: r() * w, y: r() * h, v: 4 + r() * 7, s: 0.6 + r(), a: 0.1 + r() * 0.16 }))
       // distant animals glowing steadily, far off in the dark
-      const m = Math.round(clamp((w * h) / 9000, 40, 120))
-      ambient = Array.from({ length: m }, () => {
-        const inFocus = r() < 0.7
-        return {
-          x: inFocus ? f.x + r() * f.w : w * (0.25 + r() * 0.75),
-          y: inFocus ? f.y + r() * f.h : h * (0.06 + r() * 0.86),
-          s: 2 + r() * 4,
-          a: 0.12 + r() * 0.3,
-          ph: r() * TAU,
-          sp: 0.3 + r() * 0.9,
-          blue: r() < 0.45,
-        }
-      })
+      const m = Math.round(clamp((w * h) / 6000, 30, 110))
+      ambient = Array.from({ length: m }, () => ({
+        x: r() * w,
+        y: h * (0.06 + r() * 0.86),
+        s: 1.6 + r() * 3.4,
+        a: 0.1 + r() * 0.3,
+        ph: r() * TAU,
+        sp: 0.3 + r() * 0.9,
+        blue: r() < 0.5,
+      }))
     },
-    draw(c, t, dt, w, h, f) {
+    draw(c, t, dt, w, h, f, out, k) {
       const S = sprites()
       c.globalCompositeOperation = 'lighter'
       for (const q of ambient) {
@@ -257,33 +486,24 @@ function midnightScene() {
       c.globalAlpha = 1
       if (next < t - 1) next = t // re-entry after a pause: don't replay the backlog
       while (t > next) {
-        next += 0.1 + r() * 0.32
-        const wide = r() < 0.25 // a few lights well outside the diagram
-        flashes.push({
-          x: wide ? w * (0.3 + r() * 0.7) : f.x + r() * f.w,
-          y: wide ? h * (0.08 + r() * 0.8) : f.y + r() * f.h,
-          s: wide ? 5 + r() * 9 : 7 + r() * 22,
-          t0: next,
-          dur: 0.6 + r() * 2.2,
-          blue: r() < 0.38,
-        })
+        next += 0.18 + r() * 0.5
+        flashes.push({ x: r() * w, y: h * (0.08 + r() * 0.82), s: 5 + r() * 14, t0: next, dur: 0.6 + r() * 2.2, blue: r() < 0.4 })
       }
       if (t > nextChain) {
         // a siphonophore: a chain of lights firing one after another
-        nextChain = t + 2.6 + r() * 2.8
-        const n = 8 + Math.floor(r() * 7)
-        let x = f.x + f.w * (0.1 + r() * 0.6)
-        let y = f.y + f.h * (0.1 + r() * 0.75)
-        let a = r() * TAU
-        const bend = (r() - 0.5) * 0.5
+        nextChain = t + 3.2 + r() * 3
+        const n = 9 + Math.floor(r() * 7)
+        let x = w * (0.1 + r() * 0.35)
+        let y = h * (0.12 + r() * 0.2)
+        let a = r() * 0.8 - 0.1
+        const bend = (r() - 0.5) * 0.4
         for (let i = 0; i < n; i++) {
           flashes.push({ x, y, s: 4 + r() * 3, t0: t + i * 0.075, dur: 1.4, blue: false })
           a += bend
-          x += Math.cos(a) * 13
-          y += Math.sin(a) * 13
+          x += Math.cos(a) * 12
+          y += Math.sin(a) * 12
         }
       }
-      c.globalCompositeOperation = 'lighter'
       for (let i = flashes.length - 1; i >= 0; i--) {
         const q = flashes[i]
         const age = t - q.t0
@@ -297,28 +517,27 @@ function midnightScene() {
         c.drawImage(q.blue ? S.blue : S.glow, q.x - q.s, q.y - q.s, q.s * 2, q.s * 2)
       }
       c.globalAlpha = 1
-
-      // the anglerfish: only its lure is visible
-      const lx = f.x + f.w * 0.6 + Math.sin(t * 0.31) * 6
-      const ly = f.y + f.h * 0.52 + Math.sin(t * 0.73) * 7
-      const pulse = 0.72 + 0.28 * Math.sin(t * 1.1) * Math.sin(t * 0.37 + 1)
       c.globalCompositeOperation = 'source-over'
-      c.strokeStyle = 'rgba(255,176,84,0.16)'
-      c.lineWidth = 1
-      c.beginPath()
-      c.moveTo(lx, ly + 2)
-      c.quadraticCurveTo(lx - 44, ly - 8, lx - 58, ly + 54)
-      c.stroke()
-      c.globalCompositeOperation = 'lighter'
-      const ls = 70 * (0.85 + 0.15 * pulse)
-      c.globalAlpha = 0.8 * pulse
-      c.drawImage(S.lure, lx - ls, ly - ls, ls * 2, ls * 2)
-      c.globalAlpha = 1
 
+      // the anglerfish: the lure comes up as it reaches the centre
+      const lit = out.still ? 1 : 0.18 + 0.82 * smooth(0.18, 0.46, k)
+      const pulse = 0.8 + 0.2 * Math.sin(t * 1.3) * (0.7 + 0.3 * Math.sin(t * 0.37 + 1))
+      const S0 = Math.min(w / 300, f.h / 210, 2.6)
+      const cx = w * 0.6 + (0.5 - k) * w * 0.12 + Math.sin(t * 0.21) * 4
+      const cy = f.y + f.h * 0.5 + Math.sin(t * 0.33) * 5
+      const [lx, ly] = drawAngler(c, cx, cy, S0, lit, pulse, t)
+
+      // marine snow, warmed where the lure lights it
+      const R2 = (150 * S0) ** 2
+      c.globalCompositeOperation = 'lighter'
       for (const p of snow) {
         p.y += p.v * dt
         if (p.y > h) p.y = -2
-        c.fillStyle = `rgba(234,246,244,${p.a})`
+        const near = Math.exp(-((p.x - lx) ** 2 + (p.y - ly) ** 2) / R2) * lit * pulse
+        c.fillStyle =
+          near > 0.05
+            ? `rgba(255,${Math.round(246 - 50 * near)},${Math.round(244 - 120 * near)},${(p.a + 0.6 * near).toFixed(3)})`
+            : `rgba(234,246,244,${p.a})`
         c.fillRect(p.x, p.y, p.s, p.s)
       }
       c.globalCompositeOperation = 'source-over'
@@ -326,103 +545,233 @@ function midnightScene() {
   }
 }
 
+/* ---------------------------------------------------------------- abyss */
+function drawTripod(c, x, y, s, a) {
+  // Bathypterois: stands on its pelvic rays and the lower lobe of its tail,
+  // facing into the current, pectoral rays held forward like feelers
+  c.save()
+  c.translate(x, y)
+  c.scale(s, s)
+  const lw = 1 / s
+  c.lineCap = 'round'
+  c.strokeStyle = `rgba(234,246,244,${(0.42 * a).toFixed(3)})`
+  c.lineWidth = 0.9 * lw
+  c.beginPath()
+  c.moveTo(-6, -38)
+  c.quadraticCurveTo(-11, -18, -15, 0)
+  c.moveTo(-3, -38)
+  c.quadraticCurveTo(-1, -18, 3, 0)
+  c.moveTo(34, -40)
+  c.quadraticCurveTo(42, -20, 46, 0)
+  // pectoral rays
+  for (const [px, py] of [[-62, -76], [-66, -66], [-58, -84]]) {
+    c.moveTo(-20, -46)
+    c.quadraticCurveTo(-38, -64, px, py)
+  }
+  c.stroke()
+  // body
+  c.beginPath()
+  c.moveTo(-33, -44)
+  c.bezierCurveTo(-22, -52, 14, -50, 36, -41)
+  c.lineTo(46, -48)
+  c.lineTo(44, -40)
+  c.bezierCurveTo(14, -36, -20, -37, -33, -44)
+  c.closePath()
+  c.fillStyle = 'rgba(2,6,14,0.9)'
+  c.fill()
+  c.strokeStyle = `rgba(234,246,244,${(0.55 * a).toFixed(3)})`
+  c.lineWidth = lw
+  c.stroke()
+  c.fillStyle = `rgba(234,246,244,${(0.7 * a).toFixed(3)})`
+  c.beginPath()
+  c.arc(-27, -45, 1.1, 0, TAU)
+  c.fill()
+  c.restore()
+}
+
+function drawCucumber(c, x, y, s, glow) {
+  // a sea pig (Scotoplanes): a plump body on stubby tube feet, papillae up front
+  c.save()
+  c.translate(x, y)
+  c.scale(s, s)
+  const lw = 1 / s
+  c.lineCap = 'round'
+  c.strokeStyle = `rgba(160,255,240,${(0.5 + 0.3 * glow).toFixed(3)})`
+  c.lineWidth = 0.9 * lw
+  c.beginPath()
+  for (let i = 0; i < 5; i++) {
+    c.moveTo(-15 + i * 7.5, -2)
+    c.lineTo(-16 + i * 7.5, 3)
+  }
+  c.moveTo(-12, -12)
+  c.quadraticCurveTo(-17, -20, -15, -26)
+  c.moveTo(-6, -14)
+  c.quadraticCurveTo(-8, -22, -5, -27)
+  c.stroke()
+  c.beginPath()
+  c.ellipse(0, -7, 22, 8.5, -0.06, 0, TAU)
+  c.fillStyle = `rgba(108,248,232,${(0.1 + 0.12 * glow).toFixed(3)})`
+  c.fill()
+  c.strokeStyle = `rgba(190,255,246,${(0.6 + 0.3 * glow).toFixed(3)})`
+  c.lineWidth = lw
+  c.stroke()
+  c.restore()
+}
+
 function abyssScene() {
   let snow = []
-  const ROWS = 20
-  const elev = (X, z) => Math.sin(X * 0.0042 + z * 0.9) * 16 + Math.sin(X * 0.011 - z * 1.7) * 7 + Math.sin(X * 0.026 + z * 3.1) * 2.5
   let geo = null
+  let trail = []
+  const ROWS = 22
+  const elev = (X, z) =>
+    Math.sin(X * 0.031 + z * 1.3) * 2.6 + Math.sin(X * 0.0072 - z * 0.7) * 7 + Math.sin(X * 0.083 + z * 2.9) * 0.9
   return {
     setup(w, h, f) {
       const r = rng(31)
       const horizon = f.y + f.h * 0.42
-      const ground = h * 0.99
-      geo = { horizon, ground, vpx: f.x + f.w * 0.55 }
-      const n = Math.round(clamp((w * h) / 6000, 50, 220))
+      const near = h * 0.97
+      geo = { horizon, near, vpx: w * 0.5 }
+      const n = Math.round(clamp((w * h) / 2600, 70, 240))
       snow = Array.from({ length: n }, () => ({
         x: r() * w,
         y: r() * h,
-        z: 1 + r() * 9,
-        v: 7 + r() * 16,
-        s: 0.6 + r() * 1.4,
+        z: 1 + r() * 8,
+        v: 6 + r() * 12,
+        s: 0.6 + r() * 1.3,
         ph: r() * TAU,
         a: 0.25 + r() * 0.5,
         land: 0,
       }))
+      // the sea cucumber's feeding trail, behind it on the floor
+      trail = Array.from({ length: 70 }, (_, i) => ({
+        X: 40 + i * 5 + Math.sin(i * 0.31) * 6,
+        z: 1.75 + i * 0.03 + Math.sin(i * 0.17) * 0.12,
+      }))
     },
-    draw(c, t, dt, w, h, f) {
-      const { horizon, ground, vpx } = geo
-      const yAt = (x, z) => horizon + (ground - horizon) / z - elev((x - vpx) * z, z) / z
-      const fadeX = (x) => smooth(f.x - f.w * 0.55, f.x + f.w * 0.15, x)
-      const sweep = 1 + ((t * 0.16) % 1) * 13 // a sonar ping travelling out
+    draw(c, t, dt, w, h, f, out, k) {
+      const S = sprites()
+      const { horizon, near, vpx } = geo
+      const pan = (k - 0.5) * 260 // the camera drifts across the plain
+      const yAt = (x, z) => horizon + (near - horizon) / z - elev((x - vpx) * z + pan, z) / z
+      const sx = (X, z) => vpx + (X - pan) / z
+      const glow = 0.72 + 0.28 * Math.sin(t * 0.9) * Math.sin(t * 0.31 + 2)
+
+      // where the living light is: the sea cucumber
+      const cucX = 10
+      const cucZ = 1.7
+      const gx = sx(cucX, cucZ)
+      const gy = yAt(gx, cucZ)
+      const rad = Math.max(w, h) * 0.5
+
+      // sediment ripples, near → far; lit only near the glow
       c.lineWidth = 1
-      // contour rows, near → far
-      for (let k = 0; k < ROWS; k++) {
-        const z = 1 + k * 0.62
-        const hl = Math.exp(-((z - sweep) ** 2) * 2.2)
-        const a = 0.34 / z ** 0.8
+      const lightG = c.createRadialGradient(gx, gy, 0, gx, gy, rad)
+      lightG.addColorStop(0, `rgba(108,248,232,${(0.5 * glow).toFixed(3)})`)
+      lightG.addColorStop(0.3, `rgba(108,248,232,${(0.12 * glow).toFixed(3)})`)
+      lightG.addColorStop(1, 'rgba(108,248,232,0)')
+      for (let i = 0; i < ROWS; i++) {
+        const z = 1 + i * 0.5
         c.beginPath()
-        for (let x = -10; x <= w + 10; x += 12) {
+        for (let x = -12; x <= w + 12; x += 9) {
           const y = yAt(x, z)
-          if (x === -10) c.moveTo(x, y)
+          if (x === -12) c.moveTo(x, y)
           else c.lineTo(x, y)
         }
-        const grd = c.createLinearGradient(0, 0, w, 0)
-        const col = hl > 0.05 ? `108,248,232` : `234,246,244`
-        const alpha = hl > 0.05 ? a * 0.5 + hl * 0.55 : a
-        grd.addColorStop(0, `rgba(${col},0)`)
-        grd.addColorStop(clamp((f.x - f.w * 0.35) / w), `rgba(${col},0)`)
-        grd.addColorStop(clamp((f.x + f.w * 0.1) / w), `rgba(${col},${alpha.toFixed(3)})`)
-        grd.addColorStop(1, `rgba(${col},${(alpha * 0.8).toFixed(3)})`)
-        c.strokeStyle = grd
+        c.strokeStyle = `rgba(234,246,244,${(0.028 + 0.11 / z ** 1.1).toFixed(3)})`
+        c.stroke()
+        c.strokeStyle = lightG
         c.stroke()
       }
-      // a few lines running away from us
-      c.strokeStyle = 'rgba(234,246,244,0.07)'
-      for (let j = -8; j <= 8; j++) {
-        const X = j * 120
+
+      // the feeding trail: a meander of faint pellets
+      c.fillStyle = 'rgba(234,246,244,0.16)'
+      for (const p of trail) {
+        const x = sx(p.X, p.z)
+        if (x < -4 || x > w + 4) continue
+        const y = yAt(x, p.z)
+        c.fillRect(x, y - 0.5, 1.4 / p.z + 0.6, 1)
+      }
+
+      // a brittle star, close by
+      {
+        const z = 1.22
+        const x = sx(-150, z)
+        const y = yAt(x, z) - 1
+        c.strokeStyle = 'rgba(234,246,244,0.32)'
+        c.lineWidth = 1
         c.beginPath()
-        for (let k = 0; k <= 24; k++) {
-          const z = 1 + k * 0.5
-          const x = vpx + X / z
-          const y = yAt(x, z)
-          if (k === 0) c.moveTo(x, y)
-          else c.lineTo(x, y)
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * TAU + 0.4 + Math.sin(t * 0.4 + i) * 0.05
+          const L = 26 / z
+          c.moveTo(x, y)
+          c.quadraticCurveTo(x + Math.cos(a) * L * 0.6, y + Math.sin(a) * L * 0.6 * 0.35, x + Math.cos(a + 0.5) * L, y + Math.sin(a + 0.5) * L * 0.35)
         }
         c.stroke()
+        c.fillStyle = 'rgba(234,246,244,0.4)'
+        c.beginPath()
+        c.ellipse(x, y, 3.2 / z, 1.4 / z, 0, 0, TAU)
+        c.fill()
       }
+
+      // a tripod fish, further off
+      {
+        const z = 2.3
+        const x = sx(-110, z)
+        drawTripod(c, x, yAt(x, z), 1.5 / z * Math.min(1.6, w / 420), 1)
+      }
+
+      // the sea cucumber and its glow
+      c.globalCompositeOperation = 'lighter'
+      const gs = (70 + 18 * glow) / cucZ * Math.min(1.5, w / 460)
+      c.globalAlpha = 0.6 * glow
+      c.drawImage(S.glow, gx - gs, gy - 10 - gs * 0.6, gs * 2, gs * 1.2)
+      c.globalAlpha = 1
+      c.globalCompositeOperation = 'source-over'
+      drawCucumber(c, gx, gy, (1.15 / cucZ) * Math.min(1.7, w / 380), glow)
+
       // marine snow, settling onto the plain
       for (const p of snow) {
         const floor = yAt(p.x, p.z)
         if (p.land > 0) {
           p.land += dt
-          if (p.land > 1.6) {
+          if (p.land > 1.8) {
             p.land = 0
             p.y = -4
             p.x = Math.random() * w
           }
         } else {
-          p.y += p.v * dt
-          p.x += Math.sin(t * 0.6 + p.ph) * 4 * dt
+          p.y += (p.v / Math.sqrt(p.z)) * dt
+          p.x += Math.sin(t * 0.6 + p.ph) * 3 * dt
           if (p.y >= floor) {
             p.y = floor
             p.land = 0.001
           }
         }
-        const fade = p.land > 0 ? 1 - p.land / 1.6 : 1
-        c.fillStyle = `rgba(234,246,244,${(p.a * fade * fadeX(p.x) ** 0.5).toFixed(3)})`
+        const fade = p.land > 0 ? 1 - p.land / 1.8 : 1
+        const lightUp = Math.exp(-((p.x - gx) ** 2 + (p.y - gy) ** 2) / (rad * rad * 0.12)) * glow
+        c.fillStyle = `rgba(${Math.round(234 - 120 * lightUp)},${Math.round(246 + 2 * lightUp)},${Math.round(244 - 10 * lightUp)},${(p.a * fade * (0.55 + 0.45 / p.z) + 0.4 * lightUp).toFixed(3)})`
         c.fillRect(p.x, p.y, p.s, p.s)
       }
     },
   }
 }
 
+/* ---------------------------------------------------------------- hadal */
 function hadalScene() {
   let snow = []
+  let pods = []
   return {
     setup(w, h) {
       const r = rng(41)
-      const n = Math.round(clamp((w * h) / 26000, 14, 50))
+      const n = Math.round(clamp((w * h) / 12000, 16, 60))
       snow = Array.from({ length: n }, () => ({ x: r() * w, y: r() * h, v: 3 + r() * 6, s: 0.6 + r(), a: 0.08 + r() * 0.16 }))
+      pods = Array.from({ length: 30 }, () => ({
+        x: (r() - 0.5) * 50,
+        y: (r() - 0.8) * 16,
+        vx: (r() - 0.5) * 20,
+        vy: (r() - 0.5) * 10,
+        ph: r() * TAU,
+      }))
     },
     draw(c, t, dt, w, h, f, out) {
       const S = sprites()
@@ -437,10 +786,29 @@ function hadalScene() {
       if (out.deep > 0) {
         const x = f.x + f.w * TRENCH_DEEP.x
         const y = f.y + f.h * TRENCH_DEEP.y
-        const s = 46 + 8 * Math.sin(t * 1.3)
-        c.globalAlpha = 0.5 * out.deep
+        const s = 44 + 8 * Math.sin(t * 1.3)
+        c.globalAlpha = 0.45 * out.deep
         c.drawImage(S.glow, x - s, y - s, s * 2, s * 2)
         c.globalAlpha = 1
+        // amphipods scavenging on the bottom
+        c.lineWidth = 1
+        c.lineCap = 'round'
+        for (const p of pods) {
+          p.vx += (-p.x * 0.9 + (Math.random() - 0.5) * 160) * dt
+          p.vy += (-(p.y + 4) * 2.2 + (Math.random() - 0.5) * 90) * dt
+          p.vx *= 1 - 1.6 * dt
+          p.vy *= 1 - 2.2 * dt
+          p.x += p.vx * dt
+          p.y = Math.min(2, p.y + p.vy * dt)
+          const a = Math.atan2(p.vy, p.vx)
+          const px = x + p.x
+          const py = y + p.y - 2
+          c.strokeStyle = `rgba(234,246,244,${(0.75 * out.deep * (0.7 + 0.3 * Math.sin(t * 5 + p.ph))).toFixed(3)})`
+          c.beginPath()
+          c.arc(px, py, 1.9, a + 0.8, a + 0.8 + 2.4)
+          c.stroke()
+        }
+        c.lineCap = 'butt'
       }
       c.globalCompositeOperation = 'source-over'
     },
@@ -506,8 +874,8 @@ function buildTrench(focus, svg) {
   svg.setAttribute('preserveAspectRatio', 'none')
   svg.innerHTML =
     `<defs><linearGradient id="zones-rock" x1="0" y1="0" x2="0" y2="1">` +
-    `<stop offset="0" stop-color="rgb(234,246,244)" stop-opacity="0.07"/>` +
-    `<stop offset="0.7" stop-color="rgb(234,246,244)" stop-opacity="0.015"/>` +
+    `<stop offset="0" stop-color="rgb(234,246,244)" stop-opacity="0.08"/>` +
+    `<stop offset="0.7" stop-color="rgb(234,246,244)" stop-opacity="0.02"/>` +
     `<stop offset="1" stop-color="rgb(234,246,244)" stop-opacity="0"/></linearGradient></defs>` +
     grid +
     `<path class="tr-rock" d="${d} L1000,1000 L0,1000 Z"/>` +
@@ -542,14 +910,11 @@ export function init(ctx) {
   const { gsap, ScrollTrigger } = ctx
   const ZONES = ctx.depth.ZONES
   const compress = (d) => ctx.depth.compression(d).f // 0 … 1, unrounded
+  const reduced = ctx.reducedMotion
 
   const track = root.querySelector('.zones__track')
   const list = root.querySelector('.zones__list')
-  const tint = root.querySelector('.zones__tint')
-  const rail = root.querySelector('.zones__rail')
-  const strip = root.querySelector('.zones__strip')
-  const fill = root.querySelector('.zones__fill')
-  if (ctx.reducedMotion) root.classList.add('is-static')
+  if (reduced) root.classList.add('is-static')
 
   /* ------------------------------------------------------------ panels */
   const panels = [...root.querySelectorAll('.zones__panel')].map((el, i) => {
@@ -557,16 +922,25 @@ export function init(ctx) {
     const c = ctx.depth.compression((z.from + z.to) / 2)
     el.style.setProperty('--wdth', c.wdth)
     el.style.setProperty('--wght', c.wght)
+    // the window holds this layer's own water, top to bottom of its range
+    const top = ctx.depth.colorAt(z.id === 'sunlight' ? 10 : z.from)
+    const bot = ctx.depth.colorAt(z.to)
+    el.style.setProperty('--water-top', top.css)
+    el.style.setProperty('--water-bottom', bot.css)
     const canvas = el.querySelector('.zones__canvas')
     return {
       el,
       z,
       range: el.querySelector('.zones__range'),
+      frame: el.querySelector('.zones__frame'),
       canvas,
       c2d: canvas?.getContext('2d') ?? null,
       focus: el.querySelector('.zones__focus'),
+      cloud: el.querySelector('.zones__cloud'),
+      clock: el.querySelector('.zones__clock'),
+      clockText: '',
       scene: SCENES[z.id]?.() ?? null,
-      out: { cloud: 0.5, deep: 0 },
+      out: { cloud: 0.74, hour: 14, deep: 0, still: false },
       f: { x: 0, y: 0, w: 1, h: 1 },
       w: 0,
       h: 0,
@@ -574,46 +948,19 @@ export function init(ctx) {
       sized: false,
       visible: false,
       t: 0,
+      k: 0.5,
+      side: 0,
+      pingT: -10,
       left: 0,
       width: 0,
-      top: 0,
-      height: 0,
-      segStart: 0,
+      frameOff: 0,
+      frameW: 1,
       segLen: 1,
-      seg: null,
       rw: -1,
-      active: false,
     }
   })
   const hadal = panels.find((p) => p.z.id === 'hadal')
   const pins = hadal?.focus ? buildTrench(hadal.focus, hadal.focus.querySelector('.zones__trench')) : []
-
-  /* ------------------------------------------------------------- tape */
-  for (const p of panels) {
-    if (!strip) break
-    const { from, to, id, name } = p.z
-    const spec = TAPE[id] || { step: (to - from) / 10, labels: [] }
-    const seg = document.createElement('div')
-    seg.className = 'zones__seg'
-    const pct = (d) => `${(((d - from) / (to - from)) * 100).toFixed(3)}%`
-    let lines = ''
-    for (let d = from; d < to - 1e-6; d += spec.step) {
-      const labelled = spec.labels.includes(d)
-      const cls = d === from ? 'is-edge' : labelled ? 'is-mid' : 'is-minor'
-      const len = d === from ? 12 : labelled ? 8 : 4
-      lines += `<line class="${cls}" x1="${pct(d)}" x2="${pct(d)}" y1="0" y2="${len}"/>`
-    }
-    if (p === panels[panels.length - 1]) lines += `<line class="is-edge" x1="100%" x2="100%" y1="-6" y2="12"/>`
-    let labels = `<span class="zones__seg-depth" style="left:0">${fmt(from)} m</span>`
-    for (const d of spec.labels) labels += `<span class="zones__seg-depth is-minor" style="left:${pct(d)}">${fmt(d)}</span>`
-    if (p === panels[panels.length - 1]) {
-      seg.classList.add('is-end')
-      labels += `<span class="zones__seg-depth is-last" style="left:100%">${fmt(to)} m</span>`
-    }
-    seg.innerHTML = `<span class="zones__seg-name">${name}</span><svg aria-hidden="true" focusable="false">${lines}</svg>${labels}`
-    strip.appendChild(seg)
-    p.seg = seg
-  }
 
   /* ------------------------------------------------------------ layout */
   let horizontal = false
@@ -622,43 +969,38 @@ export function init(ctx) {
 
   function layout() {
     horizontal = root.classList.contains('is-horizontal')
-    half = (rail?.clientWidth || window.innerWidth) / 2
+    half = window.innerWidth / 2
     dist = Math.max(0, track.scrollWidth - window.innerWidth)
     for (const p of panels) {
       p.left = list.offsetLeft + p.el.offsetLeft
       p.width = p.el.offsetWidth
-      p.top = list.offsetTop + p.el.offsetTop
-      p.height = p.el.offsetHeight
-    }
-    // the tape: each layer spans its panel, the last ends where the playhead
-    // stops (the centre of the final screen)
-    const tapeEnd = dist + half
-    panels.forEach((p, i) => {
-      p.segStart = p.left
-      p.segLen = i === panels.length - 1 ? Math.max(40, tapeEnd - p.left) : p.width
-      if (p.seg) {
-        p.seg.style.left = `${p.segStart}px`
-        p.seg.style.width = `${p.segLen}px`
+      if (p.frame) {
+        const fr = p.frame.getBoundingClientRect()
+        const pr = p.el.getBoundingClientRect()
+        p.frameOff = fr.left - pr.left
+        p.frameW = Math.max(1, fr.width)
       }
+    }
+    // pressure squeezes each range from the moment its panel reaches the
+    // centre of the screen until the next one does (the last: until the end)
+    panels.forEach((p, i) => {
+      p.segLen = i === panels.length - 1 ? Math.max(40, dist + half - p.left) : p.width
     })
-    paintTint()
   }
 
-  function paintTint() {
-    if (!tint || !panels.length) return
-    const stops = []
-    const pos = (p, k) => (horizontal ? p.left + p.width * k : p.top + p.height * k)
-    const first = panels[0]
-    const col = (p) => {
-      const { r, g, b } = ctx.depth.colorAt(p.z.id === 'sunlight' ? 70 : (p.z.from + p.z.to) / 2)
-      return `rgb(${r} ${g} ${b} / 0.94)`
-    }
-    stops.push(`rgb(0 0 0 / 0) 0px`, `rgb(0 0 0 / 0) ${Math.round(pos(first, -0.12))}px`)
-    // the sunlight panel brightens from the left like a window, then each
-    // layer's colour sits under its own panel
-    for (const p of panels) stops.push(`${col(p)} ${Math.round(pos(p, 0.45))}px`)
-    const dir = horizontal ? '90deg' : '180deg'
-    root.style.setProperty('--zones-tint', `linear-gradient(${dir}, ${stops.join(', ')})`)
+  /* --------------------------------------------------- sonar, progress */
+  function ping(p, cx, cy) {
+    if (reduced) return
+    p.pingT = p.t
+    ctx.emit('sonar', { x: cx, y: cy, strength: 0.35 })
+  }
+  // k: 0 as the window enters, 0.5 at the centre, 1 as it leaves.
+  // A ping each time a window's centre crosses the centre of the screen.
+  function progress(p, k, cx, cy) {
+    p.k = k
+    const side = k < 0.5 ? -1 : 1
+    if (p.side && side !== p.side && p.visible) ping(p, cx, cy)
+    p.side = side
   }
 
   /* ------------------------------------------------------------ render */
@@ -666,15 +1008,13 @@ export function init(ctx) {
     if (!horizontal) return
     const x = gsap.getProperty(track, 'x')
     const ph = half - x
-    if (strip) strip.style.transform = `translate3d(${x.toFixed(2)}px,0,0)`
-    if (fill) {
-      const w = clamp(ph - panels[0].segStart, 0, half)
-      fill.style.transform = `scaleX(${(w / half).toFixed(4)})`
-    }
     const vw = window.innerWidth
+    const vh = window.innerHeight
     for (let i = 0; i < panels.length; i++) {
       const p = panels[i]
-      const t = (ph - p.segStart) / p.segLen
+      const t = (ph - p.left) / p.segLen
+      const l = p.left + p.frameOff + x
+      progress(p, clamp((vw - l) / (vw + p.frameW)), l + p.frameW / 2, vh * 0.45)
       const onScreen = p.left + x < vw && p.left + p.width + x > 0
       if (onScreen && p.range) {
         // pressure follows the playhead through this layer's own depths
@@ -686,17 +1026,11 @@ export function init(ctx) {
           p.range.style.setProperty('--rg', Math.round(260 + 600 * f))
         }
       }
-      const active = (t >= 0 && t < 1) || (i === panels.length - 1 && t >= 1)
-      if (active !== p.active) {
-        p.active = active
-        p.el.classList.toggle('is-active', active)
-        p.seg?.classList.toggle('is-active', active)
-      }
     }
   }
 
   /* ------------------------------------------------------------ scenes */
-  const scan = { v: ctx.reducedMotion ? 1 : 0 }
+  const scan = { v: reduced ? 1 : 0 }
   function paintScan() {
     if (!hadal?.focus) return
     const v = scan.v
@@ -717,14 +1051,34 @@ export function init(ctx) {
     p.h = h
     p.canvas.width = Math.round(w * p.dpr)
     p.canvas.height = Math.round(h * p.dpr)
+    // the band the scale covers: the layer's top to its bottom
     if (p.focus) {
       p.f = { x: p.focus.offsetLeft, y: p.focus.offsetTop, w: p.focus.offsetWidth || w, h: p.focus.offsetHeight || h }
     } else {
-      p.f = { x: 0, y: 0, w, h }
+      p.f = { x: 0, y: h * 0.12, w, h: h * 0.68 }
     }
     p.scene?.setup(w, h, p.f)
     p.sized = true
     return true
+  }
+
+  function drawPing(p) {
+    const age = p.t - p.pingT
+    if (age < 0 || age > 2.4) return
+    const c = p.c2d
+    const e = age / 2.4
+    c.globalCompositeOperation = 'lighter'
+    c.lineWidth = 1.2
+    for (let j = 0; j < 2; j++) {
+      const a = e - j * 0.08
+      if (a <= 0) continue
+      const r = a * p.h * 1.05
+      c.strokeStyle = `rgba(108,248,232,${(0.5 * (1 - a) ** 1.6 * (j ? 0.45 : 1)).toFixed(3)})`
+      c.beginPath()
+      c.ellipse(p.w * 0.5, p.h * 0.02, r * 1.25, r, 0, Math.PI * 0.08, Math.PI * 0.92)
+      c.stroke()
+    }
+    c.globalCompositeOperation = 'source-over'
   }
 
   function frame(p, dt) {
@@ -732,24 +1086,51 @@ export function init(ctx) {
     c.setTransform(1, 0, 0, 1, 0, 0)
     c.clearRect(0, 0, p.canvas.width, p.canvas.height)
     c.setTransform(p.dpr, 0, 0, p.dpr, 0, 0)
-    p.scene.draw(c, p.t, dt, p.w, p.h, p.f, p.out)
-    if (p.z.id === 'twilight' && p.focus) p.focus.style.setProperty('--cloud', p.out.cloud.toFixed(4))
+    p.scene.draw(c, p.t, dt, p.w, p.h, p.f, p.out, p.k)
+    drawPing(p)
+    if (p.z.id === 'twilight') paintTwilight(p)
   }
 
-  // Reduced motion: one still per scene, a few seconds into its life.
+  function paintTwilight(p) {
+    p.cloud?.style.setProperty('--cloud', p.out.cloud.toFixed(4))
+    if (p.clock) {
+      const q = Math.floor((p.out.hour * 60) / 15) * 15 // quarter hours
+      const txt = `${String(Math.floor(q / 60) % 24).padStart(2, '0')}:${String(q % 60).padStart(2, '0')}`
+      if (txt !== p.clockText) {
+        p.clockText = txt
+        p.clock.textContent = txt
+      }
+    }
+  }
+
+  // Reduced motion: one still per scene, at the middle of its story.
   function still(p) {
     if (!p.sized && !sizeScene(p)) return
     p.t = 0
-    for (let k = 0; k < 150; k++) {
+    p.k = 0.5
+    p.out.still = true
+    for (let n = 0; n < 150; n++) {
       p.t += 1 / 30
       frame(p, 1 / 30)
     }
   }
 
   let ticking = false
+  const rects = []
   function loop(time, deltaMs) {
     if (document.hidden) return
     const dt = Math.min(0.05, deltaMs / 1000)
+    // stacked: each window's progress comes from its place on the screen
+    // (read every rect first, then draw)
+    if (!horizontal) {
+      const vh = window.innerHeight
+      rects.length = 0
+      for (const p of panels) rects.push(p.visible && p.frame ? p.frame.getBoundingClientRect() : null)
+      panels.forEach((p, i) => {
+        const r = rects[i]
+        if (r) progress(p, clamp((vh - r.top) / (vh + r.height)), r.left + r.width / 2, r.top + r.height / 2)
+      })
+    }
     for (const p of panels) {
       if (!p.visible || !p.scene) continue
       if (!p.sized && !sizeScene(p)) continue
@@ -759,7 +1140,7 @@ export function init(ctx) {
   }
   function updateLoop() {
     const any = panels.some((p) => p.visible)
-    if (any && !ticking && !ctx.reducedMotion) {
+    if (any && !ticking && !reduced) {
       gsap.ticker.add(loop)
       ticking = true
     } else if (!any && ticking) {
@@ -775,8 +1156,9 @@ export function init(ctx) {
           const p = panels.find((q) => q.canvas === e.target)
           if (!p) continue
           p.visible = e.isIntersecting
-          if (p.visible && ctx.reducedMotion) still(p)
-          if (!p.visible && p.sized && !ctx.reducedMotion) {
+          if (!p.visible) p.side = 0 // no ping for the first crossing seen
+          if (p.visible && reduced) still(p)
+          if (!p.visible && p.sized && !reduced) {
             // free the backing store while off screen
             p.canvas.width = p.canvas.height = 0
             p.sized = false
@@ -793,7 +1175,7 @@ export function init(ctx) {
       for (const p of panels) {
         if (!p.sized) continue
         p.sized = false
-        if (p.visible) (ctx.reducedMotion ? still(p) : sizeScene(p))
+        if (p.visible) (reduced ? still(p) : sizeScene(p))
       }
     })
     for (const p of panels) if (p.canvas) ro.observe(p.canvas)
@@ -810,10 +1192,10 @@ export function init(ctx) {
     },
     (m) => {
       const { wide, reduce } = m.conditions
-      if (!wide || reduce || ctx.reducedMotion) {
+      if (!wide || reduce || reduced) {
         root.classList.remove('is-horizontal')
         layout()
-        if (!ctx.reducedMotion && hadal) {
+        if (!reduced && hadal) {
           // stacked: the sonar sweep surveys the trench as it scrolls into view
           gsap.fromTo(
             scan,
@@ -883,8 +1265,8 @@ export function init(ctx) {
             scrollTrigger: {
               trigger: hadal.el,
               containerAnimation: tween,
-              start: 'left 82%',
-              end: 'left 24%',
+              start: 'left 78%',
+              end: 'left 18%',
               scrub: 0.6,
             },
           },
@@ -896,7 +1278,6 @@ export function init(ctx) {
         root.classList.remove('is-horizontal', 'is-settled')
         root.style.removeProperty('--tf')
         gsap.set(track, { clearProps: 'transform' })
-        if (strip) strip.style.transform = ''
         for (const p of panels) {
           p.range?.style.removeProperty('--rw')
           p.range?.style.removeProperty('--rg')
@@ -911,5 +1292,4 @@ export function init(ctx) {
     layout()
     render()
   })
-
 }

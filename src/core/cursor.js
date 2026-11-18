@@ -8,6 +8,11 @@
  * brighter as the sun fades (1 - state.sun); blue-green, turning red-tinted
  * with --hadal. The loop only runs while something is moving or glowing.
  *
+ * In #descent — where the page explains the name — the plankton answer even
+ * in daylight: the wake is floored to a visible brightness and runs blue,
+ * dragging stirs a denser wake, and a click in open water sets off a ring
+ * of flashes and a soft sonar ripple (ctx.emit('sonar')).
+ *
  * Cursor contract (DESIGN.md): nearest [data-cursor] ancestor →
  *   hide | lamp | drag | view. Links and buttons enlarge the ring.
  */
@@ -82,6 +87,11 @@ export function init(ctx) {
   let running = false
   let last = 0
   let intensity = 0.2
+  let baseIntensity = 0.2
+  let floor = 0 // eased towards floorTarget in the loop
+  let floorTarget = 0
+  let blueShare = 0.28
+  let inDescent = false
   let hadal = 0
   let lastSpawnT = 0
   let hidden = document.hidden
@@ -97,8 +107,12 @@ export function init(ctx) {
   window.addEventListener('resize', resize)
 
   ctx.depth.onChange((s) => {
-    // plankton flashes are invisible in sunlight and vivid in the dark
-    intensity = 0.16 + 0.84 * (1 - s.sun)
+    // plankton flashes are invisible in sunlight and vivid in the dark …
+    baseIntensity = 0.16 + 0.84 * (1 - s.sun)
+    // … except where the page tells you what Noctiluca does
+    inDescent = s.section === 'descent'
+    floorTarget = inDescent ? 0.64 : 0
+    blueShare = inDescent ? 0.62 : 0.28
     hadal = s.hadal
     if (Math.abs(hadal - spriteHadal) > 0.04) paintSprites(hadal)
     if (Math.abs(hadal - (root._h ?? -1)) > 0.01) {
@@ -122,16 +136,16 @@ export function init(ctx) {
     P[o + 5] = life
     P[o + 6] = size
     P[o + 7] = delay
-    P[o + 8] = Math.random() < 0.72 ? 0 : 1
+    P[o + 8] = Math.random() < blueShare ? 1 : 0
   }
 
-  function wake(x0, y0, x1, y1, dt) {
+  function wake(x0, y0, x1, y1, dt, stir = 1) {
     const dx = x1 - x0
     const dy = y1 - y0
     const dist = Math.hypot(dx, dy)
     const speed = dist / Math.max(dt, 1) // px per ms
-    if (speed < 0.35 || dist < 2) return
-    const n = Math.min(10, Math.floor(dist * 0.06 * Math.min(2.2, speed)))
+    if (speed < 0.35 / stir || dist < 2) return
+    const n = Math.min(10 * stir, Math.floor(dist * 0.06 * stir * Math.min(2.2, speed)))
     const nx = -dy / dist
     const ny = dx / dist
     for (let k = 0; k < n; k++) {
@@ -165,6 +179,33 @@ export function init(ctx) {
     kick()
   }
 
+  // Disturbed water: a widening ring of plankton lighting up one after
+  // another, as if the shock travelled outward through the bloom.
+  function bloom(x, y) {
+    const rings = [
+      { n: 26, r: 18, delay: 0.0 },
+      { n: 34, r: 46, delay: 0.09 },
+      { n: 40, r: 84, delay: 0.2 },
+    ]
+    for (const ring of rings) {
+      for (let k = 0; k < ring.n; k++) {
+        const a = (k / ring.n) * Math.PI * 2 + Math.random() * 0.4
+        const r = ring.r * (0.75 + Math.random() * 0.5)
+        const sp = 0.15 + Math.random() * 0.35
+        spawn(
+          x + Math.cos(a) * r,
+          y + Math.sin(a) * r,
+          Math.cos(a) * sp,
+          Math.sin(a) * sp,
+          0.8 + Math.random() * 1.0,
+          0.6 + Math.random() ** 2 * 1.7,
+          ring.delay + Math.random() * 0.08,
+        )
+      }
+    }
+    kick()
+  }
+
   /* --------------------------------------------------------------- loop */
   function kick() {
     if (running || hidden) return
@@ -180,6 +221,8 @@ export function init(ctx) {
     }
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
+    floor += (floorTarget - floor) * (1 - Math.pow(0.04, dt))
+    intensity = Math.max(baseIntensity, floor)
 
     // dot: exact; ring: lags with a frame-rate independent ease
     dot.style.transform = `translate3d(${mouse.x}px, ${mouse.y}px, 0)`
@@ -268,7 +311,9 @@ export function init(ctx) {
         ringPos.y = mouse.y
       } else if (mode !== 'hide' && dt < 80 && now - lastSpawnT > 8) {
         lastSpawnT = now
-        wake(mouse.px, mouse.py, mouse.x, mouse.y, dt)
+        // dragging through #descent stirs the bloom harder
+        const stir = inDescent && e.buttons & 1 && mode !== 'text' ? 2.2 : 1
+        wake(mouse.px, mouse.py, mouse.x, mouse.y, dt, stir)
       }
       if (e.target !== modeEl) {
         modeEl = e.target
@@ -302,7 +347,12 @@ export function init(ctx) {
   window.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return
     root.classList.add('is-down')
-    if (mode !== 'hide' && mode !== 'text') burst(e.clientX, e.clientY)
+    if (mode === 'hide' || mode === 'text') return
+    if (inDescent && mode === 'default') {
+      // open water in the manifesto: Noctiluca answers
+      bloom(e.clientX, e.clientY)
+      ctx.emit('sonar', { x: e.clientX, y: e.clientY, strength: 0.32 })
+    } else burst(e.clientX, e.clientY)
   })
   window.addEventListener('pointerup', () => root.classList.remove('is-down'))
 

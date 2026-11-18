@@ -112,5 +112,7 @@ html.has-cursor :is(input:not([type='checkbox'], [type='radio'], [type='range'],
   height: 100%;
   z-index: var(--z-cursor);
   pointer-events: none;
+  /* light adds to light */
   mix-blend-mode: screen;
+  mix-blend-mode: plus-lighter;
 }

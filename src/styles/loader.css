@@ -42,6 +42,15 @@ html.is-ready .loader:not(.is-exiting),
   opacity: var(--loader-bloom, 0);
   pointer-events: none;
 }
+/* while the fonts arrive (≤ 1.2 s), the dark is never dead: the bloom
+   breathes in on its own; the timeline takes over from the same value */
+.loader:not(.is-running) .loader__panel::before {
+  animation: loader-pre 1.2s cubic-bezier(0.33, 0, 0.2, 1) 0.1s both;
+}
+@keyframes loader-pre {
+  from { opacity: 0; }
+  to { opacity: 0.75; }
+}
 
 .loader__frame {
   position: absolute;

@@ -17,6 +17,16 @@
     .loader { position: fixed; inset: 0; z-index: 100; }
     .loader__panel { position: absolute; inset: 0; background: #000; }
     .loader__frame, .loader__mark { opacity: 0; }
+    /* a light breathes in the dark from the first paint, while fonts load */
+    .loader__panel::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(38vmax 30vmax at 50% 50%, rgb(108 248 232 / 0.055), transparent 70%);
+      opacity: var(--loader-bloom, 0);
+    }
+    .loader:not(.is-running) .loader__panel::before {
+      animation: loader-pre 1.2s cubic-bezier(0.33, 0, 0.2, 1) 0.1s both;
+    }
+    @keyframes loader-pre { from { opacity: 0; } to { opacity: 0.75; } }
     html.skip-intro .loader,
     html.is-ready .loader:not(.is-exiting) { display: none; }
   </style>

@@ -6,6 +6,8 @@
 
 .nav {
   --nav-accent: color-mix(in oklab, var(--c-photophore), var(--c-redlight) calc(var(--hadal) * 100%));
+  /* small secondary text: brighter in sunlit water, so it holds 4.5:1 */
+  --nav-dim: color-mix(in srgb, var(--c-ink) calc(72% + 18% * var(--sun)), transparent);
   --nav-h: 76px;
   position: fixed;
   inset: 0 0 auto 0;
@@ -42,9 +44,10 @@
   inset: 0 0 -70px 0;
   background: linear-gradient(
     to bottom,
-    rgb(5 34 58 / 0.42),
-    rgb(5 34 58 / 0.2) 55%,
-    rgb(5 34 58 / 0)
+    rgb(4 30 52 / 0.6),
+    rgb(4 30 52 / 0.42) 38%,
+    rgb(4 30 52 / 0.14) 70%,
+    rgb(4 30 52 / 0)
   );
   opacity: calc(var(--sun) * 1);
   transition: opacity 0.8s var(--ease-out);
@@ -52,8 +55,11 @@
 }
 .nav.is-scrolled::before,
 .nav.is-open::before { opacity: 0; }
+/* a tight halo of deep water around each glyph where the sun is brightest */
 .nav__bar {
-  text-shadow: 0 0 18px rgb(3 24 44 / calc(0.5 * var(--sun)));
+  text-shadow:
+    0 0 2px rgb(3 24 44 / calc(0.45 * var(--sun))),
+    0 0 14px rgb(3 24 44 / calc(0.6 * var(--sun)));
 }
 
 .nav__bar {
@@ -202,6 +208,9 @@
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
+/* the state word is decoration: the button's name is "Sound" and
+   aria-pressed carries on / off */
+.nav__sound-state { margin-left: 0.3em; }
 
 .nav__bars {
   display: inline-flex;
@@ -296,7 +305,7 @@
   inset: 0;
   background:
     radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--nav-accent) 7%, transparent), transparent 60%),
-    linear-gradient(to bottom, color-mix(in srgb, var(--bg) 94%, #000), color-mix(in srgb, var(--bg) 40%, #000));
+    linear-gradient(to bottom, color-mix(in srgb, var(--bg) 68%, #000), color-mix(in srgb, var(--bg) 30%, #000));
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
 }
@@ -313,7 +322,7 @@
   font-family: var(--font-text);
   font-style: italic;
   font-size: var(--fs-small);
-  color: var(--c-ink-3);
+  color: var(--nav-dim);
 }
 .nav__menu-list {
   position: relative;
@@ -355,7 +364,7 @@
   font-weight: 420;
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
-  color: var(--c-ink-3);
+  color: var(--nav-dim);
 }
 .nav__menu-link:hover .nav__menu-name,
 .nav__menu-link:focus-visible .nav__menu-name,
@@ -376,7 +385,7 @@
   font-family: var(--font-text);
   font-style: italic;
   font-size: var(--fs-small);
-  color: var(--c-ink-3);
+  color: var(--nav-dim);
 }
 
 /* ---------------------------------------------------------- responsive */
@@ -387,7 +396,20 @@
 @media (max-width: 767px) {
   .nav { --nav-h: 64px; }
   .nav__cta { display: none; }
-  .nav__sound { padding: 0.75rem 0.5rem; }
+  /* 44 px touch targets */
+  .nav__brand { min-height: 44px; }
+  .nav__sound {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.75rem;
+  }
+  .nav__menu-btn {
+    min-height: 44px;
+    padding: 0 0.5rem 0 0.75rem;
+    margin-right: -0.5rem;
+  }
+  .nav__actions { gap: 0.25rem; }
   .nav__sound-label {
     position: absolute;
     width: 1px;

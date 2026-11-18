@@ -1,9 +1,12 @@
 /* ==========================================================================
    core/hud — the dive computer.
-   Bottom-left: zone, a mechanical depth odometer, pressure, water
-   temperature and sunlight. Right edge (≥ 1024 px): a depth ruler for the
-   whole page. Accent: photophore blue-green, shifting to the red
-   observation lamps as --hadal rises (set as --hud-accent by hud.js).
+   Bottom-left, on the content column: zone, a mechanical depth odometer,
+   pressure, water temperature and sunlight. When the page's text or
+   drawings reach it, it folds into a slim glass chip (.is-compact); short,
+   narrow and touch screens always get the chip (.is-chip-only). Right edge
+   (≥ 1024 px): a depth ruler for the whole page. Accent: photophore
+   blue-green, shifting to the red observation lamps as --hadal rises (set
+   as --hud-accent by hud.js).
    ========================================================================== */
 
 .hud {
@@ -11,6 +14,11 @@
   --hud-glow: color-mix(in srgb, var(--hud-accent) 65%, transparent);
   --hud-wdth: 120;
   --hud-wght: 280;
+  /* secondary text: brighter where sunlit water is brighter, so it keeps
+     4.5:1 against the water at every depth */
+  --hud-dim: color-mix(in srgb, var(--c-ink) calc(64% + 30% * var(--sun)), transparent);
+  /* the left edge of the content column (.wrap), at every width */
+  --hud-x: max(var(--rail), calc((100% - var(--maxw) - var(--instrument)) / 2));
   position: fixed;
   inset: 0;
   z-index: var(--z-hud);
@@ -21,7 +29,7 @@
 /* ============================================================= readout */
 .hud__readout {
   position: absolute;
-  left: var(--rail);
+  left: var(--hud-x);
   bottom: clamp(18px, 3.4vh, 36px);
   width: 15rem;
   opacity: 0;
@@ -31,6 +39,15 @@
     transform 1.4s var(--ease-out);
 }
 .hud.is-on .hud__readout { opacity: 1; transform: none; }
+/* stepping aside: for the footer's small print, or while the visitor
+   reads something the chip would cover */
+.hud.is-tucked .hud__readout {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.7s var(--ease-out),
+    transform 0.9s var(--ease-out);
+}
 .hud.is-docked .hud__readout { opacity: 0; transform: translateY(12px); }
 
 /* a pool of the water's own colour behind the instrument, never a box */
@@ -45,6 +62,28 @@
     color-mix(in srgb, var(--bg) 40%, transparent) 55%,
     transparent
   );
+  pointer-events: none;
+  transition: opacity 0.6s var(--ease-out);
+}
+
+/* the chip's glass: invisible while the full instrument is out */
+.hud__glass {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 999px;
+  border: 1px solid var(--c-line);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgb(234 246 244 / 0.07),
+    0 0 22px -8px var(--hud-glow);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  opacity: 0;
+  transform: scale(0.9, 0.7);
+  transition:
+    opacity 0.35s var(--ease-out),
+    transform 0.8s var(--ease-out);
   pointer-events: none;
 }
 
@@ -92,7 +131,7 @@
   font-family: var(--font-text);
   font-style: italic;
   font-size: 0.875rem;
-  color: var(--c-ink-3);
+  color: var(--hud-dim);
 }
 
 /* ------------------------------------------------------------- odometer */
@@ -169,7 +208,7 @@
   font-stretch: 100%;
   font-weight: 400;
   font-size: 1rem;
-  color: var(--c-ink-3);
+  color: var(--hud-dim);
 }
 
 /* ------------------------------------------------- band through the zone */
@@ -181,10 +220,10 @@
   margin: 0.55rem 0 0.7rem;
   font-family: var(--font-display);
   font-stretch: 100%;
-  font-size: 0.6875rem;
-  font-weight: 420;
+  font-size: 0.75rem;
+  font-weight: 450;
   font-variant-numeric: tabular-nums;
-  color: var(--c-ink-3);
+  color: var(--hud-dim);
 }
 .hud__band-track {
   grid-column: 2;
@@ -232,9 +271,9 @@
 .hud__row dt {
   font-family: var(--font-display);
   font-stretch: 100%;
-  font-weight: 420;
+  font-weight: 450;
   font-size: 0.75rem;
-  color: var(--c-ink-3);
+  color: var(--hud-dim);
 }
 .hud__row dd {
   margin: 0;
@@ -249,9 +288,89 @@
 .hud__u {
   margin-left: 0.3em;
   font-weight: 400;
-  color: var(--c-ink-2);
+  color: var(--hud-dim);
 }
 .hud__u:empty { display: none; }
+
+/* on unfolding, the details surface after the odometer has landed */
+@keyframes hud-surface {
+  from { opacity: 0; transform: translateY(8px); filter: blur(2px); }
+}
+.hud:not(.is-compact) :is(.hud__band, .hud__rows, .hud__zone-sci) {
+  animation: hud-surface 0.9s var(--ease-out) 0.12s both;
+}
+.hud:not(.is-compact) .hud__rows { animation-delay: 0.2s; }
+.hud:not(.is-compact) .hud__zone-sci { animation-delay: 0.28s; }
+
+/* a fading copy of the rows/band left behind when the instrument folds */
+.hud__ghost {
+  position: fixed;
+  margin: 0 !important;
+  pointer-events: none;
+}
+.hud.is-compact .hud__ghost.hud__band,
+.hud.is-compact .hud__ghost.hud__rows { display: grid; }
+
+/* measuring a layout must never start a transition */
+.hud.is-measuring,
+.hud.is-measuring * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* lower screens: drop the band, keep the readings */
+@media (max-height: 860px) {
+  .hud__band { display: none; }
+  .hud__rows { margin-top: 0.6rem; }
+}
+
+/* ================================================================ chip */
+/* The slim chip: depth and zone on its own glass, so it is legible over
+   anything. The glass stands on the content column's edge. */
+.hud.is-compact .hud__readout {
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 1rem 0.5rem 0.85rem;
+}
+.hud.is-compact .hud__readout::before { opacity: 0; }
+.hud.is-compact .hud__glass {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.5s var(--ease-out) 0.08s,
+    transform 0.9s var(--ease-out);
+}
+.hud.is-compact .hud__band,
+.hud.is-compact .hud__rows,
+.hud.is-compact .hud__zone-sci { display: none; }
+.hud.is-compact .hud__depth { order: 1; margin: 0; gap: 0.22rem; }
+.hud.is-compact .hud__zone { order: 2; height: 1.1rem; gap: 0.5rem; }
+.hud.is-compact .hud__digits {
+  font-size: 1.0625rem;
+  font-stretch: calc(max(86, var(--hud-wdth)) * 1%);
+  font-weight: max(460, var(--hud-wght));
+  letter-spacing: 0;
+}
+.hud.is-compact .hud__col.is-lead,
+.hud.is-compact .hud__comma.is-lead { color: rgb(234 246 244 / 0.2); }
+.hud.is-compact .hud__unit { font-size: 0.75rem; }
+.hud.is-compact .hud__dir { width: 0.6rem; height: 0.6rem; }
+.hud.is-compact .hud__zone-name { font-size: 0.75rem; font-weight: 450; color: var(--hud-dim); }
+
+/* touch, narrow and short screens: the chip only, kept small */
+.hud.is-chip-only .hud__readout {
+  bottom: max(12px, env(safe-area-inset-bottom));
+}
+.hud.is-chip-only .hud__digits {
+  font-size: 1rem;
+  font-weight: 500;
+  font-stretch: 100%;
+}
+.hud.is-chip-only .hud__dir,
+.hud.is-chip-only .hud__col.is-lead,
+.hud.is-chip-only .hud__comma.is-lead { display: none; }
 
 /* =============================================================== ruler */
 .hud__ruler {
@@ -264,8 +383,12 @@
   opacity: 0;
   transition: opacity 1.4s var(--ease-out);
 }
-.hud.is-ready .hud__ruler { opacity: 0.55; }
-.hud.is-on .hud__ruler { opacity: 1; }
+.hud.is-ready .hud__ruler { opacity: 1; }
+/* quiet in the hero: the scale recedes, the labels stay readable */
+.hud__scale,
+.hud__track,
+.hud__needle { transition: opacity 1.4s var(--ease-out); }
+.hud.is-ready:not(.is-on) :is(.hud__scale, .hud__track) { opacity: 0.55; }
 
 .hud__scale {
   position: absolute;
@@ -323,27 +446,30 @@
 .hud__marks { position: absolute; inset: 0; }
 .hud__mark {
   position: absolute;
-  right: 1.6rem;
+  right: 1.5rem;
   top: 0;
   display: flex;
   align-items: center;
-  padding: 0.3rem 0 0.3rem 0.5rem;
+  min-height: 26px;
+  padding: 0.4rem 0.15rem 0.4rem 0.6rem;
   transform: translateY(-50%);
   font-family: var(--font-display);
   font-stretch: 100%;
-  font-weight: 450;
-  font-size: 0.6875rem;
+  font-weight: 460;
+  font-size: 0.75rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--c-ink-3);
+  color: var(--hud-dim);
+  /* a breath of deep water under the figures where the sun is bright */
+  text-shadow: 0 0 8px rgb(3 24 44 / calc(0.7 * var(--sun)));
   pointer-events: auto;
   border-radius: 3px;
   transition: color 0.5s var(--ease-out);
 }
 .hud__mark:hover,
 .hud__mark:focus-visible { color: var(--c-ink); }
-.hud__mark.is-current { color: var(--hud-accent); }
+.hud__mark.is-current { color: color-mix(in srgb, var(--hud-accent), var(--c-ink) calc(var(--sun) * 45%)); }
 .hud__mark.is-crowded .hud__mark-num { opacity: 0; }
 .hud__tip {
   position: absolute;
@@ -355,6 +481,7 @@
   font-weight: 400;
   font-size: 0.875rem;
   color: var(--c-ink);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--bg) 90%, transparent);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s var(--ease-out), translate 0.6s var(--ease-out);
@@ -364,39 +491,4 @@
 
 @media (min-width: 1024px) {
   .hud__ruler { display: block; }
-}
-
-/* ======================================================= mobile readout */
-@media (max-width: 767px) {
-  .hud__readout {
-    left: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom));
-    width: auto;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.45rem 0.85rem 0.45rem 0.75rem;
-    border: 1px solid var(--c-line);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bg) 70%, transparent);
-    -webkit-backdrop-filter: blur(10px) saturate(1.2);
-    backdrop-filter: blur(10px) saturate(1.2);
-  }
-  .hud__readout::before,
-  .hud__band,
-  .hud__rows,
-  .hud__zone-sci,
-  .hud__dir { display: none; }
-  .hud__depth { order: 1; margin: 0; gap: 0.2rem; }
-  .hud__zone { order: 2; height: 1.1rem; gap: 0.5rem; }
-  .hud__digits {
-    font-size: 1rem;
-    font-weight: 500;
-    font-stretch: 100%;
-    letter-spacing: 0;
-  }
-  .hud__unit { font-size: 0.75rem; }
-  .hud__zone-name { font-size: 0.75rem; font-weight: 450; color: var(--c-ink-2); }
-  .hud__col.is-lead,
-  .hud__comma.is-lead { display: none; }
 }

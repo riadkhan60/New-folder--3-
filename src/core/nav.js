@@ -5,7 +5,8 @@
  * - Hides on the way down, returns on the way up (or when the pointer nears
  *   the top edge, or focus enters it).
  * - Sound toggle: emits ctx.emit('sound', { on }). The preference is stored by
- *   core/audio under SOUND_KEY; nav reads it so the button starts in sync.
+ *   core/audio under SOUND_KEY; the button follows audio's 'sound:state', so
+ *   it only reads "on" while sound is really playing.
  * - ≤ 1099 px: a menu button opens a full-screen menu whose links are set at
  *   the pressure of their own depth. Focus-trapped, Esc closes, Lenis paused.
  * - Listens for `intro:landed` (from core/loader) to reveal its wordmark.
@@ -24,7 +25,7 @@ export function init(ctx) {
   const links = [...nav.querySelectorAll('.nav__link')]
   const indicator = nav.querySelector('.nav__indicator')
   const soundBtn = nav.querySelector('.nav__sound')
-  const soundLabel = nav.querySelector('.nav__sound-label')
+  const soundState = nav.querySelector('.nav__sound-state')
   const menuBtn = nav.querySelector('.nav__menu-btn')
   const menuLabel = nav.querySelector('.nav__menu-label')
   const menu = nav.querySelector('.nav__menu')
@@ -60,13 +61,25 @@ export function init(ctx) {
     const target = id.length > 1 ? document.querySelector(id) : null
     if (!target) return
     e.preventDefault()
+    // Lenis also listens for anchor clicks (on window); its second scrollTo
+    // would replace ours and drop the onComplete that moves focus.
+    e.stopPropagation()
     const fromKeyboard = e.detail === 0
+    const wasOpen = menuOpen
     if (menuOpen) closeMenu({ restoreFocus: false })
+    // Keyboard users, and anyone leaving the menu (whose link just
+    // vanished), continue from the section they chose, not from <body>.
+    const moveFocus = fromKeyboard || wasOpen
     const land = () => {
-      if (!fromKeyboard) return
+      if (!moveFocus) return
       const focusEl = target.querySelector('h1, h2') || target
       if (!focusEl.hasAttribute('tabindex')) focusEl.setAttribute('tabindex', '-1')
       focusEl.focus({ preventScroll: true })
+    }
+    if (moveFocus && wasOpen) {
+      // park focus on the target straight away, so it never falls to <body>
+      // while the water scrolls
+      land()
     }
     if (id === '#surface') ctx.scrollTo(0, { onComplete: land })
     else ctx.scrollTo(target, { onComplete: land })
@@ -141,19 +154,25 @@ export function init(ctx) {
   nav.addEventListener('focusin', () => setHidden(false))
 
   /* ------------------------------------------------------- sound */
+  // The button shows what is actually playing. A remembered "on" stays
+  // silent until the visitor's first gesture (core/audio), so the button
+  // starts off and follows audio's `sound:state` once it really starts.
+  // The accessible name stays "Sound"; aria-pressed carries the state.
   let soundOn = false
-  try {
-    soundOn = localStorage.getItem(SOUND_KEY) === '1'
-  } catch {}
   const renderSound = () => {
     soundBtn.setAttribute('aria-pressed', String(soundOn))
-    soundLabel.textContent = soundOn ? 'Sound on' : 'Sound off'
+    if (soundState) soundState.textContent = soundOn ? 'on' : 'off'
   }
   renderSound()
   soundBtn.addEventListener('click', () => {
     soundOn = !soundOn
     renderSound()
     ctx.emit('sound', { on: soundOn })
+  })
+  ctx.on('sound:state', (d) => {
+    if (!!d?.on === soundOn) return
+    soundOn = !!d?.on
+    renderSound()
   })
 
   /* -------------------------------------------------------- menu */
@@ -185,9 +204,28 @@ export function init(ctx) {
     }
   }
 
+  // While the menu is open everything behind it is inert, so neither Tab
+  // nor a screen reader's virtual cursor can wander into the page.
+  // (No aria-modal: the Close button lives in the bar, outside the panel.)
+  let inerted = []
+  function setBackgroundInert(v) {
+    if (v) {
+      const behind = [
+        ...document.querySelectorAll('body > :not(header.nav, script, .cursor, .cursor__sparks)'),
+        ...bar.querySelectorAll('.nav__brand, .nav__links, .nav__sound, .nav__cta'),
+      ].filter((el) => !el.inert)
+      behind.forEach((el) => (el.inert = true))
+      inerted = behind
+    } else {
+      inerted.forEach((el) => (el.inert = false))
+      inerted = []
+    }
+  }
+
   function openMenu() {
     if (menuOpen) return
     menuOpen = true
+    setBackgroundInert(true)
     setHidden(false)
     menu.hidden = false
     nav.classList.add('is-open')
@@ -234,6 +272,7 @@ export function init(ctx) {
   function closeMenu({ restoreFocus = true } = {}) {
     if (!menuOpen) return
     menuOpen = false
+    setBackgroundInert(false)
     nav.classList.remove('is-open')
     html.classList.remove('nav-is-open')
     menuBtn.setAttribute('aria-expanded', 'false')

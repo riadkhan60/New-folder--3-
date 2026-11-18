@@ -1,34 +1,34 @@
 <section id="zones" class="zones" data-depth-start="200" data-depth-end="1000" aria-labelledby="zones-title">
   <div class="zones__track">
-    <!-- the colour of each layer, laid side by side (set from depth.js colours) -->
-    <div class="zones__tint" aria-hidden="true"></div>
-
     <header class="zones__intro">
       <h2 id="zones-title" class="zones__title t-display">Five layers of&nbsp;ocean.</h2>
       <p class="zones__lead">
         Oceanographers divide the water column into five layers. Each is darker than the one
-        above it, and under more pressure. Vesper passes through all five on the way down.
+        above it, and under more pressure. You are in the second now. Vesper passes through all
+        five on the way down.
       </p>
     </header>
 
+    <!-- Each layer gets a window of its own water (its colour from depth.js),
+         with a scale of its own depths. The page around it stays at the depth
+         you are really at: the windows are a look up and down the column. -->
     <ol class="zones__list">
       <!-- 0–200 m -->
       <li class="zones__panel" data-layer="sunlight">
         <div class="zones__visual" aria-hidden="true">
-          <canvas class="zones__canvas"></canvas>
-          <div class="zones__focus">
-            <div class="zones__meter">
-              <span class="zones__meter-glow"></span>
-              <span class="zones__meter-bar"></span>
-              <span class="zones__meter-tick" style="--y: 0"><b>0 m</b><i>100%</i></span>
-              <span class="zones__meter-tick" style="--y: 0.5"><b>100 m</b><i>10%</i></span>
-              <span class="zones__meter-tick" style="--y: 1"><b>200 m</b><i>1%</i></span>
-              <span class="zones__meter-cap">Share of the surface light</span>
+          <div class="zones__frame">
+            <div class="zones__window"><canvas class="zones__canvas"></canvas></div>
+            <div class="zones__scale">
+              <span class="zones__tick" style="--y: 0"><b>0 m</b><i>100%</i></span>
+              <span class="zones__tick" style="--y: 0.5"><b>100 m</b><i>10%</i></span>
+              <span class="zones__tick" style="--y: 1"><b>200 m</b><i>1%</i></span>
             </div>
+            <p class="zones__caption">Share of the surface light. It falls tenfold every 100 metres.</p>
           </div>
         </div>
         <div class="zones__copy">
           <h3 class="zones__name t-h3">Sunlight zone</h3>
+          <p class="zones__where"><svg class="zones__where-mark" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 10V2M2.5 5.5 6 2l3.5 3.5"/></svg>Above you</p>
           <p class="zones__range"><span class="zones__num" aria-hidden="true">0<span class="zones__dash">–</span>200<span class="zones__unit">m</span></span><span class="visually-hidden">From the surface to 200 metres</span></p>
           <p class="zones__sci">Epipelagic</p>
           <p class="zones__text">
@@ -46,18 +46,20 @@
       <!-- 200–1,000 m -->
       <li class="zones__panel" data-layer="twilight">
         <div class="zones__visual" aria-hidden="true">
-          <canvas class="zones__canvas"></canvas>
-          <div class="zones__focus">
-            <div class="zones__guide">
-              <span class="zones__guide-line"></span>
-              <span class="zones__guide-mark"></span>
-              <span class="zones__guide-label zones__guide-label--top">Night</span>
-              <span class="zones__guide-label zones__guide-label--bottom">Day</span>
+          <div class="zones__frame">
+            <div class="zones__window"><canvas class="zones__canvas"></canvas></div>
+            <div class="zones__scale">
+              <span class="zones__tick" style="--y: 0"><b>200 m</b></span>
+              <span class="zones__tick" style="--y: 0.5"><b>600 m</b></span>
+              <span class="zones__tick" style="--y: 1"><b>1,000 m</b></span>
+              <span class="zones__cloud"></span>
             </div>
+            <p class="zones__caption">One night of the migration, in time-lapse: <b class="zones__clock">14:00</b></p>
           </div>
         </div>
         <div class="zones__copy">
           <h3 class="zones__name t-h3">Twilight zone</h3>
+          <p class="zones__where"><span class="zones__where-dot"></span>Around you</p>
           <p class="zones__range"><span class="zones__num" aria-hidden="true">200<span class="zones__dash">–</span>1,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 200 to 1,000 metres</span></p>
           <p class="zones__sci">Mesopelagic</p>
           <p class="zones__text">
@@ -76,11 +78,20 @@
       <!-- 1,000–4,000 m -->
       <li class="zones__panel" data-layer="midnight">
         <div class="zones__visual" aria-hidden="true">
-          <canvas class="zones__canvas"></canvas>
-          <div class="zones__focus"></div>
+          <div class="zones__frame">
+            <div class="zones__window"><canvas class="zones__canvas"></canvas></div>
+            <div class="zones__scale">
+              <span class="zones__tick" style="--y: 0"><b>1,000 m</b></span>
+              <span class="zones__tick" style="--y: 0.3333"><b>2,000 m</b></span>
+              <span class="zones__tick" style="--y: 0.6667"><b>3,000 m</b></span>
+              <span class="zones__tick" style="--y: 1"><b>4,000 m</b></span>
+            </div>
+            <p class="zones__caption">An anglerfish, lit only by its own lure</p>
+          </div>
         </div>
         <div class="zones__copy">
           <h3 class="zones__name t-h3">Midnight zone</h3>
+          <p class="zones__where"><svg class="zones__where-mark" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 2v8M2.5 6.5 6 10l3.5-3.5"/></svg>Below you</p>
           <p class="zones__range"><span class="zones__num" aria-hidden="true">1,000<span class="zones__dash">–</span>4,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 1,000 to 4,000 metres</span></p>
           <p class="zones__sci">Bathypelagic</p>
           <p class="zones__text">
@@ -98,11 +109,19 @@
       <!-- 4,000–6,000 m -->
       <li class="zones__panel" data-layer="abyss">
         <div class="zones__visual" aria-hidden="true">
-          <canvas class="zones__canvas"></canvas>
-          <div class="zones__focus"></div>
+          <div class="zones__frame">
+            <div class="zones__window"><canvas class="zones__canvas"></canvas></div>
+            <div class="zones__scale">
+              <span class="zones__tick" style="--y: 0"><b>4,000 m</b></span>
+              <span class="zones__tick" style="--y: 0.5"><b>5,000 m</b></span>
+              <span class="zones__tick" style="--y: 1"><b>6,000 m</b></span>
+            </div>
+            <p class="zones__caption">A tripod fish and a sea cucumber on the abyssal plain</p>
+          </div>
         </div>
         <div class="zones__copy">
           <h3 class="zones__name t-h3">The abyss</h3>
+          <p class="zones__where"><svg class="zones__where-mark" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 1v10M2.5 4.5 6 8l3.5-3.5M2.5 7.5 6 11l3.5-3.5"/></svg>Further below</p>
           <p class="zones__range"><span class="zones__num" aria-hidden="true">4,000<span class="zones__dash">–</span>6,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 4,000 to 6,000 metres</span></p>
           <p class="zones__sci">Abyssopelagic</p>
           <p class="zones__text">
@@ -120,13 +139,17 @@
       <!-- 6,000–10,935 m -->
       <li class="zones__panel" data-layer="hadal">
         <div class="zones__visual" aria-hidden="true">
-          <canvas class="zones__canvas"></canvas>
-          <div class="zones__focus">
-            <svg class="zones__trench" viewBox="0 0 800 640" preserveAspectRatio="xMidYMid meet" focusable="false"></svg>
+          <div class="zones__frame">
+            <div class="zones__window"><canvas class="zones__canvas"></canvas></div>
+            <div class="zones__focus">
+              <svg class="zones__trench" viewBox="0 0 800 640" preserveAspectRatio="xMidYMid meet" focusable="false"></svg>
+            </div>
+            <p class="zones__caption">The Mariana Trench in section, surveyed by sonar</p>
           </div>
         </div>
         <div class="zones__copy">
           <h3 class="zones__name t-h3">Hadal zone</h3>
+          <p class="zones__where"><svg class="zones__where-mark" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 1v8M2.5 5.5 6 9l3.5-3.5M2 11.25h8"/></svg>At the bottom</p>
           <p class="zones__range"><span class="zones__num" aria-hidden="true">6,000<span class="zones__dash">–</span>10,935<span class="zones__unit">m</span></span><span class="visually-hidden">From 6,000 to 10,935 metres</span></p>
           <p class="zones__sci">Hadalpelagic</p>
           <p class="zones__text">
@@ -142,13 +165,5 @@
         </div>
       </li>
     </ol>
-  </div>
-
-  <!-- the depth track: a tape that runs under all five panels, read by a
-       fixed playhead at the centre of the screen (horizontal mode only) -->
-  <div class="zones__rail" aria-hidden="true">
-    <div class="zones__strip"></div>
-    <span class="zones__fill"></span>
-    <span class="zones__playhead"><span class="zones__playhead-bead"></span></span>
   </div>
 </section>

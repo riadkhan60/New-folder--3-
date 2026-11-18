@@ -11,7 +11,7 @@
  *  2.9 s  hand-over: init() resolves, main.js marks the page ready
  *  3.0 s  the wordmark flies into the nav and becomes the nav brand
  *
- * Any click or key press fast-forwards. Emits `intro:landed` on the bus when
+ * Any click, key press, wheel or touch fast-forwards. Emits `intro:landed` on the bus when
  * the wordmark reaches the nav (nav.js reveals its own brand then).
  */
 import '../styles/loader.css'
@@ -33,8 +33,16 @@ const T = {
 
 export async function init(ctx, { fontsReady } = {}) {
   const root = document.querySelector('.loader')
-  // Fonts set the wordmark; never wait forever on a slow font CDN.
-  await Promise.race([fontsReady ?? Promise.resolve(), wait(3000)])
+  // Fonts set the wordmark. Ask for the two faces straight away, but never
+  // hold the dark for long on a slow font CDN: a soft bloom (CSS) breathes
+  // while we wait, and the intro starts after 1.2 s at the latest.
+  const faces = document.fonts?.load
+    ? Promise.all([
+        document.fonts.load('200 1em Anybody'),
+        document.fonts.load('italic 400 1em Newsreader'),
+      ]).catch(() => {})
+    : Promise.resolve()
+  await Promise.race([Promise.all([fontsReady ?? Promise.resolve(), faces]), wait(1200)])
   if (!root) return
 
   const { gsap } = ctx
@@ -69,14 +77,16 @@ export async function init(ctx, { fontsReady } = {}) {
     gsap.set(li.querySelector('.loader__tick path'), { drawSVG: '0%' })
     gsap.set(li.querySelector('.loader__tick'), { opacity: 0, scale: 0.6 })
   })
+  const pre = parseFloat(getComputedStyle(panel, '::before').opacity) || 0
   root.classList.add('is-running')
 
   /* --------------------------------------------------------- timeline */
   const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
 
-  // 1. one cell of light in the dark
+  // 1. one cell of light in the dark (the bloom picks up from wherever the
+  //    CSS pre-glow had got to while the fonts loaded)
   tl.to(tittle, { scale: 1, opacity: 1, duration: 0.9, ease: 'expo.out' }, 0)
-  tl.fromTo(root, { '--loader-bloom': 0 }, { '--loader-bloom': 1, duration: 1.4, ease: 'power2.out' }, 0)
+  tl.fromTo(root, { '--loader-bloom': pre }, { '--loader-bloom': 1, duration: 1.4, ease: 'power2.out' }, 0)
 
   // 2. the wordmark gathers outward from the i
   tl.to(
@@ -122,13 +132,18 @@ export async function init(ctx, { fontsReady } = {}) {
     0,
   )
 
-  // 6. release
+  // 6. release: the label flips like a mechanical counter, "Release in"
+  //    up and out, "Released" up from below
   tl.addLabel('release', T.release)
-  tl.call(() => {
-    countLabel.textContent = 'Released'
-    countVal.textContent = '0.00'
-  }, null, 'release')
-  tl.fromTo(countLabel, { yPercent: 100 }, { yPercent: 0, duration: 0.5, ease: 'expo.out' }, 'release')
+  tl.call(() => (countVal.textContent = '0.00'), null, 'release')
+  tl.to(countLabel, { yPercent: -110, duration: 0.18, ease: 'power2.in' }, 'release')
+  tl.call(() => (countLabel.textContent = 'Released'), null, 'release+=0.18')
+  tl.fromTo(
+    countLabel,
+    { yPercent: 110 },
+    { yPercent: 0, duration: 0.55, ease: 'expo.out', immediateRender: false },
+    'release+=0.18',
+  )
   tl.to(bottom, { y: 5, duration: 0.07, ease: 'power1.in' }, 'release')
   tl.to(bottom, { y: 0, duration: 0.9, ease: 'expo.out' }, 'release+=0.07')
   tl.to(tittle, { scale: 1.35, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1 }, 'release')
@@ -162,20 +177,21 @@ export async function init(ctx, { fontsReady } = {}) {
 
   /* --------------------------------------------------- fast-forward */
   tl.call(() => { if (tl.timeScale() > 1.6) tl.timeScale(1.5) }, null, 'release')
+  // a click, a key, or simply trying to scroll: the visitor wants in
+  const FF = ['pointerdown', 'keydown', 'wheel', 'touchstart']
   const fastForward = (e) => {
     if (e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
-    tl.timeScale(tl.time() < T.release ? 6 : 2.2)
+    const ts = tl.time() < T.release ? 6 : 2.2
+    if (tl.timeScale() < ts) tl.timeScale(ts)
   }
-  window.addEventListener('pointerdown', fastForward)
-  window.addEventListener('keydown', fastForward)
+  FF.forEach((t) => window.addEventListener(t, fastForward, { passive: true }))
 
   /* --------------------------------------------------------- the flight */
   let flown = false
   function flyToNav() {
     if (flown) return
     flown = true
-    window.removeEventListener('pointerdown', fastForward)
-    window.removeEventListener('keydown', fastForward)
+    FF.forEach((t) => window.removeEventListener(t, fastForward, { passive: true }))
 
     const target = document.querySelector('.nav__word')
     const b = target?.getBoundingClientRect()

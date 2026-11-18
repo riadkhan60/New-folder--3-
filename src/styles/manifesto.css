@@ -2,15 +2,15 @@
    MANIFESTO (#descent) — 0 → 200 m. Why go down.
    One passage, read by sinking: every word is dark until the reading head
    reaches it, flashes blue-green like disturbed plankton, then settles to
-   ink. A tape measure fixed to the water column rises past an index on the
-   left edge, so the descent is something you can see.
+   ink. Then the passage sinks away and its last line breaks out as display
+   type, squeezed by the pressure at 200 m.
    Transparent: the water is depth.js, the sunlight is the ocean canvas.
    ========================================================================== */
 
 #descent.manifesto {
   --m-dim: rgb(234 246 244 / 0.2);
   position: relative;
-  height: 260vh;
+  height: 300vh;
 }
 
 /* ---------------------------------------------------------------- stage */
@@ -35,7 +35,10 @@
 
 /* ---------------------------------------------------------------- text */
 .manifesto__text {
+  grid-row: 1;
   grid-column: 3 / span 9;
+  align-self: center;
+  will-change: transform, opacity;
   max-width: 24em;
   margin-top: -6vh;
   font-family: var(--font-text);
@@ -75,6 +78,32 @@
   font-weight: 300;
 }
 
+/* --------------------------------------------------------------- payoff */
+.manifesto__payoff {
+  grid-row: 1;
+  grid-column: 2 / span 10;
+  align-self: center;
+  max-width: 13.5em;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5.6vw, 6.4rem);
+  font-weight: 260;
+  font-stretch: 150%;
+  line-height: 0.94;
+  letter-spacing: -0.028em;
+  color: var(--c-ink);
+  text-wrap: balance;
+  pointer-events: none;
+}
+.manifesto__pw {
+  display: inline-block;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+#descent:not(.is-split) .manifesto__payoff,
+#descent.is-static .manifesto__payoff {
+  display: none;
+}
+
 /* ---------------------------------------------------------------- note */
 .manifesto__note {
   position: absolute;
@@ -94,89 +123,6 @@
   color: var(--c-ink);
 }
 
-/* ---------------------------------------------------------------- gauge */
-/* Lives in the left rail; faded out before it reaches the HUD (bottom left). */
-.manifesto__gauge {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: clamp(10px, calc(var(--rail) * 0.26), 26px);
-  width: 4.5rem;
-  z-index: 1;
-  pointer-events: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 9%, #000 30%, #000 60%, transparent 73%);
-  mask-image: linear-gradient(to bottom, transparent 9%, #000 30%, #000 60%, transparent 73%);
-}
-
-.manifesto__tape {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 260vh;
-  will-change: transform;
-}
-
-.manifesto__ticks {
-  position: absolute;
-  inset: 0;
-  width: 18px;
-  height: 100%;
-  overflow: visible;
-}
-.manifesto__ticks line {
-  stroke: var(--c-ink);
-  stroke-width: 1;
-  shape-rendering: crispEdges;
-  vector-effect: non-scaling-stroke;
-}
-.manifesto__ticks .is-minor { stroke-opacity: 0.2; }
-.manifesto__ticks .is-mid { stroke-opacity: 0.38; }
-.manifesto__ticks .is-major { stroke-opacity: 0.7; }
-
-.manifesto__mark {
-  position: absolute;
-  left: 22px;
-  top: 0;
-  translate: 0 -50%;
-  font-family: var(--font-display);
-  font-stretch: 100%;
-  font-weight: 450;
-  font-size: 0.6875rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums lining-nums;
-  white-space: nowrap;
-  color: var(--c-ink-3);
-  transition: color 0.6s var(--ease-out), text-shadow 0.6s var(--ease-out);
-}
-.manifesto__mark.is-near {
-  color: var(--c-snell);
-  text-shadow: 0 0 10px color-mix(in srgb, var(--c-snell) 60%, transparent);
-}
-
-/* the index: where the probe line meets the tape (centre of the screen) */
-.manifesto__index {
-  position: absolute;
-  top: 50%;
-  left: -6px;
-  width: 22px;
-  height: 1px;
-  background: linear-gradient(to right, transparent, var(--c-snell));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--c-snell) 50%, transparent);
-}
-.manifesto__index-bead {
-  position: absolute;
-  right: -3px;
-  top: -2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #f6ffff;
-  box-shadow:
-    0 0 4px var(--c-snell),
-    0 0 12px color-mix(in srgb, var(--c-snell) 70%, transparent);
-}
-
 /* ---------------------------------------------------------------- sparks */
 .manifesto__sparks {
   position: absolute;
@@ -193,17 +139,19 @@
   .manifesto__text {
     grid-column: 2 / span 11;
   }
+  .manifesto__payoff {
+    grid-column: 1 / span 12;
+  }
 }
 
 /* --------------------------------------------------------------- phones */
 @media (max-width: 767px) {
   #descent.manifesto {
-    height: 240vh;
+    height: 280vh;
   }
 
   .manifesto__inner {
     grid-template-columns: minmax(0, 1fr);
-    padding-left: calc(var(--rail) + 22px);
   }
 
   .manifesto__text {
@@ -214,25 +162,17 @@
     letter-spacing: -0.01em;
   }
 
+  .manifesto__payoff {
+    grid-column: 1;
+    font-size: clamp(2.35rem, 11vw, 3.4rem);
+    line-height: 0.96;
+  }
+
   .manifesto__note {
-    left: calc(var(--rail) + 22px);
+    left: var(--rail);
     right: var(--rail);
     bottom: calc(max(12px, env(safe-area-inset-bottom)) + 64px);
     max-width: 30ch;
-  }
-
-  .manifesto__gauge {
-    left: 8px;
-    width: 26px;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 12%, #000 30%, #000 62%, transparent 80%);
-    mask-image: linear-gradient(to bottom, transparent 12%, #000 30%, #000 62%, transparent 80%);
-  }
-  .manifesto__mark {
-    display: none;
-  }
-  .manifesto__index {
-    left: -8px;
-    width: 26px;
   }
 }
 
@@ -249,18 +189,35 @@
 #descent.is-static .manifesto__inner {
   will-change: auto;
 }
-#descent.is-static .manifesto__gauge,
 #descent.is-static .manifesto__sparks {
   display: none;
 }
 #descent.is-static .manifesto__text {
   margin-top: 0;
+  will-change: auto;
+}
+/* no scroll timeline: the last line is the display moment, in place */
+#descent.is-static .manifesto__last {
+  margin-top: 0.9em;
+  max-width: 13.5em;
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: clamp(2.3rem, 5vw, 5.6rem);
+  font-stretch: 118%;
+  font-weight: 450;
+  line-height: 0.96;
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+}
+#descent.is-static .manifesto__note {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  margin: var(--s-8) calc(var(--rail) + var(--instrument)) 0 auto;
 }
 @media (max-width: 767px) {
-  #descent.is-static .manifesto__inner {
-    padding-left: var(--rail);
-  }
   #descent.is-static .manifesto__note {
-    left: var(--rail);
+    left: auto;
+    margin: var(--s-7) var(--rail) 0;
   }
 }

@@ -8,9 +8,11 @@
  * and settles to full ink. A wake of 3–4 words glows behind the head.
  * Pure function of scroll, so it runs the same backwards.
  *
- * The gauge: a tape measure fixed to the water column, 1 m to a tick, rises
- * past an index on the left edge. While the stage is stuck, the tick at the
- * index is exactly the depth depth.js reports (same probe, same mapping).
+ * The payoff: once every word is lit, the passage sinks away and its last
+ * line breaks out as display type. Each word arrives wide and light, flashes
+ * like the passage did, and is squeezed to the pressure at the bottom of the
+ * section (Anybody wdth/wght from ctx.depth.compression). It holds for about
+ * half a screen before #zones arrives. The depth itself is the HUD's job.
  */
 import '../styles/manifesto.css'
 
@@ -20,7 +22,6 @@ const GLOW = [108, 248, 232] // --c-photophore
 const GLOW2 = [58, 168, 255] // --c-photophore-2
 const DIM = 0.2 // alpha of unreached words
 const TAIL = 3.6 // words of glowing wake behind the reading head
-const SVGNS = 'http://www.w3.org/2000/svg'
 
 /* Wrap every word in a span, keeping inline elements (numbers, the last
    line) intact. Spaces stay real text nodes so the line breaks are native. */
@@ -58,32 +59,6 @@ function splitWords(p) {
   return words
 }
 
-function buildTape(tape) {
-  const svg = document.createElementNS(SVGNS, 'svg')
-  svg.setAttribute('class', 'manifesto__ticks')
-  svg.setAttribute('aria-hidden', 'true')
-  svg.setAttribute('focusable', 'false')
-  const marks = []
-  let html = ''
-  for (let d = 0; d <= 200; d++) {
-    const kind = d % 25 === 0 ? 'major' : d % 5 === 0 ? 'mid' : 'minor'
-    const len = kind === 'major' ? 16 : kind === 'mid' ? 9 : 4.5
-    const y = `${(d / 200) * 100}%`
-    html += `<line class="is-${kind}" x1="0" x2="${len}" y1="${y}" y2="${y}"/>`
-  }
-  svg.innerHTML = html
-  tape.appendChild(svg)
-  for (let d = 0; d <= 200; d += 25) {
-    const m = document.createElement('span')
-    m.className = 'manifesto__mark'
-    m.style.top = `${(d / 200) * 100}%`
-    m.textContent = `${d} m`
-    tape.appendChild(m)
-    marks.push({ d, el: m })
-  }
-  return marks
-}
-
 export function init(ctx) {
   const root = document.getElementById('descent')
   if (!root) return
@@ -93,7 +68,7 @@ export function init(ctx) {
   const inner = root.querySelector('.manifesto__inner')
   const text = root.querySelector('[data-manifesto-text]')
   const note = root.querySelector('.manifesto__note')
-  const tape = root.querySelector('.manifesto__tape')
+  const payoff = root.querySelector('.manifesto__payoff')
   const canvas = root.querySelector('.manifesto__sparks')
 
   // Reduced motion: the passage as plain, fully lit text. No sticky, no scrub.
@@ -105,7 +80,6 @@ export function init(ctx) {
   const words = splitWords(text)
   root.classList.add('is-split')
   const N = words.length
-  const marks = tape ? buildTape(tape) : []
 
   /* ------------------------------------------------------------ words */
   const cache = new Float32Array(N * 2).fill(-1)
@@ -273,50 +247,74 @@ export function init(ctx) {
     }
   }
 
-  /* ------------------------------------------------------------ gauge */
+  /* ------------------------------------------------------------ payoff */
+  // The last line as display type: one span per word, each arriving wide and
+  // light and settling at the pressure of 200 m.
+  const pw = []
+  if (payoff) {
+    const txt = payoff.textContent.trim().split(/\s+/)
+    payoff.textContent = ''
+    txt.forEach((w, i) => {
+      const s = document.createElement('span')
+      s.className = 'manifesto__pw'
+      s.textContent = w
+      payoff.appendChild(s)
+      if (i < txt.length - 1) payoff.appendChild(document.createTextNode(' '))
+      pw.push(s)
+    })
+  }
+  const target = ctx.depth.compression(200) // { wdth, wght }
+  const pay = { v: 0 }
+  const pcache = new Float32Array(pw.length).fill(-1)
+  let prevPay = 0
+  function paintPayoff() {
+    const M = pw.length
+    if (!M) return
+    // words come in one after another, overlapping
+    const span = 0.42
+    const step = (1 - span) / Math.max(1, M - 1)
+    for (let i = 0; i < M; i++) {
+      let q = clamp((pay.v - i * step) / span)
+      q = Math.round(q * 200) / 200
+      if (pcache[i] === q) continue
+      const was = pcache[i]
+      pcache[i] = q
+      const e = 1 - (1 - q) ** 3 // ease-out
+      const s = pw[i].style
+      s.opacity = (q <= 0 ? 0 : 0.15 + 0.85 * Math.min(1, q * 1.6)).toFixed(3)
+      s.transform = q >= 1 ? 'none' : `translate3d(0, ${((1 - e) * 0.32).toFixed(3)}em, 0)`
+      s.fontStretch = `${(150 + (target.wdth - 150) * e).toFixed(1)}%`
+      s.fontWeight = Math.round(260 + (target.wght - 260) * e)
+      // the same flash of living light as the passage, peaking mid-entry
+      const f = q > 0 && q < 1 ? Math.sin(Math.PI * q) ** 1.5 : 0
+      s.color = f > 0.01 ? `rgb(${Math.round(INK[0] + (GLOW[0] - INK[0]) * f * 0.85)} ${Math.round(INK[1] + (GLOW[1] - INK[1]) * f * 0.85)} ${Math.round(INK[2] + (GLOW[2] - INK[2]) * f * 0.85)})` : ''
+      s.textShadow =
+        f > 0.02
+          ? `0 0 0.04em rgb(214 255 250 / ${(0.7 * f).toFixed(3)}), 0 0 0.18em rgb(${GLOW.join(' ')} / ${(0.6 * f).toFixed(3)}), 0 0 0.6em rgb(${GLOW2.join(' ')} / ${(0.35 * f).toFixed(3)})`
+          : 'none'
+      if (pay.v > prevPay && was < 0.3 && q >= 0.3) sparkWord(pw[i], 5)
+    }
+    prevPay = pay.v
+  }
+
+  /* ------------------------------------------------------------ triggers */
   let H = 0
   let SH = 0
   function measure() {
     H = root.offsetHeight
     SH = stage.offsetHeight
-    if (tape) tape.style.height = `${H}px`
     sizeCanvas()
   }
   measure()
+  // scroll position (from the section's top) at a share of the stuck range
+  const at = (k) => () => `top+=${Math.round((H - SH) * k)} top`
 
-  let nearMark = null
-  function paintGauge(p) {
-    if (!tape) return
-    const T = -p * (H - SH)
-    tape.style.transform = `translate3d(0, ${T.toFixed(2)}px, 0)`
-    // the tick under the index
-    const dIdx = ((SH / 2 - T) / H) * 200
-    let near = null
-    for (const m of marks) if (Math.abs(m.d - dIdx) < 5) near = m
-    if (near !== nearMark) {
-      nearMark?.el.classList.remove('is-near')
-      near?.el.classList.add('is-near')
-      nearMark = near
-    }
-  }
-
-  /* ------------------------------------------------------------ triggers */
-  // The stuck range of the sticky stage → the gauge (exact, unsmoothed)
-  // and a slow upward drift of the passage, as if we were sinking past it.
-  const stuck = ScrollTrigger.create({
-    trigger: root,
-    start: 'top top',
-    end: () => `bottom top+=${SH}`,
-    onUpdate: (self) => paintGauge(self.progress),
-    onRefresh: (self) => paintGauge(self.progress),
-  })
-  paintGauge(stuck.progress)
-
+  // the passage drifts slowly upward, as if we were sinking past it
   gsap.fromTo(
     inner,
-    { y: () => window.innerHeight * 0.05 },
+    { y: () => window.innerHeight * 0.04 },
     {
-      y: () => -window.innerHeight * 0.05,
+      y: () => -window.innerHeight * 0.04,
       ease: 'none',
       scrollTrigger: {
         trigger: root,
@@ -328,8 +326,7 @@ export function init(ctx) {
     },
   )
 
-  // The reading: from just before the stage settles to ~85% through it,
-  // so the fully lit passage holds for a moment before it leaves.
+  // The reading: from just before the stage settles to half way through it.
   gsap.to(lit, {
     head: N + TAIL + 0.4,
     ease: 'none',
@@ -337,30 +334,62 @@ export function init(ctx) {
     scrollTrigger: {
       trigger: root,
       start: 'top 32%',
-      end: () => `+=${Math.round(window.innerHeight * 0.32 + (H - SH) * 0.84)}`,
+      end: () => `+=${Math.round(window.innerHeight * 0.32 + (H - SH) * 0.5)}`,
       scrub: 0.65,
       invalidateOnRefresh: true,
     },
   })
   paintWords()
 
-  // the note about the plankton comes up once the passage is lit
+  // Then the passage sinks away and its last line breaks out.
+  gsap.fromTo(
+    text,
+    { opacity: 1, y: 0 },
+    {
+      opacity: 0,
+      y: () => -window.innerHeight * 0.08,
+      ease: 'power1.in',
+      scrollTrigger: {
+        trigger: root,
+        start: at(0.55),
+        end: at(0.66),
+        scrub: 0.6,
+        invalidateOnRefresh: true,
+      },
+    },
+  )
+  if (pw.length) {
+    gsap.to(pay, {
+      v: 1,
+      ease: 'none',
+      onUpdate: paintPayoff,
+      scrollTrigger: {
+        trigger: root,
+        start: at(0.58),
+        end: at(0.76),
+        scrub: 0.7,
+        invalidateOnRefresh: true,
+      },
+    })
+    paintPayoff()
+  }
+
+  // The note about the plankton: up while the passage is read, gone with it,
+  // long before the next section arrives.
   if (note) {
-    gsap.fromTo(
-      note,
-      { opacity: 0 },
-      {
-        opacity: 1,
-        ease: 'none',
+    gsap
+      .timeline({
         scrollTrigger: {
           trigger: root,
-          start: () => `top+=${Math.round((H - SH) * 0.7)} top`,
-          end: () => `top+=${Math.round((H - SH) * 0.92)} top`,
+          start: at(0.3),
+          end: at(0.64),
           scrub: 0.6,
           invalidateOnRefresh: true,
         },
-      },
-    )
+      })
+      .fromTo(note, { opacity: 0, y: 12 }, { opacity: 1, y: 0, ease: 'none', duration: 0.3 })
+      .to(note, { opacity: 1, duration: 0.45 })
+      .to(note, { opacity: 0, y: -12, ease: 'none', duration: 0.25 })
   }
 
   // only spend frames on sparks while the section is on screen

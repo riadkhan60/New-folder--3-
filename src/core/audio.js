@@ -11,6 +11,7 @@
  * Starts on ctx.on('sound', { on }) (emitted by the nav toggle inside a click,
  * so the AudioContext is created inside a user gesture). The choice is kept in
  * localStorage; a remembered "on" waits for the visitor's first gesture.
+ * Emits ctx.emit('sound:state', { on }) whenever it really starts or stops.
  * Suspends when off or when the tab is hidden.
  */
 import '../styles/audio.css'
@@ -312,13 +313,19 @@ export function init(ctx) {
     if (save) writePref(on)
     if (on) start()
     else stop()
+    // tell the nav what is really happening (it renders the toggle from this)
+    ctx.emit('sound:state', { on: on && !!ac })
   }
 
   ctx.on('sound', (d) => setOn(d?.on, true))
 
-  // a remembered "on" never autoplays: it waits for the first real gesture
+  // a remembered "on" never autoplays: it waits for the first real gesture.
+  // A gesture on the sound toggle itself is left to the toggle (otherwise
+  // this would start the sound and the click would switch it straight off).
   if (readPref()) {
-    const gesture = () => {
+    const gesture = (e) => {
+      if (e.target instanceof Element && e.target.closest('.nav__sound')) return
+      if (e.type === 'keydown' && ['Shift', 'Control', 'Alt', 'Meta', 'Tab'].includes(e.key)) return
       window.removeEventListener('pointerdown', gesture, true)
       window.removeEventListener('keydown', gesture, true)
       if (!on && readPref()) setOn(true, false)
