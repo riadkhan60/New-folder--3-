@@ -1,3 +1,154 @@
-<section id="zones" class="zones" data-depth-start="200" data-depth-end="1000" aria-label="The five layers of the ocean">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[zones — 200 m → 1000 m]</div>
+<section id="zones" class="zones" data-depth-start="200" data-depth-end="1000" aria-labelledby="zones-title">
+  <div class="zones__track">
+    <!-- the colour of each layer, laid side by side (set from depth.js colours) -->
+    <div class="zones__tint" aria-hidden="true"></div>
+
+    <header class="zones__intro">
+      <h2 id="zones-title" class="zones__title t-display">Five layers of&nbsp;ocean.</h2>
+      <p class="zones__lead">
+        Oceanographers divide the water column into five layers. Each is darker than the one
+        above it, and under more pressure. Vesper passes through all five on the way down.
+      </p>
+    </header>
+
+    <ol class="zones__list">
+      <!-- 0–200 m -->
+      <li class="zones__panel" data-layer="sunlight">
+        <div class="zones__visual" aria-hidden="true">
+          <canvas class="zones__canvas"></canvas>
+          <div class="zones__focus">
+            <div class="zones__meter">
+              <span class="zones__meter-glow"></span>
+              <span class="zones__meter-bar"></span>
+              <span class="zones__meter-tick" style="--y: 0"><b>0 m</b><i>100%</i></span>
+              <span class="zones__meter-tick" style="--y: 0.5"><b>100 m</b><i>10%</i></span>
+              <span class="zones__meter-tick" style="--y: 1"><b>200 m</b><i>1%</i></span>
+              <span class="zones__meter-cap">Share of the surface light</span>
+            </div>
+          </div>
+        </div>
+        <div class="zones__copy">
+          <h3 class="zones__name t-h3">Sunlight zone</h3>
+          <p class="zones__range"><span class="zones__num" aria-hidden="true">0<span class="zones__dash">–</span>200<span class="zones__unit">m</span></span><span class="visually-hidden">From the surface to 200 metres</span></p>
+          <p class="zones__sci">Epipelagic</p>
+          <p class="zones__text">
+            Nearly all of the ocean’s photosynthesis happens in this thin top layer. Its
+            phytoplankton make about half of the oxygen produced on Earth.
+          </p>
+          <dl class="zones__data">
+            <div><dt>Light</dt><dd>100% to 1%</dd></div>
+            <div><dt>Water</dt><dd>27 to 15 °C</dd></div>
+            <div><dt>Pressure</dt><dd>1 to 21 bar</dd></div>
+          </dl>
+        </div>
+      </li>
+
+      <!-- 200–1,000 m -->
+      <li class="zones__panel" data-layer="twilight">
+        <div class="zones__visual" aria-hidden="true">
+          <canvas class="zones__canvas"></canvas>
+          <div class="zones__focus">
+            <div class="zones__guide">
+              <span class="zones__guide-line"></span>
+              <span class="zones__guide-mark"></span>
+              <span class="zones__guide-label zones__guide-label--top">Night</span>
+              <span class="zones__guide-label zones__guide-label--bottom">Day</span>
+            </div>
+          </div>
+        </div>
+        <div class="zones__copy">
+          <h3 class="zones__name t-h3">Twilight zone</h3>
+          <p class="zones__range"><span class="zones__num" aria-hidden="true">200<span class="zones__dash">–</span>1,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 200 to 1,000 metres</span></p>
+          <p class="zones__sci">Mesopelagic</p>
+          <p class="zones__text">
+            There is too little light here for plants to grow. Every night, lanternfish, krill
+            and squid rise toward the surface to feed, then sink back before dawn: the largest
+            migration on the planet.
+          </p>
+          <dl class="zones__data">
+            <div><dt>Light</dt><dd>1% down to a trace</dd></div>
+            <div><dt>Water</dt><dd>15 to 4 °C</dd></div>
+            <div><dt>Pressure</dt><dd>21 to 101 bar</dd></div>
+          </dl>
+        </div>
+      </li>
+
+      <!-- 1,000–4,000 m -->
+      <li class="zones__panel" data-layer="midnight">
+        <div class="zones__visual" aria-hidden="true">
+          <canvas class="zones__canvas"></canvas>
+          <div class="zones__focus"></div>
+        </div>
+        <div class="zones__copy">
+          <h3 class="zones__name t-h3">Midnight zone</h3>
+          <p class="zones__range"><span class="zones__num" aria-hidden="true">1,000<span class="zones__dash">–</span>4,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 1,000 to 4,000 metres</span></p>
+          <p class="zones__sci">Bathypelagic</p>
+          <p class="zones__text">
+            Sunlight never reaches this far, so most animals here make their own. An anglerfish
+            hangs a glowing lure in front of its jaws, and waits.
+          </p>
+          <dl class="zones__data">
+            <div><dt>Light</dt><dd>Living light only</dd></div>
+            <div><dt>Water</dt><dd>4 to 1.5 °C</dd></div>
+            <div><dt>Pressure</dt><dd>101 to 403 bar</dd></div>
+          </dl>
+        </div>
+      </li>
+
+      <!-- 4,000–6,000 m -->
+      <li class="zones__panel" data-layer="abyss">
+        <div class="zones__visual" aria-hidden="true">
+          <canvas class="zones__canvas"></canvas>
+          <div class="zones__focus"></div>
+        </div>
+        <div class="zones__copy">
+          <h3 class="zones__name t-h3">The abyss</h3>
+          <p class="zones__range"><span class="zones__num" aria-hidden="true">4,000<span class="zones__dash">–</span>6,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 4,000 to 6,000 metres</span></p>
+          <p class="zones__sci">Abyssopelagic</p>
+          <p class="zones__text">
+            Flat plains of soft sediment cover most of the deep sea floor. Sea cucumbers, brittle
+            stars and tripod fish live on marine snow, the slow fall of debris from above.
+          </p>
+          <dl class="zones__data">
+            <div><dt>Light</dt><dd>Living light only</dd></div>
+            <div><dt>Water</dt><dd>About 1.5 °C</dd></div>
+            <div><dt>Pressure</dt><dd>403 to 604 bar</dd></div>
+          </dl>
+        </div>
+      </li>
+
+      <!-- 6,000–10,935 m -->
+      <li class="zones__panel" data-layer="hadal">
+        <div class="zones__visual" aria-hidden="true">
+          <canvas class="zones__canvas"></canvas>
+          <div class="zones__focus">
+            <svg class="zones__trench" viewBox="0 0 800 640" preserveAspectRatio="xMidYMid meet" focusable="false"></svg>
+          </div>
+        </div>
+        <div class="zones__copy">
+          <h3 class="zones__name t-h3">Hadal zone</h3>
+          <p class="zones__range"><span class="zones__num" aria-hidden="true">6,000<span class="zones__dash">–</span>10,935<span class="zones__unit">m</span></span><span class="visually-hidden">From 6,000 to 10,935 metres</span></p>
+          <p class="zones__sci">Hadalpelagic</p>
+          <p class="zones__text">
+            Trenches, where one tectonic plate sinks beneath another. A snailfish filmed at
+            8,336 metres is the deepest fish ever seen; below it, amphipods scavenge all the way
+            to the bottom.
+          </p>
+          <dl class="zones__data">
+            <div><dt>Light</dt><dd>Living light only</dd></div>
+            <div><dt>Water</dt><dd>1.5 to 2.5 °C</dd></div>
+            <div><dt>Pressure</dt><dd>604 to 1,100 bar</dd></div>
+          </dl>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <!-- the depth track: a tape that runs under all five panels, read by a
+       fixed playhead at the centre of the screen (horizontal mode only) -->
+  <div class="zones__rail" aria-hidden="true">
+    <div class="zones__strip"></div>
+    <span class="zones__fill"></span>
+    <span class="zones__playhead"><span class="zones__playhead-bead"></span></span>
+  </div>
 </section>

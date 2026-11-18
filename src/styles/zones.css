@@ -1,0 +1,772 @@
+/* ==========================================================================
+   ZONES (#zones) — 200 → 1,000 m. The five layers.
+   Desktop: a pinned, horizontal pass through the whole water column. Each
+   panel's depth range is set in Anybody at the pressure of *that* layer, and
+   is squeezed live as it crosses the playhead, so the type narrows and
+   thickens from 0 m to 10,935 m. A tape of depth runs under all five.
+   Phones / reduced motion / no JS: the same panels, stacked.
+   The section stays transparent; .zones__tint is a deliberate local effect
+   (each layer's own water colour, side by side).
+   ========================================================================== */
+
+#zones.zones {
+  position: relative;
+  --zones-gutter: calc(var(--rail) + var(--instrument));
+}
+
+.zones__track {
+  position: relative;
+}
+
+/* ------------------------------------------------------------------ tint */
+.zones__tint {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--zones-tint, none);
+  /* soft top and bottom edges while the section scrolls in and out;
+     --tf falls to 0 while it is pinned (set by zones.js) */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 6%), #000 calc(100% - var(--tf, 6%)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 6%), #000 calc(100% - var(--tf, 6%)), transparent);
+}
+
+/* ----------------------------------------------------------------- intro */
+.zones__intro {
+  position: relative;
+  z-index: 2;
+  padding: var(--s-10) var(--zones-gutter) var(--s-8) var(--rail);
+}
+
+.zones__title {
+  max-width: 7.5em;
+  font-size: clamp(2.9rem, 6.4vw, 7.25rem);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.zones__lead {
+  max-width: 33ch;
+  margin-top: var(--s-6);
+  font-family: var(--font-text);
+  font-size: var(--fs-lead);
+  font-weight: 340;
+  line-height: 1.45;
+  color: var(--c-ink);
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------- panels */
+.zones__list {
+  position: relative;
+  z-index: 1;
+}
+
+.zones__panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'range'
+    'name'
+    'sci'
+    'visual'
+    'text'
+    'data';
+  padding: var(--s-8) var(--zones-gutter) var(--s-9) var(--rail);
+}
+
+/* the boundary between two layers: a hairline */
+.zones__panel::before {
+  content: '';
+  position: absolute;
+  left: var(--rail);
+  right: var(--zones-gutter);
+  top: 0;
+  height: 1px;
+  background: linear-gradient(to right, var(--c-line-strong), var(--c-line) 60%, transparent);
+}
+
+.zones__copy {
+  display: contents;
+}
+
+/* the depth range: the natural numbering of the site */
+.zones__range {
+  grid-area: range;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  line-height: 0.8;
+}
+.zones__num {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-stretch: calc(var(--rw, var(--wdth)) * 1%);
+  font-weight: var(--rg, var(--wght));
+  font-size: clamp(3.3rem, 15vw, 7.5rem);
+  line-height: 0.8;
+  /* tracking opens as the type is squeezed, so heavy narrow glyphs never touch */
+  letter-spacing: calc(-0.04em + (150 - var(--rw, var(--wdth))) * 0.00052em);
+  font-variant-numeric: lining-nums;
+  font-feature-settings: 'lnum' 1;
+  white-space: nowrap;
+  color: var(--c-ink);
+}
+.zones__dash {
+  /* a constant thin rule between the two depths, whatever the pressure */
+  font-weight: 260;
+  color: var(--c-ink-3);
+  margin-inline: 0.05em;
+}
+.zones__unit {
+  margin-left: 0.16em;
+  font-size: 0.22em;
+  font-stretch: 100%;
+  font-weight: 420;
+  letter-spacing: 0;
+  color: var(--c-ink-2);
+}
+
+.zones__name {
+  grid-area: name;
+  position: relative;
+  z-index: 2;
+  margin-top: var(--s-5);
+}
+
+.zones__sci {
+  grid-area: sci;
+  position: relative;
+  z-index: 2;
+  margin-top: 0.15rem;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: clamp(1.05rem, 1.2vw, 1.2rem);
+  color: var(--c-ink-2);
+}
+
+.zones__text {
+  grid-area: text;
+  position: relative;
+  z-index: 2;
+  max-width: 36ch;
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  font-weight: 380;
+  line-height: 1.6;
+  color: var(--c-ink-2);
+  text-wrap: pretty;
+}
+
+.zones__data {
+  grid-area: data;
+  position: relative;
+  z-index: 2;
+  max-width: 22rem;
+  margin-top: var(--s-5);
+  border-top: 1px solid var(--c-line);
+}
+.zones__data > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-4);
+  padding: 0.5rem 0 0.45rem;
+  border-bottom: 1px solid var(--c-line);
+}
+.zones__data dt {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 420;
+  font-size: 0.75rem;
+  color: var(--c-ink-3);
+}
+.zones__data dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: right;
+  color: var(--c-ink);
+}
+
+/* ---------------------------------------------------------------- visual */
+.zones__visual {
+  grid-area: visual;
+  position: relative;
+  z-index: 1;
+  height: clamp(300px, 92vw, 520px);
+  margin: var(--s-6) calc(-1 * var(--zones-gutter)) var(--s-6) calc(-1 * var(--rail));
+  pointer-events: none;
+}
+.zones__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.zones__focus {
+  position: absolute;
+  inset: 8% var(--zones-gutter) 10% var(--rail);
+}
+
+/* sunlight: the light meter --------------------------------------------- */
+.zones__meter {
+  position: absolute;
+  top: 0;
+  bottom: 2.2rem;
+  right: 26%;
+  width: 1px;
+}
+.zones__meter-bar,
+.zones__meter-glow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* light falls tenfold every 100 m: 100% → 10% → 1% */
+  background: linear-gradient(
+    to bottom,
+    rgb(217 251 255 / 1),
+    rgb(217 251 255 / 0.32) 25%,
+    rgb(217 251 255 / 0.1) 50%,
+    rgb(217 251 255 / 0.035) 75%,
+    rgb(217 251 255 / 0.012)
+  );
+}
+.zones__meter-bar {
+  left: -1px;
+  width: 3px;
+  border-radius: 2px;
+}
+.zones__meter-glow {
+  left: -26px;
+  width: 54px;
+  filter: blur(16px);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+}
+.zones__meter-tick {
+  position: absolute;
+  top: calc(var(--y) * 100%);
+  left: -9px;
+  width: 19px;
+  height: 1px;
+  background: var(--c-line-strong);
+}
+.zones__meter-tick b,
+.zones__meter-tick i {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-style: normal;
+  font-size: 0.6875rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+.zones__meter-tick b {
+  right: calc(100% + 0.6rem);
+  font-weight: 420;
+  color: var(--c-ink-3);
+}
+.zones__meter-tick i {
+  left: calc(100% + 0.6rem);
+  font-weight: 480;
+  color: var(--c-ink);
+}
+.zones__meter-cap {
+  position: absolute;
+  top: calc(100% + 1.1rem);
+  left: 0;
+  translate: -50% 0;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  color: var(--c-ink-3);
+}
+
+/* twilight: the migration guide ---------------------------------------- */
+.zones__guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6%;
+  width: 1px;
+}
+.zones__guide-line {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--c-line-strong) 12%,
+    var(--c-line-strong) 88%,
+    transparent
+  );
+}
+.zones__guide-mark {
+  position: absolute;
+  left: -3px;
+  top: calc(var(--cloud, 0.5) * 100%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  translate: 0 -50%;
+  background: #effffd;
+  box-shadow:
+    0 0 6px var(--c-photophore),
+    0 0 18px color-mix(in srgb, var(--c-photophore) 60%, transparent);
+}
+.zones__guide-label {
+  position: absolute;
+  left: 0.9rem;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  line-height: 1;
+  color: var(--c-ink-3);
+  white-space: nowrap;
+}
+.zones__guide-label--top {
+  top: 10%;
+}
+.zones__guide-label--bottom {
+  bottom: 10%;
+}
+
+/* hadal: the trench, surveyed by a sonar sweep -------------------------- */
+.zones__trench {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%);
+  mask-image: linear-gradient(to right, transparent, #000 9%);
+  clip-path: inset(-2% calc((1 - var(--scan, 1)) * 100%) -2% -2%);
+}
+.zones__trench .tr-rock {
+  fill: url(#zones-rock);
+}
+.zones__trench .tr-line {
+  fill: none;
+  stroke: var(--c-ink);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.zones__trench .tr-grid {
+  stroke: var(--c-ink);
+  stroke-opacity: 0.09;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: crispEdges;
+}
+.zones__trench .tr-deep {
+  stroke: var(--c-photophore);
+  stroke-opacity: 0.55;
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+}
+.zones__axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background: var(--c-line);
+}
+.zones__axis-tick {
+  position: absolute;
+  right: 0;
+  top: var(--y);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  translate: 0 -50%;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 420;
+  font-size: 0.6875rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+  color: var(--c-ink-3);
+}
+.zones__axis-tick::after {
+  content: '';
+  width: 8px;
+  height: 1px;
+  background: var(--c-line-strong);
+}
+.zones__axis-tick.is-deep {
+  color: var(--c-photophore);
+}
+.zones__pin {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: 0;
+  height: 0;
+  opacity: var(--on, 1);
+  transition: opacity 0.8s var(--ease-out);
+}
+.zones__pin::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #effffd;
+  box-shadow:
+    0 0 6px var(--c-photophore),
+    0 0 16px color-mix(in srgb, var(--c-photophore) 60%, transparent);
+}
+.zones__pin--deep::after {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--c-photophore) 70%, transparent);
+  animation: zones-ping 3.2s var(--ease-out) infinite;
+}
+@keyframes zones-ping {
+  0% { transform: scale(0.3); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.zones__pin-label {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  translate: 0 -50%;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--c-ink);
+}
+.zones__pin-label b {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--c-ink-2);
+}
+.zones__pin--deep .zones__pin-label {
+  top: 1.5rem;
+  left: -1rem;
+}
+.zones__scan {
+  position: absolute;
+  top: -4%;
+  bottom: -4%;
+  left: calc(var(--scan, 1) * 100%);
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--c-photophore) 20%, var(--c-photophore) 80%, transparent);
+  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--c-photophore) 55%, transparent);
+  opacity: var(--scan-on, 0);
+}
+
+/* the depth tape: only in the horizontal journey */
+.zones__rail {
+  display: none;
+}
+
+/* ===================================================== horizontal journey */
+#zones.is-horizontal {
+  height: 100vh;
+  overflow: hidden;
+}
+
+#zones.is-horizontal .zones__track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  will-change: transform;
+}
+
+#zones.is-horizontal .zones__intro {
+  flex: 0 0 50vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 0 5vw 22vh var(--rail);
+}
+
+#zones.is-horizontal .zones__list {
+  display: flex;
+  height: 100%;
+}
+
+#zones.is-horizontal .zones__panel {
+  display: block;
+  flex: 0 0 88vw;
+  height: 100%;
+  padding: 0;
+}
+#zones.is-horizontal .zones__panel::before {
+  left: 0;
+  right: auto;
+  top: 18vh;
+  bottom: 0;
+  width: 1px;
+  height: auto;
+  background: linear-gradient(to bottom, transparent, var(--c-line) 30%, var(--c-line) 62%, transparent 82%);
+}
+
+#zones.is-horizontal .zones__copy {
+  position: absolute;
+  z-index: 2;
+  left: 5vw;
+  top: clamp(92px, 14vh, 140px);
+  display: grid;
+  grid-template-columns: 15vw minmax(0, 22rem);
+  grid-template-areas:
+    'range range'
+    '. name'
+    '. sci'
+    '. text'
+    '. data';
+}
+#zones.is-horizontal .zones__num {
+  font-size: clamp(4rem, min(10.2vw, 17vh), 12rem);
+}
+#zones.is-horizontal .zones__name {
+  margin-top: clamp(1.25rem, 4vh, 2.5rem);
+}
+#zones.is-horizontal .zones__text {
+  margin-top: var(--s-4);
+}
+#zones.is-horizontal .zones__sci + .zones__text {
+  margin-top: var(--s-4);
+}
+
+#zones.is-horizontal .zones__visual {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  margin: 0;
+}
+/* scenes melt into their neighbours instead of ending at the panel edge */
+#zones.is-horizontal .zones__canvas {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 16%, #000 84%, transparent);
+}
+#zones.is-horizontal .zones__focus {
+  /* below the depth range, above the tape */
+  top: calc(clamp(92px, 14vh, 140px) + clamp(4rem, min(10.2vw, 17vh), 12rem) * 0.8 + clamp(28px, 6vh, 64px));
+  right: 7%;
+  bottom: clamp(130px, 19vh, 170px);
+  left: 54%;
+}
+#zones.is-horizontal [data-layer='hadal'] .zones__focus {
+  /* the last panel ends flush with the screen: stay clear of the HUD ruler */
+  right: 14%;
+  left: 52%;
+}
+#zones.is-horizontal .zones__meter {
+  right: 18%;
+}
+
+/* ---- the tape */
+#zones.is-horizontal .zones__rail {
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(20px, 4.6vh, 44px);
+  height: 52px;
+  z-index: 3;
+  pointer-events: none;
+  /* clear of the HUD (bottom left) and its ruler (right edge) */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent 22%, #000 34%, #000 85%, transparent 92%);
+  mask-image: linear-gradient(to right, transparent 0, transparent 22%, #000 34%, #000 85%, transparent 92%);
+}
+.zones__strip {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.zones__seg {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+.zones__seg::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 22px;
+  height: 1px;
+  background: var(--c-line-strong);
+}
+.zones__seg svg {
+  position: absolute;
+  left: 0;
+  top: 22px;
+  width: 100%;
+  height: 12px;
+  overflow: visible;
+}
+.zones__seg line {
+  stroke: var(--c-ink);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+  vector-effect: non-scaling-stroke;
+}
+.zones__seg .is-minor { stroke-opacity: 0.22; }
+.zones__seg .is-mid { stroke-opacity: 0.45; }
+.zones__seg .is-edge { stroke-opacity: 0.8; }
+.zones__seg-name {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  translate: -50% 0;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: 0.8125rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--c-ink-3);
+  transition: color 0.6s var(--ease-out);
+}
+.zones__seg-depth {
+  position: absolute;
+  top: 38px;
+  translate: -50% 0;
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: 0.6875rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+  color: var(--c-ink-3);
+}
+.zones__seg-depth.is-minor {
+  color: rgb(234 246 244 / 0.3);
+}
+.zones__seg.is-active .zones__seg-name {
+  color: var(--c-ink);
+}
+.zones__seg.is-end .zones__seg-depth.is-last {
+  color: var(--c-photophore);
+}
+.zones__fill {
+  position: absolute;
+  left: 0;
+  top: 22px;
+  width: 50%;
+  height: 1px;
+  transform-origin: right center;
+  transform: scaleX(0);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--c-photophore-2) 0%, transparent),
+    var(--c-photophore-2) 40%,
+    var(--c-photophore)
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c-photophore) 60%, transparent);
+}
+.zones__playhead {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 22px;
+  background: linear-gradient(to bottom, transparent, var(--c-photophore));
+}
+.zones__playhead-bead {
+  position: absolute;
+  left: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f2fffd;
+  box-shadow:
+    0 0 6px var(--c-photophore),
+    0 0 18px color-mix(in srgb, var(--c-photophore) 65%, transparent);
+  animation: zones-bead 3.6s var(--ease-drift) infinite;
+}
+@keyframes zones-bead {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+/* the playhead's bead belongs on the tape: centre it on the baseline */
+#zones.is-horizontal .zones__playhead-bead {
+  bottom: -4px;
+}
+
+/* ================================================== stacked, wide screens */
+@media (min-width: 768px) {
+  #zones:not(.is-horizontal) .zones__panel {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: var(--gap);
+    grid-template-areas:
+      'range range'
+      'name visual'
+      'sci visual'
+      'text visual'
+      'data visual';
+    grid-template-rows: auto auto auto auto 1fr;
+    padding-block: var(--s-9);
+  }
+  #zones:not(.is-horizontal) .zones__visual {
+    height: auto;
+    min-height: 460px;
+    margin: var(--s-5) calc(-1 * var(--zones-gutter)) 0 0;
+  }
+  #zones:not(.is-horizontal) .zones__focus {
+    inset: 6% var(--zones-gutter) 8% 10%;
+  }
+  #zones:not(.is-horizontal) .zones__num {
+    font-size: clamp(4rem, 10vw, 9rem);
+  }
+}
+
+/* ================================================================= phones */
+@media (max-width: 767px) {
+  .zones__intro {
+    padding-top: var(--s-9);
+  }
+  .zones__name {
+    margin-top: var(--s-4);
+  }
+  .zones__visual {
+    margin-block: var(--s-5);
+  }
+  .zones__meter {
+    right: 30%;
+  }
+  .zones__axis-tick {
+    font-size: 0.625rem;
+  }
+  .zones__pin-label {
+    font-size: 0.8125rem;
+  }
+}
+
+/* ========================================================= reduced motion */
+#zones.is-static .zones__pin--deep::after,
+#zones.is-static .zones__playhead-bead {
+  animation: none;
+}

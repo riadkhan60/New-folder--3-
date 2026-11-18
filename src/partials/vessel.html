@@ -1,3 +1,130 @@
-<section id="vessel" class="vessel" data-depth-start="1000" data-depth-end="4000" aria-label="The submersible">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[vessel — 1000 m → 4000 m]</div>
+<section id="vessel" class="vessel" data-depth-start="1000" data-depth-end="4000" aria-labelledby="vessel-title">
+  <div class="vessel__stage">
+    <div class="vessel__copy wrap">
+      <h2 id="vessel-title" class="vessel__title t-display">Vesper</h2>
+      <p class="vessel__lead t-lead">
+        A titanium sphere 1.5&nbsp;metres across, wrapped in buoyant foam and fitted with ten thrusters.
+        Vesper takes two guests and a pilot to any depth in the ocean, then brings them home.
+      </p>
+
+      <ol class="vessel__acts" aria-label="How Vesper comes together">
+        <li class="vessel__act is-active">
+          <span class="vessel__act-name">Drawn</span>
+          <span class="vessel__act-track" aria-hidden="true"><span class="vessel__act-fill"></span></span>
+          <p class="vessel__act-text">Everything starts with the sphere. The rest of Vesper is drawn around it.</p>
+        </li>
+        <li class="vessel__act">
+          <span class="vessel__act-name">Built</span>
+          <span class="vessel__act-track" aria-hidden="true"><span class="vessel__act-fill"></span></span>
+          <p class="vessel__act-text">Foam made of hollow glass beads gives her lift. Titanium and acrylic keep the pressure out.</p>
+        </li>
+        <li class="vessel__act">
+          <span class="vessel__act-name">Lit</span>
+          <span class="vessel__act-track" aria-hidden="true"><span class="vessel__act-fill"></span></span>
+          <p class="vessel__act-text">Twenty-two lamps come on, one bank at a time. Down here, nothing else makes white light.</p>
+        </li>
+      </ol>
+    </div>
+
+    <div class="vessel__view" data-cursor="drag">
+      <canvas class="vessel__canvas" aria-hidden="true"></canvas>
+      <div class="vessel__fallback" aria-hidden="true"></div>
+      <svg class="vessel__leaders" aria-hidden="true" focusable="false"></svg>
+      <ul class="vessel__callouts" aria-hidden="true">
+        <li class="vessel__callout" data-key="sphere">
+          <span class="vessel__callout-title">Titanium pressure sphere</span>
+          <span class="vessel__callout-sub">90&nbsp;mm wall, 1.5&nbsp;m inside</span>
+        </li>
+        <li class="vessel__callout" data-key="rated">
+          <span class="vessel__callout-title">Rated to 11,000&nbsp;m</span>
+          <span class="vessel__callout-sub">full ocean depth</span>
+        </li>
+        <li class="vessel__callout" data-key="foam">
+          <span class="vessel__callout-title">Syntactic foam</span>
+          <span class="vessel__callout-sub">hollow glass beads in resin</span>
+        </li>
+        <li class="vessel__callout" data-key="viewports">
+          <span class="vessel__callout-title">Three viewports</span>
+          <span class="vessel__callout-sub">acrylic, 180&nbsp;mm thick</span>
+        </li>
+        <li class="vessel__callout" data-key="lamps">
+          <span class="vessel__callout-title">22 lamps</span>
+          <span class="vessel__callout-sub">white for filming, red for watching</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="vessel__plate wrap">
+    <div class="vessel__plate-grid">
+      <figure class="vessel__drawing">
+        <div class="vessel__elevation" role="img" aria-label="Side elevation of Vesper: a tall foam body with the titanium sphere cradled at the front, skids below and thrusters at the tail."></div>
+        <figcaption class="vessel__drawing-cap t-caption">
+          Side elevation. Vesper is 4.6&nbsp;m long, about the length of a family car, and weighs 11.7&nbsp;tonnes.
+        </figcaption>
+      </figure>
+
+      <div class="vessel__specplate">
+        <h3 class="visually-hidden">Vesper specifications</h3>
+        <p class="vessel__plate-head">
+          <span class="vessel__plate-name">Vesper</span>
+          <span class="vessel__plate-kind">Full-ocean-depth submersible</span>
+        </p>
+        <dl class="vessel__specs">
+          <div class="vessel__spec vessel__spec--key">
+            <dt>Depth rating</dt>
+            <dd><span class="vessel__val">11,000</span><span class="vessel__unit">m</span><span class="vessel__note">full ocean depth</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Crew</dt>
+            <dd>2 guests, 1 pilot</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Pressure sphere</dt>
+            <dd>Titanium, 1.5&nbsp;m inside, 90&nbsp;mm wall</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Viewports</dt>
+            <dd>3, acrylic, 180&nbsp;mm thick</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Lamps</dt>
+            <dd>22 LED, white and red</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Thrusters</dt>
+            <dd>10, electric</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Buoyancy</dt>
+            <dd>Syntactic foam</dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Descent</dt>
+            <dd><span class="vessel__val">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Bottom time</dt>
+            <dd><span class="vessel__pre">up to</span><span class="vessel__val">4</span><span class="vessel__unit">h</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Ascent</dt>
+            <dd><span class="vessel__val">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Life support</dt>
+            <dd><span class="vessel__val">96</span><span class="vessel__unit">h</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Length</dt>
+            <dd><span class="vessel__val">4.6</span><span class="vessel__unit">m</span></dd>
+          </div>
+          <div class="vessel__spec">
+            <dt>Mass</dt>
+            <dd><span class="vessel__val">11.7</span><span class="vessel__unit">t</span></dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
 </section>

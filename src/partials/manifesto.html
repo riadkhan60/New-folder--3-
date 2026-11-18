@@ -1,3 +1,30 @@
-<section id="descent" class="manifesto" data-depth-start="0" data-depth-end="200" aria-label="The descent">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.4">[manifesto — 0 m → 200 m]</div>
+<section id="descent" class="manifesto" data-depth-start="0" data-depth-end="200" aria-labelledby="descent-title">
+  <div class="manifesto__stage">
+    <!-- A tape measure fixed to the water column: it rises past the index
+         at the centre of the screen, which reads the same depth as the HUD. -->
+    <div class="manifesto__gauge" aria-hidden="true">
+      <div class="manifesto__tape"></div>
+      <span class="manifesto__index"><span class="manifesto__index-bead"></span></span>
+    </div>
+
+    <canvas class="manifesto__sparks" aria-hidden="true"></canvas>
+
+    <div class="manifesto__inner wrap">
+      <h2 id="descent-title" class="visually-hidden">Why we go down</h2>
+
+      <p class="manifesto__text" data-manifesto-text>
+        At <span class="manifesto__num">200</span> metres, about one percent of the sunlight is left.
+        Below <span class="manifesto__num">1,000</span> metres, the only light is the light living things make.
+        Roughly three quarters of the sea floor has never been mapped in detail.
+        Its deepest point, the Challenger Deep, is <span class="manifesto__num">10,935</span> metres down:
+        deeper than Everest is tall, by two kilometres.
+        <span class="manifesto__last">Fewer people have been there than have been to space.</span>
+      </p>
+    </div>
+
+    <p class="manifesto__note">
+      <em>Noctiluca scintillans</em>, the plankton we are named after, flashes blue
+      when the water around it is disturbed.
+    </p>
+  </div>
 </section>
