@@ -68,13 +68,20 @@ export function init(ctx) {
   }
   let commaLead = null
 
-  function setOdometer(v) {
-    const val = reduced ? Math.round(v) : Math.max(0, v)
+  // A detent, like the Geneva drive in a mechanical counter: each wheel
+  // holds on its digit, then snaps through to the next one.
+  const detent = (f) => {
+    const t = clamp((f - 0.22) / 0.56)
+    return t * t * (3 - 2 * t)
+  }
+  function renderOdometer(v) {
+    const val = Math.max(0, v)
+    const whole = Math.floor(val)
+    const fd = detent(val - whole)
     for (let i = 0; i < COLS; i++) {
       const p = 10 ** i
-      let pos
-      if (i === 0) pos = val % 10
-      else pos = (Math.floor(val / p) % 10) + Math.max(0, (val % p) - (p - 1))
+      // a wheel only turns while every wheel below it is passing 9 → 0
+      const pos = (Math.floor(whole / p) % 10) + (whole % p === p - 1 ? fd : 0)
       const c = cols[i]
       if (Math.abs(pos - c.pos) > 0.0015) {
         c.pos = pos
@@ -91,6 +98,22 @@ export function init(ctx) {
       commaLead = cl
       comma.classList.toggle('is-lead', cl)
     }
+  }
+
+  // follow the depth while it moves; when the water is still, settle the
+  // wheels on the nearest whole metre
+  const odo = { v: 0 }
+  let settleT = 0
+  let settleTw = null
+  function setOdometer(v) {
+    settleTw?.kill()
+    odo.v = reduced ? Math.round(v) : v
+    renderOdometer(odo.v)
+    clearTimeout(settleT)
+    if (reduced) return
+    settleT = setTimeout(() => {
+      settleTw = gsap.to(odo, { v: Math.round(v), duration: 0.6, ease: 'power3.out', onUpdate: () => renderOdometer(odo.v) })
+    }, 140)
   }
 
   /* --------------------------------------------------------- fields */
@@ -331,12 +354,18 @@ export function init(ctx) {
       fast = isFast
       hud.classList.toggle('is-fast', fast)
     }
+    // direction of travel, like a dive computer's ascent/descent arrow
+    const dir = s.velocity > 0.25 ? 'down' : s.velocity < -0.25 ? 'up' : null
+    if (dir && dir !== hud.dataset.dir) hud.dataset.dir = dir
+
     // depth.js stops reporting once the water is still: settle the blur
+    // and let the arrow fade
     clearTimeout(fastT)
-    if (fast) fastT = setTimeout(() => {
+    fastT = setTimeout(() => {
       fast = false
       hud.classList.remove('is-fast')
-    }, 140)
+      delete hud.dataset.dir
+    }, fast ? 140 : 420)
 
     if (rulerH && map) {
       let mi = 0
@@ -354,6 +383,16 @@ export function init(ctx) {
       a11yT = now
       setText(depthText, fmt(s.depth))
     }
+  }
+
+  // at the floor the footer's small print owns the bottom-left corner:
+  // the readout surfaces out of its way
+  const footer = document.getElementById('footer') || document.querySelector('body > footer')
+  if (footer && 'IntersectionObserver' in window) {
+    new IntersectionObserver(
+      ([e]) => hud.classList.toggle('is-docked', e.isIntersecting),
+      { rootMargin: '0px 0px -24px 0px' },
+    ).observe(footer)
   }
 
   measure()

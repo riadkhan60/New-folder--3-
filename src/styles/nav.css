@@ -34,6 +34,28 @@
 .nav.is-scrolled .nav__scrim { opacity: 1; }
 .nav.is-open .nav__scrim { opacity: 0; }
 
+/* At the surface the sun sits right behind the bar: a breath of deeper
+   water along the top edge keeps the links legible without a box. */
+.nav::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -70px 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(5 34 58 / 0.42),
+    rgb(5 34 58 / 0.2) 55%,
+    rgb(5 34 58 / 0)
+  );
+  opacity: calc(var(--sun) * 1);
+  transition: opacity 0.8s var(--ease-out);
+  pointer-events: none;
+}
+.nav.is-scrolled::before,
+.nav.is-open::before { opacity: 0; }
+.nav__bar {
+  text-shadow: 0 0 18px rgb(3 24 44 / calc(0.5 * var(--sun)));
+}
+
 .nav__bar {
   position: relative;
   display: flex;
@@ -106,7 +128,7 @@
   font-size: 0.9375rem;
   line-height: 1.3;
   letter-spacing: 0.005em;
-  color: var(--c-ink-2);
+  color: color-mix(in srgb, var(--c-ink) calc(74% + 26% * var(--sun)), transparent);
   transition: color 0.5s var(--ease-out);
 }
 .nav__link:hover,
@@ -169,7 +191,7 @@
   font-weight: 450;
   font-size: 0.875rem;
   line-height: 1;
-  color: var(--c-ink-2);
+  color: color-mix(in srgb, var(--c-ink) calc(74% + 26% * var(--sun)), transparent);
   border-radius: 4px;
   transition: color 0.4s var(--ease-out);
 }
@@ -193,10 +215,18 @@
   height: 14px;
   border-radius: 1px;
   background: currentColor;
-  transform: scaleY(0.14);
-  transition: transform 0.6s var(--ease-out), background-color 0.5s var(--ease-out), box-shadow 0.5s;
+  opacity: 0.75;
+  transform: scaleY(var(--h, 0.3));
+  transition: transform 0.6s var(--ease-out), background-color 0.5s var(--ease-out), box-shadow 0.5s, opacity 0.5s;
 }
+/* a still waveform while silent */
+.nav__bars i:nth-child(1) { --h: 0.28; }
+.nav__bars i:nth-child(2) { --h: 0.55; }
+.nav__bars i:nth-child(3) { --h: 0.38; }
+.nav__bars i:nth-child(4) { --h: 0.7; }
+.nav__bars i:nth-child(5) { --h: 0.3; }
 .nav__sound[aria-pressed='true'] .nav__bars i {
+  opacity: 1;
   background: var(--nav-accent);
   box-shadow: 0 0 6px color-mix(in srgb, var(--nav-accent) 70%, transparent);
   animation: nav-bar 1.1s var(--ease-drift) infinite alternate;

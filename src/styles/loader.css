@@ -247,7 +247,7 @@ html.is-ready .loader:not(.is-exiting),
   position: absolute;
   left: 50%;
   top: 0.085em;
-  width: calc(0.075em + (var(--lg) - 200) * 0.00009em);
+  width: max(5px, calc(0.075em + (var(--lg) - 200) * 0.00009em));
   aspect-ratio: 1;
   border-radius: 50%;
   translate: -50% 0;
