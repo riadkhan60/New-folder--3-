@@ -322,3 +322,7 @@ html.is-loading body { overflow: hidden; }
     scroll-behavior: auto !important;
   }
 }
+
+/* <main> takes focus from the skip link; don't ring the whole page */
+main:focus,
+main:focus-visible { outline: none; }

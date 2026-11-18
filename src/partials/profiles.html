@@ -6,6 +6,7 @@
         Every dive we run is one of these three lines: hours since leaving the surface along
         the top, depth down the side. Prices are per guest, for the whole trip.
       </p>
+      <p class="pf__hint" data-pf-hint aria-hidden="true"><span class="pf__hint-dot"></span><span data-pf-hint-text>Choose a line to read it out</span></p>
     </header>
 
     <!-- The chart is drawn in JS at the figure's real pixel size. Each curve is
@@ -19,7 +20,7 @@
     </figure>
 
     <div class="pf__side">
-      <ul class="pf__list" aria-label="Dive profiles">
+      <ul class="pf__list" aria-label="Dive profiles" data-pf-list>
         <li>
           <button type="button" class="pf__opt" data-pf-opt="twilight" aria-pressed="false">
             <span class="pf__opt-swatch" aria-hidden="true"></span>
@@ -50,14 +51,15 @@
       </ul>
 
       <div class="pf__panel" data-pf-panel data-profile="hadal">
-        <div class="pf__inner" data-pf-inner aria-live="polite">
-          <h3 class="pf__name" data-pf="name">Hadal</h3>
+        <div class="pf__inner" data-pf-inner>
+          <h3 class="pf__name"><span class="pf__name-swatch" aria-hidden="true"></span><span data-pf="name">Hadal</span></h3>
           <p class="pf__where" data-pf="where">The floor of the Challenger Deep</p>
-          <p class="pf__depth">
-            <span class="pf__depth-n" data-pf="depth" aria-hidden="true">10,935</span><span class="pf__depth-u" aria-hidden="true">&#8201;m</span>
-            <span class="visually-hidden">Maximum depth <span data-pf="depth-text">10,935</span> metres</span>
+          <p class="pf__price">
+            <span class="pf__price-n" data-pf="price">$750,000</span>
+            <span class="pf__price-per">per guest, for the whole trip</span>
           </p>
           <dl class="pf__stats">
+            <div class="pf__stat"><dt>Deepest point</dt><dd data-pf="depth">10,935 m</dd></div>
             <div class="pf__stat"><dt>Dive</dt><dd data-pf="dive">12 hours</dd></div>
             <div class="pf__stat"><dt>Trip</dt><dd data-pf="trip">9 days</dd></div>
             <div class="pf__stat"><dt>Seats per season</dt><dd data-pf="seats">6</dd></div>
@@ -66,11 +68,11 @@
             Snailfish on the way down, the deepest-living fish known. On the floor, amphipods
             gather in the red light, and xenophyophores grow as wide as your hand from a single cell.
           </p>
-          <p class="pf__price"><span class="pf__price-n" data-pf="price">$750,000</span> <span class="pf__price-per">per guest</span></p>
         </div>
         <button type="button" class="btn btn--solid pf__reserve" data-pf-reserve>
           Reserve a dive<span class="visually-hidden" data-pf="reserve-name"> on the Hadal profile</span>
         </button>
+        <p class="visually-hidden" data-pf-status aria-live="polite"></p>
       </div>
     </div>
   </div>

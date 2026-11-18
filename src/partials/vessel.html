@@ -23,17 +23,22 @@
           <span class="vessel__act-track" aria-hidden="true"><span class="vessel__act-fill"></span></span>
           <p class="vessel__act-text">Twenty-two lamps come on, one bank at a time. Down here, nothing else makes white light.</p>
         </li>
+        <li class="vessel__act">
+          <span class="vessel__act-name">Inside</span>
+          <span class="vessel__act-track" aria-hidden="true"><span class="vessel__act-fill"></span></span>
+          <p class="vessel__act-text">Two guests and a pilot, each at a viewport of their own. Inside the sphere, the air stays at surface pressure.</p>
+        </li>
       </ol>
     </div>
 
-    <div class="vessel__view" data-cursor="drag">
+    <div class="vessel__view">
       <canvas class="vessel__canvas" aria-hidden="true"></canvas>
       <div class="vessel__fallback" aria-hidden="true"></div>
       <svg class="vessel__leaders" aria-hidden="true" focusable="false"></svg>
       <ul class="vessel__callouts" aria-hidden="true">
         <li class="vessel__callout" data-key="sphere">
           <span class="vessel__callout-title">Titanium pressure sphere</span>
-          <span class="vessel__callout-sub">90&nbsp;mm wall, 1.5&nbsp;m inside</span>
+          <span class="vessel__callout-sub">1.5&nbsp;m across on the inside</span>
         </li>
         <li class="vessel__callout" data-key="rated">
           <span class="vessel__callout-title">Rated to 11,000&nbsp;m</span>
@@ -51,7 +56,16 @@
           <span class="vessel__callout-title">22 lamps</span>
           <span class="vessel__callout-sub">white for filming, red for watching</span>
         </li>
+        <li class="vessel__callout" data-key="cabin">
+          <span class="vessel__callout-title">Three seats</span>
+          <span class="vessel__callout-sub">two guests and a pilot</span>
+        </li>
+        <li class="vessel__callout" data-key="wall">
+          <span class="vessel__callout-title">90&nbsp;mm wall</span>
+          <span class="vessel__callout-sub">titanium, shown in section</span>
+        </li>
       </ul>
+      <div class="vessel__grab" data-cursor="drag" aria-hidden="true"></div>
     </div>
   </div>
 
@@ -67,25 +81,25 @@
       <div class="vessel__specplate">
         <h3 class="visually-hidden">Vesper specifications</h3>
         <p class="vessel__plate-head">
-          <span class="vessel__plate-name">Vesper</span>
+          <span class="vessel__plate-serial">Hull no.&nbsp;01 <span aria-hidden="true">·</span> Apra Harbor, Guam</span>
           <span class="vessel__plate-kind">Full-ocean-depth submersible</span>
         </p>
         <dl class="vessel__specs">
           <div class="vessel__spec vessel__spec--key">
             <dt>Depth rating</dt>
-            <dd><span class="vessel__val">11,000</span><span class="vessel__unit">m</span><span class="vessel__note">full ocean depth</span></dd>
+            <dd><span class="vessel__val t-num">11,000</span><span class="vessel__unit">m</span><span class="vessel__note">full ocean depth</span></dd>
           </div>
           <div class="vessel__spec">
             <dt>Crew</dt>
             <dd>2 guests, 1 pilot</dd>
           </div>
           <div class="vessel__spec">
-            <dt>Pressure sphere</dt>
-            <dd>Titanium, 1.5&nbsp;m inside, 90&nbsp;mm wall</dd>
+            <dt>Titanium sphere</dt>
+            <dd>1.5&nbsp;m inside, 90&nbsp;mm wall</dd>
           </div>
           <div class="vessel__spec">
             <dt>Viewports</dt>
-            <dd>3, acrylic, 180&nbsp;mm thick</dd>
+            <dd>3, acrylic, 180&nbsp;mm</dd>
           </div>
           <div class="vessel__spec">
             <dt>Lamps</dt>
@@ -101,27 +115,27 @@
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Descent</dt>
-            <dd><span class="vessel__val">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
+            <dd><span class="vessel__val t-num">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Bottom time</dt>
-            <dd><span class="vessel__pre">up to</span><span class="vessel__val">4</span><span class="vessel__unit">h</span></dd>
+            <dd><span class="vessel__pre">up to</span><span class="vessel__val t-num">4</span><span class="vessel__unit">h</span></dd>
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Ascent</dt>
-            <dd><span class="vessel__val">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
+            <dd><span class="vessel__val t-num">≈&#8202;4</span><span class="vessel__unit">h</span></dd>
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Life support</dt>
-            <dd><span class="vessel__val">96</span><span class="vessel__unit">h</span></dd>
+            <dd><span class="vessel__val t-num">96</span><span class="vessel__unit">h</span></dd>
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Length</dt>
-            <dd><span class="vessel__val">4.6</span><span class="vessel__unit">m</span></dd>
+            <dd><span class="vessel__val t-num">4.6</span><span class="vessel__unit">m</span></dd>
           </div>
           <div class="vessel__spec vessel__spec--cell">
             <dt>Mass</dt>
-            <dd><span class="vessel__val">11.7</span><span class="vessel__unit">t</span></dd>
+            <dd><span class="vessel__val t-num">11.7</span><span class="vessel__unit">t</span></dd>
           </div>
         </dl>
       </div>

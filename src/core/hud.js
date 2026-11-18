@@ -325,20 +325,24 @@ export function init(ctx) {
   let expIO = null
   let chipIO = null
 
-  // where the readout sits in a given layout (offsets ignore transforms)
+  // Where the readout sits in a given layout (offsets ignore transforms).
+  // The other layout is measured on a hidden copy, so measuring never
+  // restarts the real instrument's animations or transitions.
   function footprint(asCompact) {
-    const was = hud.classList.contains('is-compact')
-    hud.classList.add('is-measuring')
-    if (was !== asCompact) hud.classList.toggle('is-compact', asCompact)
-    const r = {
-      left: readout.offsetLeft,
-      top: readout.offsetTop,
-      width: readout.offsetWidth,
-      height: readout.offsetHeight,
+    let el = readout
+    let probe = null
+    if (asCompact !== compact) {
+      probe = document.createElement('div')
+      probe.className = `hud${asCompact ? ' is-compact' : ''}${chipOnly ? ' is-chip-only' : ''}`
+      probe.setAttribute('aria-hidden', 'true')
+      probe.style.cssText = `${hud.style.cssText};visibility:hidden`
+      el = readout.cloneNode(true)
+      el.querySelectorAll('[style]').forEach((n) => n.style.removeProperty('transform'))
+      probe.appendChild(el)
+      document.body.appendChild(probe)
     }
-    if (was !== asCompact) hud.classList.toggle('is-compact', was)
-    void readout.offsetWidth
-    hud.classList.remove('is-measuring')
+    const r = { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight }
+    probe?.remove()
     return r
   }
 

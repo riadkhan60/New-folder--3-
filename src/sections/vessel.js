@@ -46,6 +46,7 @@ import {
   Matrix4,
   Quaternion,
   Color,
+  Plane,
   CatmullRomCurve3,
   MeshPhysicalMaterial,
   MeshBasicMaterial,
@@ -58,6 +59,7 @@ import {
   SRGBColorSpace,
   AdditiveBlending,
   DoubleSide,
+  BackSide,
 } from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -436,7 +438,7 @@ float vsNoise(vec3 x) {
 float vsSeam(float d) { float w = fwidth(d); return 1.0 - smoothstep(0.0035, 0.0035 + w * 1.6, abs(d)); }
 `
 
-function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
+function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed = false, cabin = false } = {}) {
   mat.customProgramCacheKey = () => 'vesper-' + variant
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uBuild = U.uBuild
@@ -462,6 +464,8 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
         ${ao === 'hull' ? '#define VESPER_AO_HULL' : ''}
         ${ao === 'sphere' ? '#define VESPER_AO_SPHERE' : ''}
         ${lens ? '#define VESPER_LENS' : ''}
+        ${brushed ? '#define VESPER_BRUSHED' : ''}
+        ${cabin ? '#define VESPER_CABIN' : ''}
         uniform float uBuild; uniform vec3 uCore; uniform vec3 uEdge; varying vec3 vLocal;
         ${GLSL_NOISE}`,
       )
@@ -478,6 +482,15 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
         '#include <color_fragment>',
         `#include <color_fragment>
         float vsSm = 0.0;
+        float vsStreak = 0.5;
+        #ifdef VESPER_BRUSHED
+          // a machined, bead-blasted sphere: fine turning rings around its
+          // axis and a matte grain, never a mirror
+          vec3 vsQ = vLocal - uCore;
+          float vsLat = atan(vsQ.y, length(vsQ.xz));
+          vsStreak = vsNoise(vec3(vsLat * 160.0, vsQ.x * 1.5, vsQ.z * 1.5)) * 0.7 + vsNoise(vLocal * 55.0) * 0.3;
+          diffuseColor.rgb *= 0.9 + 0.16 * vsStreak;
+        #endif
         #ifdef VESPER_SEAMS
           vsSm = max(vsSm, vsSeam(vLocal.x + 1.18));
           vsSm = max(vsSm, vsSeam(vLocal.x - 0.12));
@@ -494,6 +507,9 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
         `#include <emissivemap_fragment>
         #ifdef VESPER_LENS
           totalEmissiveRadiance *= pow(clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+        #endif
+        #ifdef VESPER_CABIN
+          totalEmissiveRadiance *= smoothstep(-0.7, 0.85, (vLocal.y - uCore.y) / 0.75);
         #endif
         totalEmissiveRadiance += uEdge * vsEdge * 2.6;`,
       )
@@ -521,6 +537,12 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false } = {}) {
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
         roughnessFactor = clamp(roughnessFactor + vsSm * 0.5 + (vsNoise(vLocal * 22.0) - 0.5) * 0.08, 0.0, 1.0);`,
+      )
+    } else if (brushed) {
+      frag = frag.replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor + (vsStreak - 0.5) * 0.2, 0.0, 1.0);`,
       )
     }
     sh.fragmentShader = frag
@@ -600,14 +622,16 @@ function blueprintGeometry(geos) {
 
 function lineMaterial() {
   return new ShaderMaterial({
-    uniforms: { uDraw: { value: 0 }, uAlpha: { value: 1 }, uColor: { value: new Color(PHOTOPHORE) } },
+    uniforms: { uDraw: { value: 0 }, uAlpha: { value: 1 }, uDist: { value: 20 }, uColor: { value: new Color(PHOTOPHORE) } },
     vertexShader: /* glsl */ `
       attribute vec2 aSeg;
+      uniform float uDist;
       varying float vT; varying float vDelay; varying float vFade;
       void main() {
         vT = aSeg.y; vDelay = aSeg.x;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vFade = smoothstep(23.5, 17.0, -mv.z);
+        // near side bright, far side dim: depth read the way a draughtsman would
+        vFade = smoothstep(uDist + 3.5, uDist - 3.0, -mv.z);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
@@ -744,7 +768,7 @@ function flareMaterial(dpr) {
         vI = I;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = I > 0.01 ? uPx * (0.55 + 0.45 * min(I, 1.3)) * (19.0 / -mv.z) : 0.0;
+        gl_PointSize = I > 0.01 ? uPx * (0.55 + 0.45 * min(I, 1.3)) * min(19.0 / -mv.z, 1.35) : 0.0;
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D uMap;
@@ -752,6 +776,109 @@ function flareMaterial(dpr) {
       void main() {
         vec4 t = texture2D(uMap, gl_PointCoord);
         gl_FragColor = vec4(t.rgb, t.a * min(vI, 1.3));
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  })
+}
+
+/** The cut face of a sectioned part: a flat fill with drawing-office hatching
+ *  (back faces seen through the cut read as the solid's section). */
+const BUILD_DISCARD = /* glsl */ `
+  float vsN = vsNoise(vLocal * 3.1) * 0.6 + vsNoise(vLocal * 9.0) * 0.4;
+  float vsD = length(vLocal - uCore) + (vsN - 0.5) * 0.55;
+  if (vsD > uBuild * 4.4 - 0.3) discard;
+`
+function capMaterial(U, { fill, line, pitch, weight, planes, ring = false }) {
+  const m = new ShaderMaterial({
+    uniforms: {
+      uBuild: U.uBuild,
+      uRootInv: U.uRootInv,
+      uCore: U.uCore,
+      uCam: U.uCam,
+      uCut: U.uCut,
+      uFill: { value: new Color(fill) },
+      uLine: { value: new Color(line) },
+      uPitch: { value: pitch },
+      uWeight: { value: weight },
+      uRing: { value: new Vector2(0.75, 0.84) },
+      uI: { value: 1 },
+    },
+    vertexShader: /* glsl */ `
+      #include <common>
+      #include <clipping_planes_pars_vertex>
+      uniform mat4 uRootInv;
+      varying vec3 vLocal;
+      void main() {
+        #include <begin_vertex>
+        #include <project_vertex>
+        #include <clipping_planes_vertex>
+        vLocal = (uRootInv * modelMatrix * vec4(transformed, 1.0)).xyz;
+      }`,
+    fragmentShader: /* glsl */ `
+      #include <common>
+      #include <clipping_planes_pars_fragment>
+      ${ring ? '#define VESPER_RING' : ''}
+      uniform float uBuild; uniform vec3 uCore; uniform vec3 uFill; uniform vec3 uLine;
+      uniform float uPitch; uniform float uWeight; uniform vec2 uRing; uniform float uI;
+      uniform vec3 uCam; uniform float uCut;
+      varying vec3 vLocal;
+      ${GLSL_NOISE}
+      void main() {
+        #include <clipping_planes_fragment>
+        ${BUILD_DISCARD}
+        #ifdef VESPER_RING
+          float r = length(vLocal.xy - uCore.xy);
+          float aa = fwidth(r);
+          float inRing = smoothstep(uRing.x - aa, uRing.x + aa, r) * (1.0 - smoothstep(uRing.y - aa, uRing.y + aa, r));
+          if (inRing < 0.01) discard;
+          float edge = 1.0 - smoothstep(0.0, aa * 1.5, min(abs(r - uRing.x), abs(r - uRing.y)));
+        #else
+          float edge = 0.0;
+        #endif
+        // hatch the point where the view ray crosses the cutting plane, so
+        // the section reads as one flat face whatever lies behind it
+        vec3 rd = vLocal - uCam;
+        float tt = abs(rd.z) > 1e-4 ? clamp((uCut - uCam.z) / rd.z, 0.0, 1.0) : 1.0;
+        vec3 P = uCam + rd * tt;
+        float h = (P.x + P.y) * uPitch;
+        float hw = fwidth(h);
+        float hatch = smoothstep(0.5 - uWeight - hw, 0.5 - uWeight, abs(fract(h) - 0.5));
+        vec3 col = mix(uFill, uLine, clamp(hatch * 0.85 + edge, 0.0, 1.0));
+        gl_FragColor = vec4(col * uI, 1.0);
+        #include <colorspace_fragment>
+      }`,
+    side: ring ? DoubleSide : BackSide,
+    clipping: !ring,
+  })
+  if (!ring) {
+    m.clippingPlanes = planes
+    m.clipIntersection = true
+  }
+  return m
+}
+
+function glowMaterial() {
+  return new ShaderMaterial({
+    uniforms: { uI: { value: 0 }, uSize: { value: 3.2 }, uColor: { value: new Color(PHOTOPHORE) } },
+    vertexShader: /* glsl */ `
+      uniform float uSize;
+      varying vec2 vP;
+      void main() {
+        vP = position.xy * 2.0;
+        vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        mv.xy += position.xy * uSize;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uI; uniform vec3 uColor;
+      varying vec2 vP;
+      void main() {
+        float r2 = dot(vP, vP);
+        float a = uI * (exp(-r2 * 4.0) * 0.32 + exp(-r2 * 22.0) * 0.16) * (1.0 - smoothstep(0.7, 1.0, sqrt(r2)));
+        if (a < 0.002) discard;
+        gl_FragColor = vec4(uColor, a);
       }`,
     transparent: true,
     depthWrite: false,
@@ -785,18 +912,22 @@ function drawLivery(c) {
    The scene
    ========================================================================== */
 
-function createVesper(canvas, { dpr, mobile }) {
-  const renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' })
+function createVesper(canvas, { dpr, maxDpr, mobile }) {
+  // MSAA only where it is cheap: on high-density screens the backbuffer is
+  // already finer than the eye can resolve edges at.
+  const renderer = new WebGLRenderer({ canvas, antialias: maxDpr < 1.5, alpha: true, powerPreference: 'high-performance' })
   renderer.setClearColor(0x000000, 0)
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
   renderer.outputColorSpace = SRGBColorSpace
   renderer.setPixelRatio(dpr)
+  renderer.localClippingEnabled = true
 
   const scene = new Scene()
   const pmrem = new PMREMGenerator(renderer)
   const room = new RoomEnvironment()
-  scene.environment = pmrem.fromScene(room, 0.04).texture
+  const envTex = pmrem.fromScene(room, 0.04).texture
+  scene.environment = envTex
   scene.environmentIntensity = 0.55
   room.dispose?.()
   pmrem.dispose()
@@ -809,6 +940,8 @@ function createVesper(canvas, { dpr, mobile }) {
     uRootInv: { value: new Matrix4() },
     uCore: { value: CORE.clone() },
     uEdge: { value: new Color(PHOTOPHORE) },
+    uCam: { value: new Vector3() },
+    uCut: { value: 9 },
   }
 
   const root = new Group()
@@ -816,48 +949,79 @@ function createVesper(canvas, { dpr, mobile }) {
   const surfaces = []
   const sliceSrc = []
 
+  /* ---- the cutaway: a notch through her starboard side, around the sphere.
+     Clipped where all of these hold: z > c, 0.1 < x < 1.9, -1.36 < y < 0.45 */
+  const cutLocal = [
+    new Plane(new Vector3(0, 0, -1), 9),
+    new Plane(new Vector3(-1, 0, 0), 0.1),
+    new Plane(new Vector3(1, 0, 0), -1.9),
+    new Plane(new Vector3(0, 1, 0), -0.45),
+    new Plane(new Vector3(0, -1, 0), -1.36),
+  ]
+  const cutPlanes = cutLocal.map((pl) => pl.clone())
+  const cuttable = (mat) => {
+    mat.clippingPlanes = cutPlanes
+    mat.clipIntersection = true
+    return mat
+  }
+
   /* ---- materials */
   const M = {
-    hull: patch(
-      new MeshPhysicalMaterial({
-        color: '#1d2227',
-        metalness: 0.22,
-        roughness: 0.4,
-        clearcoat: 0.6,
-        clearcoatRoughness: 0.3,
-        envMapIntensity: 1.7,
-        polygonOffset: true,
-        polygonOffsetFactor: 1,
-        polygonOffsetUnits: 1,
-      }),
-      U,
-      'hull',
-      { seams: true, ao: 'hull' },
+    hull: cuttable(
+      patch(
+        new MeshPhysicalMaterial({
+          color: '#1d2227',
+          metalness: 0.22,
+          roughness: 0.4,
+          clearcoat: 0.6,
+          clearcoatRoughness: 0.3,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
+        }),
+        U,
+        'hull',
+        { seams: true, ao: 'hull' },
+      ),
     ),
-    sphere: patch(
-      new MeshPhysicalMaterial({ color: '#d2cdc6', metalness: 1, roughness: 0.17, clearcoat: 0.35, clearcoatRoughness: 0.06, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
-      U,
-      'sphere',
-      { ao: 'sphere' },
+    // Titanium as it really leaves the shop: machined and bead-blasted, a
+    // soft grey sheen with a narrow rim, never a mirror.
+    sphere: cuttable(
+      patch(
+        new MeshPhysicalMaterial({
+          color: '#8e9196',
+          metalness: 1,
+          roughness: 0.5,
+          envMap: envTex,
+          envMapIntensity: 0.4,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1,
+        }),
+        U,
+        'sphere',
+        { ao: 'sphere', brushed: true },
+      ),
     ),
-    satin: patch(new MeshPhysicalMaterial({ color: '#8f959c', metalness: 1, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'satin'),
+    satin: cuttable(patch(new MeshPhysicalMaterial({ color: '#8f959c', metalness: 1, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'satin')),
     dark: patch(new MeshPhysicalMaterial({ color: '#23282e', metalness: 0.6, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'dark'),
-    acrylic: patch(
-      new MeshPhysicalMaterial({
-        color: '#010608',
-        metalness: 0,
-        roughness: 0.015,
-        envMapIntensity: 2.6,
-        clearcoat: 1,
-        clearcoatRoughness: 0.02,
-        ior: 1.49,
-        specularIntensity: 1,
-        emissive: new Color('#2bbdb2'),
-        emissiveIntensity: 0.0,
-      }),
-      U,
-      'acrylic',
-      { lens: true },
+    acrylic: cuttable(
+      patch(
+        new MeshPhysicalMaterial({
+          color: '#010608',
+          metalness: 0,
+          roughness: 0.015,
+          clearcoat: 1,
+          clearcoatRoughness: 0.02,
+          ior: 1.49,
+          specularIntensity: 1,
+          emissive: new Color('#2bbdb2'),
+          emissiveIntensity: 0.0,
+        }),
+        U,
+        'acrylic',
+        { lens: true },
+      ),
     ),
   }
   const add = (geo, mat, slice = true) => {
@@ -868,8 +1032,12 @@ function createVesper(canvas, { dpr, mobile }) {
     return m
   }
 
-  /* ---- foam body */
-  add(hullGeometry(), M.hull)
+  /* ---- foam body, and its section where the cut goes through it */
+  const hullGeo = hullGeometry()
+  add(hullGeo, M.hull)
+  const hullCap = new Mesh(hullGeo, capMaterial(U, { fill: '#0b1a20', line: '#256a67', pitch: 11, weight: 0.06, planes: cutPlanes }))
+  hullCap.visible = false
+  root.add(hullCap)
 
   /* ---- livery decals, one per side, sitting exactly on the side planes */
   const liveryCanvas = document.createElement('canvas')
@@ -892,7 +1060,6 @@ function createVesper(canvas, { dpr, mobile }) {
       roughness: 0.42,
       clearcoat: 0.6,
       clearcoatRoughness: 0.3,
-      envMapIntensity: 1.4,
       depthWrite: false,
       side: DoubleSide,
       polygonOffset: true,
@@ -935,6 +1102,59 @@ function createVesper(canvas, { dpr, mobile }) {
   }
   add(merge(ports), M.acrylic, false)
 
+  /* ---- inside the sphere: cabin wall, deck, three seats, three screens.
+     Only drawn while the cutaway is open. */
+  const interior = new Group()
+  interior.visible = false
+  root.add(interior)
+  const cabinMat = patch(
+    new MeshPhysicalMaterial({ color: '#69737a', roughness: 0.85, metalness: 0.05, emissive: new Color('#ffb054'), emissiveIntensity: 0, side: BackSide }),
+    U,
+    'cabin',
+    { cabin: true },
+  )
+  interior.add(new Mesh(new SphereGeometry(SPHERE.inner, 72, 48).translate(S.x, S.y, 0), cabinMat))
+  const seatMat = patch(new MeshPhysicalMaterial({ color: '#262d33', roughness: 0.78, metalness: 0.05, sheen: 0.6, sheenRoughness: 0.5, sheenColor: new Color('#5f7d84') }), U, 'seat')
+  const floorY = S.y - 0.5
+  const seatParts = []
+  const seat = (x, z, yaw) => {
+    const q = new Quaternion().setFromAxisAngle(UP, yaw)
+    const at = (g) => seatParts.push(placed(g, new Vector3(x, floorY, z), q))
+    at(new RoundedBoxGeometry(0.2, 0.09, 0.18, 2, 0.02).translate(0, 0.045, 0))
+    at(new RoundedBoxGeometry(0.36, 0.08, 0.34, 3, 0.03).translate(0.02, 0.13, 0))
+    at(new RoundedBoxGeometry(0.07, 0.44, 0.34, 3, 0.03).rotateZ(0.32).translate(-0.2, 0.36, 0))
+    at(new RoundedBoxGeometry(0.08, 0.13, 0.2, 2, 0.035).rotateZ(0.32).translate(-0.3, 0.62, 0))
+  }
+  seat(S.x + 0.16, 0, 0) // the pilot, at the main viewport
+  seat(S.x - 0.2, 0.32, -0.66) // a guest at each side viewport
+  seat(S.x - 0.2, -0.32, 0.66)
+  interior.add(new Mesh(merge(seatParts), seatMat))
+  const deck = new CircleGeometry(Math.sqrt(SPHERE.inner ** 2 - 0.5 ** 2) - 0.01, 48).rotateX(-Math.PI / 2).translate(S.x, floorY, 0)
+  interior.add(new Mesh(deck, patch(new MeshPhysicalMaterial({ color: '#171c20', roughness: 0.9 }), U, 'deck')))
+  const screenMat = patch(new MeshBasicMaterial({ color: new Color(PHOTOPHORE).multiplyScalar(1.25), toneMapped: false }), U, 'screen')
+  const screens = []
+  for (const [d, w] of [
+    [new Vector3(0.62, 0.2, 0), 0.26],
+    [new Vector3(0.32, 0.12, 0.52), 0.16],
+    [new Vector3(0.32, 0.12, -0.52), 0.16],
+  ]) {
+    const p = S.clone().add(d.clone().setLength(SPHERE.inner - 0.06))
+    const g = new PlaneGeometry(w, w * 0.56)
+    const m = new Mesh(g, screenMat)
+    m.position.copy(p)
+    m.lookAt(S.x, S.y - 0.25, 0)
+    m.updateMatrix()
+    screens.push(g.clone().applyMatrix4(m.matrix))
+  }
+  interior.add(new Mesh(mergeGeometries(screens.map(prep)), screenMat))
+
+  // the section of the 90 mm titanium wall, exactly in the cutting plane
+  const ringMat = capMaterial(U, { fill: '#18272d', line: PHOTOPHORE, pitch: 34, weight: 0.12, ring: true })
+  const ring = new Mesh(new CircleGeometry(SPHERE.r, 112).translate(S.x, S.y, 0), ringMat)
+  ring.visible = false
+  ring.renderOrder = 1
+  root.add(ring)
+
   /* ---- frame: skids, posts, struts, brow bar, cross member */
   const satin = [flange, ...portRings]
   for (const s of [1, -1]) {
@@ -954,9 +1174,9 @@ function createVesper(canvas, { dpr, mobile }) {
   satin.push(rod(new Vector3(-1.86, 0.46, -0.8), new Vector3(-1.86, 0.46, 0.8), 0.035))
   satin.push(rod(new Vector3(-1.76, -0.3, -0.76), new Vector3(-1.76, -0.3, 0.76), 0.032))
   // hatch coaming on the deck above the sphere
-  const deck = profileAt(SPHERE.x)[1] + HULL.bevelS
-  satin.push(new CylinderGeometry(0.31, 0.33, 0.1, 48).translate(SPHERE.x, deck + 0.02, 0))
-  satin.push(new TorusGeometry(0.15, 0.018, 8, 32).rotateX(Math.PI / 2).translate(SPHERE.x, deck + 0.13, 0))
+  const deckTop = profileAt(SPHERE.x)[1] + HULL.bevelS
+  satin.push(new CylinderGeometry(0.31, 0.33, 0.1, 48).translate(SPHERE.x, deckTop + 0.02, 0))
+  satin.push(new TorusGeometry(0.15, 0.018, 8, 32).rotateX(Math.PI / 2).translate(SPHERE.x, deckTop + 0.13, 0))
   // instrument boom
   const mastA = new Vector3(1.5, profileAt(1.5)[1] + HULL.bevelS - 0.04, -0.35)
   const mastB = new Vector3(2.18, 1.17, -0.35)
@@ -965,7 +1185,7 @@ function createVesper(canvas, { dpr, mobile }) {
   add(merge(satin), M.satin)
 
   const dark = []
-  dark.push(new CylinderGeometry(0.29, 0.3, 0.06, 48).translate(SPHERE.x, deck + 0.09, 0))
+  dark.push(new CylinderGeometry(0.29, 0.3, 0.06, 48).translate(SPHERE.x, deckTop + 0.09, 0))
   // sonar head + camera pod on the boom
   dark.push(new CylinderGeometry(0.075, 0.075, 0.12, 24).rotateX(Math.PI / 2).translate(2.14, 1.26, -0.35))
   dark.push(new RoundedBoxGeometry(0.16, 0.1, 0.1, 2, 0.02).translate(1.92, 1.2, -0.35))
@@ -1093,6 +1313,15 @@ function createVesper(canvas, { dpr, mobile }) {
   lines.frustumCulled = false
   root.add(lines)
 
+  /* ---- the sphere's first light: a photophore glow while she is only lines */
+  const glowMat = glowMaterial()
+  const glow = new Mesh(new PlaneGeometry(1, 1), glowMat)
+  glow.position.copy(CORE)
+  glow.frustumCulled = false
+  glow.renderOrder = 2
+  glow.visible = false
+  root.add(glow)
+
   /* ---- light rig: key + two photophore rims, kept relative to the camera */
   const key = new DirectionalLight('#e6f5ff', 2.1)
   const rimA = new DirectionalLight(PHOTOPHORE, 2.6)
@@ -1104,12 +1333,15 @@ function createVesper(canvas, { dpr, mobile }) {
   root.add(spot, spot.target)
 
   /* ---- anchors for callouts (local point, outward normal) */
+  const ringA = 128 * DEG
   const anchors = {
     sphere: { p: S.clone().addScaledVector(new Vector3(0.34, 0.3, 0.89).normalize(), SPHERE.r), n: new Vector3(0.34, 0.3, 0.89).normalize() },
     rated: { p: new Vector3(-0.3, profileAt(-0.3)[1] + HULL.bevelS, 0.12), n: new Vector3(0, 1, 0.3).normalize(), always: true },
     foam: { p: new Vector3(-0.62, 0.12, sideZ(-0.62, 0.12)), n: new Vector3(0, 0, 1) },
     viewports: { p: S.clone().addScaledVector(VIEWPORT_DIRS[1], SPHERE.r + 0.02), n: VIEWPORT_DIRS[1].clone() },
     lamps: { p: LAMPS[7].p.clone(), n: new Vector3(0.75, -0.2, 0.6).normalize() },
+    cabin: { p: new Vector3(S.x - 0.18, floorY + 0.18, 0.3), n: new Vector3(0, 0, 1), always: true },
+    wall: { p: new Vector3(S.x + Math.cos(ringA) * 0.795, S.y + Math.sin(ringA) * 0.795, 0), n: new Vector3(0, 0, 1), always: true },
   }
 
   /* ---- points on the silhouette, for laying callouts out around her */
@@ -1121,7 +1353,7 @@ function createVesper(canvas, { dpr, mobile }) {
     if (i % 14 === 0) for (const sd of [1, -1]) silo.push(new Vector3(q.x, q.y, sd * sideZ(q.x, q.y)))
   })
   for (const sd of [1, -1]) for (const k of SKID) silo.push(new Vector3(k[0], k[1] - 0.05, sd * SKID_Z))
-  silo.push(mastB.clone().add(new Vector3(0, 0.12, 0)), new Vector3(SPHERE.x, deck + 0.14, 0), v3(ARM[2]).add(new Vector3(0.06, -0.16, 0)))
+  silo.push(mastB.clone().add(new Vector3(0, 0.12, 0)), new Vector3(SPHERE.x, deckTop + 0.14, 0), v3(ARM[2]).add(new Vector3(0.06, -0.16, 0)))
   for (const t of THRUSTERS.slice(0, 4)) for (const dy of [0.2, -0.2]) silo.push(new Vector3(t.p[0], t.p[1] + dy, t.p[2]))
 
   /* ---- state */
@@ -1134,28 +1366,49 @@ function createVesper(canvas, { dpr, mobile }) {
   const lensColor = new Color()
   let W = 1
   let H = 1
-  let shiftX = 0
-  let shiftY = 0
+  let asleep = false
 
-  function setSize(w, h, sx = 0, sy = 0) {
+  function setSize(w, h) {
     W = Math.max(1, w)
     H = Math.max(1, h)
-    shiftX = sx
-    shiftY = sy
-    renderer.setSize(W, H, false)
+    if (!asleep) renderer.setSize(W, H, false)
     camera.aspect = W / H
-    camera.setViewOffset(W, H, -sx * W, -sy * H, W, H)
     camera.updateProjectionMatrix()
+  }
+  function setDpr(d) {
+    renderer.setPixelRatio(d)
+    if (!asleep) renderer.setSize(W, H, false)
+    flares.material.uniforms.uPx.value = 46 * d
+    snowU.uniforms.uPx.value = 26 * d
+  }
+  /** Off screen, hand the backing store back (a full-size buffer is tens of MB). */
+  function sleep() {
+    if (asleep) return
+    asleep = true
+    renderer.setSize(1, 1, false)
+  }
+  function wake() {
+    if (!asleep) return
+    asleep = false
+    renderer.setSize(W, H, false)
   }
 
   function update(s, t) {
-    // camera on a sphere around the vessel
-    const [az, el, dist] = s.cam
-    const a = az * DEG
-    const e = el * DEG
+    // camera on a sphere around a moving target; distance follows from the
+    // scale (px per metre) and the lens, so the lens can change on its own
+    const c = s.cam
+    camera.fov = c.fov
+    const dist = H / 2 / (c.f * Math.tan((c.fov * DEG) / 2))
+    const a = c.az * DEG
+    const e = c.el * DEG
+    target.set(c.tx, c.ty, c.tz)
     camera.position.set(target.x + dist * Math.sin(a) * Math.cos(e), target.y + dist * Math.sin(e), target.z + dist * Math.cos(a) * Math.cos(e))
+    camera.near = Math.max(0.1, dist - 14)
+    camera.far = dist + 40
     camera.lookAt(target)
+    camera.setViewOffset(W, H, -c.sx * W, -c.sy * H, W, H)
     camera.updateMatrixWorld()
+    lineMat.uniforms.uDist.value = dist
     // the vessel hovers
     root.position.y = s.bob
     root.rotation.z = s.roll
@@ -1181,7 +1434,25 @@ function createVesper(canvas, { dpr, mobile }) {
     lineMat.uniforms.uDraw.value = s.draw
     lineMat.uniforms.uAlpha.value = s.wire
     lines.visible = s.draw > 0.001 && s.wire > 0.003
-    M.acrylic.emissiveIntensity = 0.03 + s.cabin * 0.15
+    M.acrylic.emissiveIntensity = 0.03 + s.ports * 0.15
+    glowMat.uniforms.uI.value = s.glow
+    glow.visible = s.glow > 0.002
+
+    // the cutaway
+    const cut = s.cut
+    const open = built && cut < SPHERE.r
+    cutLocal[0].constant = open ? cut : 9
+    for (let i = 0; i < cutLocal.length; i++) cutPlanes[i].copy(cutLocal[i]).applyMatrix4(root.matrixWorld)
+    interior.visible = open
+    hullCap.visible = open
+    ring.visible = open
+    if (open) {
+      ring.position.z = cut
+      ringMat.uniforms.uRing.value.set(Math.sqrt(Math.max(0, SPHERE.inner ** 2 - cut * cut)), Math.sqrt(SPHERE.r ** 2 - cut * cut))
+      cabinMat.emissiveIntensity = 0.16 * s.cabin
+      U.uCut.value = cut
+      U.uCam.value.copy(camera.position).applyMatrix4(U.uRootInv.value)
+    }
 
     const b = s.banks
     let any = 0
@@ -1246,6 +1517,22 @@ function createVesper(canvas, { dpr, mobile }) {
     return out
   }
 
+  /** Screen-space box around the pressure sphere alone. */
+  function sphereBox(out) {
+    tmp.copy(CORE).applyMatrix4(root.matrixWorld)
+    tmp2.copy(tmp).addScaledVector(up, SPHERE.r)
+    tmp.project(camera)
+    tmp2.project(camera)
+    const x = (tmp.x * 0.5 + 0.5) * W
+    const y = (-tmp.y * 0.5 + 0.5) * H
+    const r = Math.abs(tmp2.y - tmp.y) * 0.5 * H
+    out.l = x - r
+    out.r = x + r
+    out.t = y - r
+    out.b = y + r
+    return out
+  }
+
   /** Compile every program up front so nothing hitches mid-scroll. */
   async function warm() {
     const vis = []
@@ -1262,34 +1549,57 @@ function createVesper(canvas, { dpr, mobile }) {
     for (const [o, v] of vis) o.visible = v
   }
 
-  return { renderer, setSize, update, render, project, screenBox, warm, sizeInfo: () => ({ W, H, shiftX, shiftY }) }
+  return { renderer, setSize, setDpr, sleep, wake, update, render, project, screenBox, sphereBox, warm, sizeInfo: () => ({ W, H }) }
 }
 
 /* ==========================================================================
-   Choreography: everything is a pure function of p (0..1)
+   Choreography: everything is a pure function of one clock, c.
+   c runs -1 → 0 while the stage scrolls up to the pin (the pre-roll), then
+   0 → 1 across the pin. Stacked layouts run a shorter stretch of it.
    ========================================================================== */
 
-const CAM_DESKTOP = [
-  // p, azimuth°, elevation°, distance (m)
-  [0.0, -40, 13, 21.5],
-  [0.29, -6, 7, 20.2],
-  [0.58, 34, 1, 19.4],
-  [0.86, 54, -3, 19.6],
-  [1.0, 47, 1, 20.4],
-]
-const CAM_MOBILE = [
-  [0.0, -30, 10, 19.5],
-  [0.35, 2, 6, 18.8],
-  [0.65, 36, 1, 18.4],
-  [1.0, 48, 0, 18.8],
-]
+// The pinned layout needs width for the copy column beside her, and height.
+const PIN_MQ = '(min-width: 1024px) and (min-height: 600px) and (min-aspect-ratio: 5/4)'
+const PIN_LEN = 4.2 // viewports of scroll while pinned
+const TAIL = 1 - 1 / PIN_LEN // from here the builder's plate rises under her
 const ACTS = [
-  [0, 0.29],
-  [0.29, 0.58],
-  [0.58, 0.86],
+  [0, 0.2],
+  [0.2, 0.42],
+  [0.42, 0.6],
+  [0.6, TAIL],
 ]
-const BANKS_AT = [0.6, 0.67, 0.74]
-const SONAR_AT = 0.79
+const BANKS_AT = [0.44, 0.49, 0.54]
+const SONAR_AT = 0.57
+const CUT_AT = [0.6, 0.68]
+const ELEV = [0.78, 0.97] // turning to a true side elevation
+const DISSOLVE = [0.85, 0.985] // surfaces go back to lines, outside in
+const STACK_RANGE = [-0.6, 0.74]
+const STATIC_C = 0.57 // reduced motion: lamps on, sonar quiet
+
+// [c, azimuth°, elevation°, distance at 19° (m), target x, y, z, view shift x, y]
+const CAM_PIN = [
+  [-1.0, -62, 17, 23.5, 0.06, -0.12, 0, 1, 1],
+  [0.0, -40, 13, 21.5, 0.06, -0.12, 0, 1, 1],
+  [0.2, -8, 7, 20.2, 0.06, -0.12, 0, 1, 1],
+  [0.42, 26, 2, 19.4, 0.06, -0.12, 0, 1, 1],
+  [0.6, 42, 1, 19.4, 0.06, -0.12, 0, 1, 1],
+  [0.69, 31, 14, 17.8, 0.62, -0.46, 0, 1.38, 1.4],
+  [TAIL, 27, 15, 17.2, 0.68, -0.5, 0, 1.38, 1.4],
+  [1.0, 24, 15, 17.2, 0.68, -0.5, 0, 1.38, 1.4],
+]
+const CAM_STACK = [
+  [-0.6, -38, 12, 21.0, 0.06, -0.12, 0, 0, 0],
+  [0.0, -30, 10, 19.5, 0.06, -0.12, 0, 0, 0],
+  [0.2, 0, 6, 18.8, 0.06, -0.12, 0, 0, 0],
+  [0.42, 30, 2, 18.4, 0.06, -0.12, 0, 0, 0],
+  [0.6, 42, 1, 18.8, 0.06, -0.12, 0, 0, 0],
+  [0.74, 28, 14, 15.4, 0.6, -0.32, 0, 0, 0],
+]
+// the plate's side elevation, in metres: left, top, width (see elevationSVG)
+const SVG_X0 = -2.55
+const SVG_Y0 = 1.72
+const SVG_W = 5.15
+const TAN_19 = Math.tan((19 * DEG) / 2)
 
 function sampleKeys(keys, p) {
   const n = keys.length
@@ -1328,24 +1638,40 @@ export function init(ctx) {
   const canvas = $('.vessel__canvas')
   const title = $('.vessel__title')
   const copy = $('.vessel__copy')
+  const actsEl = $('.vessel__acts')
+  const grab = $('.vessel__grab')
+  const plate = $('.vessel__plate')
+  const drawing = $('.vessel__drawing')
   const actEls = [...root.querySelectorAll('.vessel__act')]
   const fillEls = actEls.map((a) => a.querySelector('.vessel__act-fill'))
+  const textEls = actEls.map((a) => a.querySelector('.vessel__act-text'))
   const leaders = $('.vessel__leaders')
-  const reduced = ctx.reducedMotion
-  let mobile = ctx.isMobile()
-
-  if (reduced) {
-    root.classList.add('vessel--static')
-    actEls.forEach((a, i) => a.classList.toggle('is-active', i === actEls.length - 1))
+  // the copy scrolls on during the hand-off; its children move rather than
+  // the column, so the column never becomes a stacking context of its own
+  // (the title stays under the 3D view, the lead and acts above it)
+  const copyKids = [title, $('.vessel__lead'), actsEl]
+  const setCopyY = (y) => {
+    const t = y > 0 ? `translate3d(0, ${(-y).toFixed(1)}px, 0)` : ''
+    for (const el of copyKids) el.style.transform = t
   }
+  const reduced = ctx.reducedMotion
+  const touch = ctx.isTouch
+  const mobile = ctx.isMobile()
+  let stacked = true
+  let pinned = false
+
+  if (reduced) root.classList.add('vessel--static')
 
   /* ---- 2D: the plate drawing, always */
   $('.vessel__elevation').innerHTML = elevationSVG('plate')
 
   /* ---- 3D, if the browser can */
+  const maxDpr = mobile ? Math.min(ctx.dpr, 1.25) : Math.min(ctx.dpr, 1.5)
+  let dprNow = Math.min(maxDpr, 1.25)
   let gl = null
   try {
-    gl = createVesper(canvas, { dpr: mobile ? Math.min(ctx.dpr, 1.25) : ctx.dpr, mobile })
+    if (new URLSearchParams(location.search).has('nogl')) throw new Error('nogl')
+    gl = createVesper(canvas, { dpr: dprNow, maxDpr, mobile })
   } catch (err) {
     console.warn('[vessel] WebGL unavailable, showing the drawing instead', err)
     gl = null
@@ -1362,15 +1688,19 @@ export function init(ctx) {
     noGL()
   })
 
-  /* ---- callouts: DOM + leader paths */
+  /* ---- callouts: DOM + leader paths. Two at most per act; an act's labels
+     leave as the next act's arrive. */
   const SVGNS = 'http://www.w3.org/2000/svg'
   const CALLOUTS = {
-    sphere: { win: [0.07, 0.42], side: 1, place: 'below', run: 0.035 },
-    rated: { win: [0.15, 0.4], side: 1, place: 'above', run: 0.04 },
-    foam: { win: [0.42, 0.72], side: 1, place: 'above', run: 0.035 },
-    viewports: { win: [0.48, 0.82], side: 1, place: 'below', run: 0.035 },
-    lamps: { win: [0.64, 1.01], side: 1, place: 'above', run: 0.035 },
+    sphere: { win: [-0.3, 0.2], side: 1, place: 'below', run: 0.035 },
+    rated: { win: [0.06, 0.2], side: 1, place: 'above', run: 0.04 },
+    foam: { win: [0.24, 0.42], side: 1, place: 'above', run: 0.035 },
+    viewports: { win: [0.3, 0.42], side: 1, place: 'below', run: 0.035 },
+    lamps: { win: [0.47, 0.6], side: 1, place: 'above', run: 0.035 },
+    cabin: { win: [0.665, TAIL - 0.012], side: 1, place: 'below', run: 0.03, near: 205 },
+    wall: { win: [0.685, TAIL - 0.012], side: -1, place: 'above', run: 0.03, near: 110 },
   }
+  const STATIC_KEYS = new Set(['sphere', 'lamps'])
   const callouts = [...root.querySelectorAll('.vessel__callout')].map((el) => {
     const key = el.dataset.key
     const path = document.createElementNS(SVGNS, 'path')
@@ -1382,31 +1712,63 @@ export function init(ctx) {
     halo.setAttribute('class', 'vessel__halo')
     halo.setAttribute('r', '9')
     leaders.append(path, halo, dot)
-    return { el, key, cfg: CALLOUTS[key], path, dot, halo, v: 0, on: false, tw: null, w: 0, pt: { x: 0, y: 0, facing: 1 } }
+    return { el, key, cfg: CALLOUTS[key], path, dot, halo, v: 0, on: false, tw: null, w: 0, hidden: true, pt: { x: 0, y: 0, facing: 1 } }
   })
   const bounds = { minX: 24, maxX: 1000 }
+  let calloutsOn = false
   const measureCallouts = () => {
+    calloutsOn = !!gl && (!stacked || view.clientWidth >= 1024)
+    if (!calloutsOn) return
     callouts.forEach((c) => {
       c.w = Math.max(c.el.querySelector('.vessel__callout-title').offsetWidth, c.el.querySelector('.vessel__callout-sub').offsetWidth)
       c.el.style.width = c.w + 'px'
     })
-    const lead = copy.querySelector('.vessel__lead').getBoundingClientRect()
-    const acts = copy.querySelector('.vessel__acts').getBoundingClientRect()
     const vr = view.getBoundingClientRect()
-    bounds.minX = Math.max(24, Math.max(lead.right, acts.right) - vr.left + 32)
     const rail = parseFloat(getComputedStyle(copy).paddingLeft) || 24
+    if (stacked) bounds.minX = rail
+    else {
+      const lead = copy.querySelector('.vessel__lead').getBoundingClientRect()
+      const acts = actsEl.getBoundingClientRect()
+      bounds.minX = Math.max(24, Math.max(lead.right, acts.right) - vr.left + 32)
+    }
     bounds.maxX = vr.width - rail - (window.innerWidth >= 1024 ? 72 : 0) - 12
   }
 
+  /* ---- the act sentences share one slot: reserve the tallest */
+  const measureActs = () => {
+    if (stacked) {
+      actsEl.style.removeProperty('--act-h')
+      return
+    }
+    const h = Math.max(...textEls.map((t) => t.offsetHeight))
+    actsEl.style.setProperty('--act-h', h + 'px')
+  }
+
+  /* ---- where the plate's drawing will be when the pin lets go (stage px) */
+  const handoff = { left: 0, top: 0, w: 0 }
+  const measureHandoff = () => {
+    handoff.w = 0
+    if (!pinned) return
+    const svg = drawing.querySelector('svg')
+    const pr = plate.getBoundingClientRect()
+    const sr = svg.getBoundingClientRect()
+    const vr = view.getBoundingClientRect()
+    handoff.left = sr.left - vr.left
+    handoff.top = sr.top - pr.top
+    handoff.w = sr.width
+  }
+
   /* ---- state */
-  const S = { p: 0, target: 0, yaw: 0, yawT: 0, mx: 0, my: 0, mxT: 0, myT: 0 }
+  const S = { c: -1, target: -1, pre: 0, pin: 0, hand: 0, yaw: 0, yawT: 0, mx: 0, my: 0, mxT: 0, myT: 0 }
   let time = 0
   let active = false
   let dirty = true
+  let blank = false
   let sonarDone = false
   const banks = [{ v: 0, on: false }, { v: 0, on: false }, { v: 0, on: false }]
   let lastAct = -1
   let lastFill = -1
+  const shift = { x: 0.11, y: 0.045 }
 
   const setBank = (b, on) => {
     if (b.on === on) return
@@ -1426,30 +1788,67 @@ export function init(ctx) {
     } else gsap.to(b, { v: 0, duration: 0.35, ease: 'power2.out' })
   }
 
-  function stateAt(p) {
+  function camAt(c, e) {
+    const k = sampleKeys(stacked ? CAM_STACK : CAM_PIN, c)
+    const { W, H } = gl.sizeInfo()
+    let dist = k[2]
+    // narrower views see less of her length: step back
+    if (stacked) dist *= clamp(1.25 / (W / H), 1, 1.9)
+    else dist *= clamp(1.6 / (W / H), 1, 1.3)
+    const cam = { az: k[0], el: k[1], f: H / 2 / (dist * TAN_19), fov: 19, tx: k[3], ty: k[4], tz: k[5], sx: k[6] * shift.x, sy: k[7] * shift.y }
+    if (e > 0 && handoff.w > 0) {
+      // a true side elevation, lined up with the drawing on the plate:
+      // a dolly-zoom flattens the perspective into orthographic
+      const f = handoff.w / SVG_W
+      cam.az = lerp(cam.az, 0, e)
+      cam.el = lerp(cam.el, 0, e)
+      cam.f = lerp(cam.f, f, e)
+      cam.fov = lerp(19, 4.5, e)
+      cam.tx = lerp(cam.tx, SVG_X0 + (W / 2 - handoff.left) / f, e)
+      cam.ty = lerp(cam.ty, SVG_Y0 - (H / 2 - handoff.top) / f, e)
+      cam.tz = lerp(cam.tz, 0, e)
+      cam.sx = lerp(cam.sx, 0, e)
+      cam.sy = lerp(cam.sy, 0, e)
+    }
+    return cam
+  }
+
+  function stateAt(c) {
+    const p = Math.max(0, c)
+    const e = pinned ? ease(range(p, ELEV[0], ELEV[1])) : 0
+    const dissolve = pinned ? ease(range(p, DISSOLVE[0], DISSOLVE[1])) : 0
+    const lampsOut = Math.max(0.6 * range(p, 0.6, 0.67), pinned ? range(p, 0.79, 0.87) : 0)
+    const still = reduced ? 0 : 1 - e
+    const cam = camAt(c, e)
+    cam.az += (S.yaw + S.mx * 3.5) * (1 - e) + (stacked && !reduced ? Math.sin(time * 0.16) * 6 : 0)
+    cam.el += -S.my * 2 * (1 - e)
     return {
-      draw: range(p, 0.0, 0.27) * 1.2,
-      build: ease(range(p, 0.29, 0.56)),
-      wire: (1 - 0.88 * range(p, 0.46, 0.64)) * (1 - range(p, 0.62, 0.8)),
-      cabin: range(p, 0.5, 0.62),
-      banks: banks.map((b) => b.v),
-      cam: sampleKeys(mobile ? CAM_MOBILE : CAM_DESKTOP, p),
-      bob: reduced ? 0 : Math.sin(time * 0.42) * 0.035,
-      roll: reduced ? 0 : Math.sin(time * 0.31 + 1.2) * 0.008,
+      draw: c < 0 ? 0.42 * ease(range(c, -0.85, -0.03)) : 0.42 + 0.8 * range(p, 0, 0.2),
+      build: ease(range(p, 0.2, 0.4)) * (1 - dissolve),
+      wire: Math.max((1 - 0.88 * range(p, 0.3, 0.44)) * (1 - range(p, 0.42, 0.56)), range(p, DISSOLVE[0], 0.96)) * (1 - S.hand),
+      glow: ease(range(c, -0.8, -0.25)) * (1 - range(p, 0.18, 0.36)),
+      ports: range(p, 0.32, 0.42),
+      cabin: range(p, 0.62, 0.7),
+      cut: p >= CUT_AT[0] ? lerp(0.95, 0, ease(range(p, CUT_AT[0], CUT_AT[1]))) : 9,
+      banks: banks.map((b) => b.v * (1 - lampsOut)),
+      cam,
+      bob: Math.sin(time * 0.42) * 0.035 * still,
+      roll: Math.sin(time * 0.31 + 1.2) * 0.008 * still,
     }
   }
 
   /* ---- DOM, per frame (cheap writes only when values change) */
-  function updateDOM(p) {
-    if (mobile || reduced) return
-    const fill = range(p, 0.29, 0.56)
+  function updateDOM(c) {
+    if (stacked) return
+    const p = Math.max(0, c)
+    const fill = range(p, 0.2, 0.4)
     const f = Math.round(fill * 1000) / 1000
     if (f !== lastFill) {
       lastFill = f
       title.style.setProperty('--fill', f.toFixed(3))
-      title.style.setProperty('--stroke', (1 - range(p, 0.5, 0.6)).toFixed(3))
+      title.style.setProperty('--stroke', (1 - range(p, 0.36, 0.44)).toFixed(3))
     }
-    const act = p < ACTS[1][0] ? 0 : p < ACTS[2][0] ? 1 : 2
+    const act = p < ACTS[1][0] ? 0 : p < ACTS[2][0] ? 1 : p < ACTS[3][0] ? 2 : 3
     if (act !== lastAct) {
       lastAct = act
       actEls.forEach((a, i) => a.classList.toggle('is-active', i === act))
@@ -1459,92 +1858,149 @@ export function init(ctx) {
 
   const pt = { x: 0, y: 0, facing: 1 }
   const box = { l: 0, r: 0, t: 0, b: 0 }
-  function updateCallouts(p) {
-    if (!gl || mobile) return
+  const live = []
+  const hideCallout = (co) => {
+    if (co.hidden) return
+    co.hidden = true
+    co.el.style.opacity = '0'
+    co.path.style.opacity = co.dot.style.opacity = co.halo.style.opacity = '0'
+  }
+  /** Do two leaders (anchor → elbow → shelf) cross? */
+  const crosses = (a, b) => {
+    const hit = (o, q) => {
+      // o's diagonal against q's shelf
+      const y = q.ey
+      if ((o.ay - y) * (o.ey - y) > 0 || o.ay === o.ey) return false
+      const x = o.ax + ((o.ex - o.ax) * (y - o.ay)) / (o.ey - o.ay)
+      return x > Math.min(q.ex, q.end) - 4 && x < Math.max(q.ex, q.end) + 4
+    }
+    return hit(a, b) || hit(b, a)
+  }
+  function updateCallouts(c) {
+    if (!gl || !calloutsOn) return
     const { W, H } = gl.sizeInfo()
     const { minX, maxX } = bounds
-    gl.screenBox(box)
-    const taken = []
-    for (const c of callouts) {
-      const on = reduced ? c.key !== 'rated' && c.key !== 'foam' : p >= c.cfg.win[0] && p < c.cfg.win[1]
-      if (on !== c.on) {
-        c.on = on
-        c.tw?.kill()
-        if (reduced) c.v = on ? 1 : 0
-        else c.tw = gsap.to(c, { v: on ? 1 : 0, duration: on ? 1.1 : 0.45, ease: on ? 'power3.out' : 'power2.in' })
+    live.length = 0
+    for (const co of callouts) {
+      const on = reduced ? STATIC_KEYS.has(co.key) : c >= co.cfg.win[0] && c < co.cfg.win[1]
+      if (on !== co.on) {
+        co.on = on
+        co.tw?.kill()
+        if (reduced) co.v = on ? 1 : 0
+        else co.tw = gsap.to(co, { v: on ? 1 : 0, duration: on ? 1.1 : 0.45, ease: on ? 'power3.out' : 'power2.in' })
       }
-      if (c.v <= 0.001) {
-        c.el.style.opacity = '0'
-        c.path.style.opacity = c.dot.style.opacity = c.halo.style.opacity = '0'
+      if (co.v <= 0.001) {
+        hideCallout(co)
         continue
       }
-      gl.project(c.key, c.pt)
-      const face = clamp((c.pt.facing + 0.05) / 0.3)
-      const vis = c.v * face
-      const ax = c.pt.x
-      const ay = c.pt.y
-      let side = c.cfg.side
-      const run = c.cfg.run * W
-      let ex = ax + side * run
-      const up = c.cfg.place === 'above'
-      let ey = up ? Math.min(ay, box.t) - 46 : Math.max(ay, box.b) + 40
-      if (side > 0 && ex + c.w + 12 > maxX) side = -1
-      if (side < 0 && ex - c.w - 12 < minX) side = 1
-      ex = ax + side * run
-      // keep labels that are on at the same time from landing on each other
-      const lx0 = side > 0 ? ex : ex - c.w - 14
-      const lx1 = lx0 + c.w + 14
-      if (c.on) {
-        for (let k = 0; k < 4; k++) {
-          const hit = taken.find((q) => lx0 < q.x1 + 16 && lx1 > q.x0 - 16 && Math.abs(ey - q.y) < 56)
-          if (!hit) break
-          ey = up ? hit.y - 58 : hit.y + 58
-        }
-        taken.push({ x0: lx0, x1: lx1, y: ey })
-      }
-      ey = clamp(ey, 84, H - 56)
-      const end = ex + side * (c.w + 14)
-      const d = `M${ax.toFixed(1)} ${ay.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}L${end.toFixed(1)} ${ey.toFixed(1)}`
-      c.path.setAttribute('d', d)
-      const len = Math.hypot(ex - ax, ey - ay) + Math.abs(end - ex)
-      c.path.style.strokeDasharray = `${len.toFixed(1)} ${len.toFixed(1)}`
-      c.path.style.strokeDashoffset = (len * (1 - c.v)).toFixed(1)
-      c.path.style.opacity = face.toFixed(3)
-      c.dot.setAttribute('cx', ax.toFixed(1))
-      c.dot.setAttribute('cy', ay.toFixed(1))
-      c.halo.setAttribute('cx', ax.toFixed(1))
-      c.halo.setAttribute('cy', ay.toFixed(1))
-      c.dot.style.opacity = vis.toFixed(3)
-      c.halo.style.opacity = (vis * (0.55 + 0.45 * Math.sin(time * 2.2 + ax * 0.01))).toFixed(3)
-      c.el.style.opacity = clamp((vis - 0.25) / 0.75).toFixed(3)
-      c.el.style.transform = `translate3d(${(side > 0 ? ex + 7 : ex - 7 - c.w).toFixed(1)}px, ${ey.toFixed(1)}px, 0)`
-      c.el.style.setProperty('--reveal', clamp((c.v - 0.35) / 0.65).toFixed(3))
-      c.el.dataset.side = side > 0 ? 'r' : 'l'
+      gl.project(co.key, co.pt)
+      co.face = clamp((co.pt.facing + 0.05) / 0.3)
+      co.ax = co.pt.x
+      co.ay = co.pt.y
+      co.up = co.cfg.place === 'above'
+      const near = co.cfg.near
+      co.ey = near ? co.ay + (co.up ? -near : near) : co.up ? Math.min(co.ay, box.t) - 46 : Math.max(co.ay, box.b) + 40
+      let side = co.cfg.side
+      const run = co.cfg.run * W
+      if (side > 0 && co.ax + run + co.w + 12 > maxX) side = -1
+      if (side < 0 && co.ax - run - co.w - 12 < minX) side = 1
+      co.side = side
+      co.ex = co.ax + side * run
+      co.end = co.ex + side * (co.w + 14)
+      co.x0 = Math.min(co.ex, co.end)
+      co.x1 = Math.max(co.ex, co.end)
+      live.push(co)
     }
+    // collision pass: labels on the same side of her keep 72 px between
+    // baselines, and leaders never cross (swap shelves, else flip a side)
+    for (const up of [true, false]) {
+      const g = live.filter((o) => o.up === up).sort((a, b) => (up ? b.ey - a.ey : a.ey - b.ey))
+      for (let i = 1; i < g.length; i++) {
+        for (let j = 0; j < i; j++) {
+          const a = g[j]
+          const b = g[i]
+          if (b.x0 < a.x1 + 16 && b.x1 > a.x0 - 16 && Math.abs(b.ey - a.ey) < 72) b.ey = up ? a.ey - 72 : a.ey + 72
+          if (crosses(a, b)) {
+            ;[a.ey, b.ey] = [b.ey, a.ey]
+            if (crosses(a, b)) {
+              ;[a.ey, b.ey] = [b.ey, a.ey]
+              b.side = -b.side
+              b.ex = b.ax + b.side * b.cfg.run * W
+              b.end = b.ex + b.side * (b.w + 14)
+            }
+          }
+        }
+      }
+    }
+    for (const co of live) {
+      co.hidden = false
+      const vis = co.v * co.face
+      const { ax, ay, side, ex } = co
+      const ey = clamp(co.ey, 84, H - 56)
+      const end = co.end
+      const d = `M${ax.toFixed(1)} ${ay.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}L${end.toFixed(1)} ${ey.toFixed(1)}`
+      co.path.setAttribute('d', d)
+      const len = Math.hypot(ex - ax, ey - ay) + Math.abs(end - ex)
+      co.path.style.strokeDasharray = `${len.toFixed(1)} ${len.toFixed(1)}`
+      co.path.style.strokeDashoffset = (len * (1 - co.v)).toFixed(1)
+      co.path.style.opacity = co.face.toFixed(3)
+      co.dot.setAttribute('cx', ax.toFixed(1))
+      co.dot.setAttribute('cy', ay.toFixed(1))
+      co.halo.setAttribute('cx', ax.toFixed(1))
+      co.halo.setAttribute('cy', ay.toFixed(1))
+      co.dot.style.opacity = vis.toFixed(3)
+      co.halo.style.opacity = (vis * (0.55 + 0.45 * Math.sin(time * 2.2 + ax * 0.01))).toFixed(3)
+      co.el.style.opacity = clamp((vis - 0.25) / 0.75).toFixed(3)
+      co.el.style.transform = `translate3d(${(side > 0 ? ex + 7 : ex - 7 - co.w).toFixed(1)}px, ${ey.toFixed(1)}px, 0)`
+      co.el.style.setProperty('--reveal', clamp((co.v - 0.35) / 0.65).toFixed(3))
+      co.el.dataset.side = side > 0 ? 'r' : 'l'
+    }
+  }
+
+  /* ---- the drag handle covers her, and only once she is there to turn */
+  const grabbable = () => !!gl && !reduced && !touch && !stacked
+  const gr = { l: 0, t: 0, w: 0, h: 0, on: false }
+  const sbox = { l: 0, r: 0, t: 0, b: 0 }
+  function updateGrab(c) {
+    const on = grabbable() && c > -0.15 && c < TAIL - 0.03
+    if (on !== gr.on) {
+      gr.on = on
+      grab.classList.toggle('is-on', on)
+    }
+    if (!on) return
+    const b = c < 0.08 ? gl.sphereBox(sbox) : box
+    const pad = 12
+    const l = Math.round(b.l - pad)
+    const t = Math.round(b.t - pad)
+    const w = Math.round(b.r - b.l + pad * 2)
+    const h = Math.round(b.b - b.t + pad * 2)
+    if (Math.abs(l - gr.l) + Math.abs(t - gr.t) + Math.abs(w - gr.w) + Math.abs(h - gr.h) < 3) return
+    Object.assign(gr, { l, t, w, h })
+    grab.style.transform = `translate3d(${l}px, ${t}px, 0)`
+    grab.style.width = w + 'px'
+    grab.style.height = h + 'px'
   }
 
   /* ---- sizing */
   function resize() {
-    mobile = ctx.isMobile()
-    root.classList.toggle('vessel--mobile', mobile)
     if (!gl) return
     const r = view.getBoundingClientRect()
-    // desktop: Vesper sits right of centre, clear of the copy column
-    const sx = mobile ? 0 : r.width >= 1200 ? 0.11 : 0.13
-    const sy = mobile ? 0 : 0.045
-    gl.setSize(Math.round(r.width), Math.round(r.height), sx, sy)
+    shift.x = stacked ? 0 : r.width >= 1200 ? 0.11 : r.width >= 1100 ? 0.13 : 0.15
+    shift.y = stacked ? 0 : 0.045
+    gl.setSize(Math.round(r.width), Math.round(r.height))
     measureCallouts()
     dirty = true
   }
   const ro = new ResizeObserver(() => resize())
   ro.observe(view)
-  resize()
 
-  /* ---- render only while on screen */
+  /* ---- render only while on screen, and give the memory back when not */
   const io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) active = e.isIntersecting
+      if (gl) active ? gl.wake() : gl.sleep()
       dirty = true
+      blank = false
     },
     { rootMargin: '10% 0px' },
   )
@@ -1552,23 +2008,71 @@ export function init(ctx) {
   document.addEventListener('visibilitychange', () => (dirty = true))
 
   /* ---- scroll */
+  const strokes = () => {
+    const svg = drawing.querySelector('svg')
+    const els = [...svg.querySelectorAll('.ve-sphere, .ve-port, .ve-cap, .ve-hull, .ve-part, .ve-dim path')]
+    // from the sphere outward, the way the lines plan was drawn
+    const cx = (SPHERE.x - SVG_X0) * 100
+    const cy = (SVG_Y0 - SPHERE.y) * 100
+    const d = new Map()
+    for (const el of els) {
+      let b
+      try {
+        b = el.getBBox()
+      } catch {
+        b = { x: cx, y: cy, width: 0, height: 0 }
+      }
+      const rx = Math.max(b.x - cx, 0, cx - (b.x + b.width))
+      const ry = Math.max(b.y - cy, 0, cy - (b.y + b.height))
+      d.set(el, Math.hypot(rx, ry) + (el.closest('.ve-dim') ? 400 : 0))
+    }
+    return els.sort((a, b) => d.get(a) - d.get(b))
+  }
+  const syncTarget = () => (S.target = S.pre - 1 + S.pin)
   const mm = gsap.matchMedia()
-  mm.add({ desktop: '(min-width: 768px)', mobile: '(max-width: 767px)' }, (c) => {
+  mm.add({ pin: PIN_MQ, any: '(min-width: 0px)' }, (mc) => {
+    pinned = !!mc.conditions.pin && !reduced && !!gl
+    stacked = !pinned
+    root.classList.toggle('vessel--stack', stacked)
+    root.classList.toggle('vessel--pinned', pinned)
+    lastAct = lastFill = -1
+    if (stacked) actEls.forEach((a) => a.classList.add('is-active'))
+    resize()
+    measureActs()
+
     if (reduced) {
-      S.p = S.target = 0.9
+      S.c = S.target = STATIC_C
       banks.forEach((b) => setBank(b, true))
       dirty = true
-      return
+      return () => actEls.forEach((a) => a.classList.remove('is-active'))
     }
-    if (c.conditions.desktop) {
+
+    if (pinned) {
+      const stageH = () => stage.offsetHeight
+      // the copy scrolls on with the page while she holds for the hand-off
+      const tailY = (self) => Math.max(0, self.progress * (self.end - self.start) - (self.end - self.start - stageH()))
       ScrollTrigger.create({
         trigger: stage,
+        start: 'top 80%',
+        end: 'top top',
+        onUpdate: (self) => {
+          S.pre = self.progress
+          syncTarget()
+        },
+      })
+      const pinST = ScrollTrigger.create({
+        trigger: stage,
         start: 'top top',
-        end: () => '+=' + Math.round(window.innerHeight * 3.3),
+        end: () => '+=' + Math.round(stageH() * PIN_LEN),
         pin: true,
         anticipatePin: 1,
         invalidateOnRefresh: true,
-        onUpdate: (self) => (S.target = self.progress),
+        onUpdate: (self) => {
+          S.pin = self.progress
+          syncTarget()
+          setCopyY(tailY(self))
+        },
+        onRefresh: (self) => setCopyY(tailY(self)),
       })
       // the title is squeezed by pressure as it arrives
       gsap.fromTo(
@@ -1576,32 +2080,55 @@ export function init(ctx) {
         { '--squeeze': 1 },
         { '--squeeze': 0, ease: 'none', scrollTrigger: { trigger: root, start: 'top 90%', end: 'top top', scrub: true } },
       )
-    } else {
-      ScrollTrigger.create({
-        trigger: view,
-        start: 'top 78%',
-        end: 'bottom 62%',
-        onUpdate: (self) => (S.target = self.progress),
+      // hand-off: once the drawing lies exactly over her, it draws itself
+      // from the sphere outward while the 3D lines let go
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: plate,
+          start: () => pinST.end,
+          end: () => pinST.end + Math.round(window.innerHeight * 0.42),
+          scrub: true,
+          invalidateOnRefresh: true,
+          onUpdate: (self) => (S.hand = self.progress),
+        },
       })
+      tl.fromTo(drawing, { '--draw-a': 0 }, { '--draw-a': 1, duration: 0.12, ease: 'none' }, 0)
+      tl.fromTo(strokes(), { drawSVG: '0%' }, { drawSVG: '100%', duration: 0.42, ease: 'none', stagger: { amount: 0.4 } }, 0.02)
+      tl.fromTo(drawing, { '--cap-a': 0 }, { '--cap-a': 1, duration: 0.3, ease: 'none' }, 0.7)
+      return () => {
+        setCopyY(0)
+        S.pre = S.pin = S.hand = 0
+      }
     }
-    // the plate drawing is traced as it comes up
-    const strokes = root.querySelectorAll('.vessel__elevation .ve-hull, .vessel__elevation .ve-cap, .vessel__elevation .ve-part, .vessel__elevation .ve-sphere, .vessel__elevation .ve-port, .vessel__elevation .ve-dim path')
+
+    // stacked: one pass while the view crosses the screen
+    ScrollTrigger.create({
+      trigger: view,
+      start: 'top 78%',
+      end: 'bottom 62%',
+      onUpdate: (self) => {
+        S.target = lerp(STACK_RANGE[0], STACK_RANGE[1], self.progress)
+      },
+    })
+    S.target = Math.max(S.target, STACK_RANGE[0])
     gsap.fromTo(
-      strokes,
+      strokes(),
       { drawSVG: '0%' },
-      { drawSVG: '100%', ease: 'none', stagger: 0.012, scrollTrigger: { trigger: '.vessel__drawing', start: 'top 85%', end: 'bottom 60%', scrub: true } },
+      { drawSVG: '100%', ease: 'none', stagger: 0.012, scrollTrigger: { trigger: drawing, start: 'top 85%', end: 'bottom 60%', scrub: true } },
     )
+    return () => actEls.forEach((a) => a.classList.remove('is-active'))
+  })
+  if (!reduced) {
     const rows = root.querySelectorAll('.vessel__spec')
     gsap.fromTo(
       rows,
       { '--rule': 0 },
       { '--rule': 1, ease: 'none', stagger: 0.06, scrollTrigger: { trigger: '.vessel__specs', start: 'top 85%', end: 'bottom 70%', scrub: true } },
     )
-  })
+  }
 
-  /* ---- pointer: a little parallax, and drag to turn her (desktop only) */
-  if (reduced || ctx.isTouch || !gl) view.removeAttribute('data-cursor')
-  if (!reduced && !ctx.isTouch) {
+  /* ---- pointer: a little parallax, and drag to turn her (fine pointers) */
+  if (!reduced && !touch) {
     window.addEventListener(
       'pointermove',
       (e) => {
@@ -1612,14 +2139,14 @@ export function init(ctx) {
       { passive: true },
     )
     let drag = null
-    view.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'mouse' || e.button !== 0 || mobile || !gl) return
+    grab.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0 || !grabbable()) return
       drag = { x: e.clientX, yaw: S.yawT }
-      view.setPointerCapture(e.pointerId)
+      grab.setPointerCapture(e.pointerId)
       view.classList.add('is-dragging')
       gsap.killTweensOf(S, 'yawT')
     })
-    view.addEventListener('pointermove', (e) => {
+    grab.addEventListener('pointermove', (e) => {
       if (!drag) return
       S.yawT = clamp(drag.yaw + (e.clientX - drag.x) * 0.28, -140, 140)
     })
@@ -1629,27 +2156,31 @@ export function init(ctx) {
       view.classList.remove('is-dragging')
       gsap.to(S, { yawT: 0, duration: 2.4, ease: 'power3.inOut', delay: 0.6 })
     }
-    view.addEventListener('pointerup', release)
-    view.addEventListener('pointercancel', release)
+    grab.addEventListener('pointerup', release)
+    grab.addEventListener('pointercancel', release)
   }
 
-  /* ---- adaptive resolution: step down if frames run long */
-  const baseDpr = mobile ? Math.min(ctx.dpr, 1.25) : ctx.dpr
-  let dprNow = baseDpr
+  /* ---- adaptive resolution: start modest, step up while frames are fast,
+     step down (for good) if they run long */
   let slow = 0
+  let fast = 0
   let frames = 0
+  let settled = false
   const watchFrame = (dt) => {
-    if (reduced || dprNow <= 1) return
+    if (reduced || !gl || maxDpr <= 1) return
     frames++
     if (dt > 1 / 40) slow++
-    if (frames >= 90) {
-      if (slow > 45) {
-        dprNow = Math.max(1, dprNow - 0.25)
-        gl?.renderer.setPixelRatio(dprNow)
-        resize()
-      }
-      frames = slow = 0
+    else if (dt < 1 / 55) fast++
+    if (frames < 90) return
+    if (slow > 45 && dprNow > 1) {
+      dprNow = Math.max(1, dprNow - 0.25)
+      settled = true
+      gl.setDpr(dprNow)
+    } else if (!settled && fast > 80 && dprNow < maxDpr) {
+      dprNow = Math.min(maxDpr, dprNow + 0.25)
+      gl.setDpr(dprNow)
     }
+    frames = slow = fast = 0
   }
 
   /* ---- frame loop */
@@ -1662,37 +2193,45 @@ export function init(ctx) {
     if (reduced && !dirty) return
     dirty = false
     time += dt
-    const k = 1 - Math.exp(-dt * 6.5)
-    S.p += (S.target - S.p) * k
+    const k = 1 - Math.exp(-dt * 7.5)
+    S.c += (S.target - S.c) * k
+    if (Math.abs(S.target - S.c) < 1e-4) S.c = S.target
     S.yaw += (S.yawT - S.yaw) * (1 - Math.exp(-dt * 8))
     S.mx += (S.mxT - S.mx) * (1 - Math.exp(-dt * 2.5))
     S.my += (S.myT - S.my) * (1 - Math.exp(-dt * 2.5))
-    const p = S.p
+    const c = S.c
 
-    for (let i = 0; i < 3; i++) setBank(banks[i], p >= BANKS_AT[i])
-    updateDOM(p)
+    for (let i = 0; i < 3; i++) setBank(banks[i], c >= BANKS_AT[i])
+    updateDOM(c)
     if (!gl) return
-    const st = stateAt(p)
-    st.cam[0] += S.yaw + S.mx * 3.5 + (mobile && !reduced ? Math.sin(time * 0.16) * 9 : 0)
-    st.cam[1] += -S.my * 2
+    const st = stateAt(c)
+    // after the hand-off there is nothing left to draw: clear once, then rest
+    const empty = st.build < 0.001 && (st.wire < 0.003 || st.draw < 0.001) && st.glow < 0.002
+    if (empty && blank) return
+    blank = empty
     gl.update(st, time)
     gl.render()
     watchFrame(dt)
-    updateCallouts(p)
+    if (!empty) gl.screenBox(box)
+    updateCallouts(c)
+    updateGrab(empty ? -9 : c)
 
-    if (!sonarDone && !reduced && p >= SONAR_AT) {
+    if (!sonarDone && !reduced && c >= SONAR_AT && c < TAIL) {
       sonarDone = true
       const r = view.getBoundingClientRect()
-      const c = gl.project('lamps', pt)
-      ctx.emit('sonar', { x: r.left + c.x, y: r.top + c.y, strength: 0.5 })
+      const s = gl.project('lamps', pt)
+      ctx.emit('sonar', { x: r.left + s.x, y: r.top + s.y, strength: 0.5 })
     }
   }
   gsap.ticker.add(frame)
 
-  updateDOM(0)
+  updateDOM(S.c)
   ScrollTrigger.addEventListener('refresh', () => {
     measureCallouts()
+    measureActs()
+    measureHandoff()
     dirty = true
+    blank = false
   })
   if (gl) gl.warm().then(() => (dirty = true))
 }

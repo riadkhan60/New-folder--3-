@@ -1,33 +1,43 @@
 /**
  * creatures.js — #life (4,000 → 6,000 m). Lights off.
  *
- * A sticky, near-black stage. In the dark you only see what glows: the
- * Atolla's ring, an anglerfish lure, the vampire squid's arm tips, a
- * dragonfish's red searchlight, a siphonophore's string of lights. The
- * pointer is the submersible's lamp: a warm cone of light with backscatter
- * in the water, and only inside it do the animals' bodies appear.
+ * A sticky, near-black stage: Vesper's descent log. In the dark you only see
+ * what glows: the Atolla's ring, an anglerfish lure, the vampire squid's arm
+ * tips, a dragonfish's red searchlight, a siphonophore's string of lights.
+ * The pointer is the submersible's lamp: a cool white cone through the water,
+ * marine snow streaking through it, and only inside it do the bodies appear.
+ *
+ * Art direction: bioluminescence photography, not illustration. Gelatinous
+ * bodies are clear jelly with a fresnel rim (the edge catches the lamp, the
+ * middle stays see-through); fish are matte black with a rim of light on the
+ * lamp side and small, soft speculars. Long filaments (Atolla's trailing
+ * tentacle, the vampire squid's two velar filaments) hang on verlet chains,
+ * so they lag and swing as the animal moves.
  *
  * Rendering (one 2D canvas, DPR capped):
- *   1. beam + haze           — additive, warm white, from below the frame
+ *   1. beam + backscatter    — additive cool white, from below the frame
  *   2. bodies                — drawn into a small offscreen canvas centred on
- *                              the lamp, tinted warm, masked by the lamp's
- *                              falloff, then composited (so cost scales with
- *                              the lamp, not the stage)
+ *                              the lamp, masked by the lamp's falloff, then
+ *                              composited (cost scales with the lamp)
  *   3. self-light            — the anglerfish's lure lights her own teeth;
  *                              the dragonfish's red lamp tints its jaw
- *   4. marine snow           — particles lit only inside the beam
+ *   4. marine snow           — streaks, lit only inside the beam
  *   5. glow                  — photophores, always visible, additive sprites
- *   6. reticle + leaders     — hairlines to the specimen labels
+ *   6. leader + pips         — one full label at a time; found animals keep
+ *                              only a small pip in their own light
  *
  * The first time the lamp rests on an animal it reacts (the Atolla spins its
  * alarm, the squid sheds glowing mucus and backs away, a wave of light runs
- * down the siphonophore), its specimen label appears and the log counts it.
+ * down the siphonophore), its label appears and the log counts it. When all
+ * six are found the lamp dims, the six lights pulse in the order they were
+ * logged and join up like a constellation, a sonar ping rolls out, and the
+ * lamp flickers back on.
  *
  * Input: pointer (lagging lamp; data-cursor="lamp" on the stage), touch
  * (tap or sideways drag), keyboard (each animal is a real <button>: focus
- * glides the lamp to it), idle (the lamp searches, visiting animals not yet
- * found). Emits ctx.emit('lamp', { on }) as the stage becomes active, and a
- * soft ctx.emit('sonar', …) ping on each discovery.
+ * places its label at once and glides the lamp to it), idle (the lamp
+ * searches, visiting animals not yet found). Only finds the visitor caused
+ * are announced to screen readers.
  *
  * Reduced motion: no sticky stage, one still frame, all labels shown.
  * Renders only while the section is on screen; pauses when the tab is hidden.
@@ -55,8 +65,13 @@ const C = {
   blue: [58, 168, 255],
   lure: [255, 176, 84],
   red: [255, 59, 47],
-  lamp: [255, 240, 220],
+  ink: [234, 246, 244],
+  lamp: [214, 234, 255], // Vesper's LED lamps: a cool white
 }
+// The order Vesper logged them on the way down (see the partial).
+const LOG_ORDER = ['comb', 'squid', 'siphonophore', 'angler', 'dragon', 'atolla']
+
+let SPR = null // sprites, shared with the body renderers
 
 /* ------------------------------------------------------------- sprites */
 function makeSprite(c, size = 64, core = 1) {
@@ -90,9 +105,25 @@ function makeSoft(c, size = 64) {
   g.fillRect(0, 0, size, size)
   return cv
 }
-/* A soft volumetric cone, baked once: gaussian across, widening along its
-   length, brightest where it meets the lit water (u ≈ 0.8). Drawn rotated
-   and stretched from below the frame to the lamp every frame. */
+/* A specular highlight: the lamp reflected in wet skin or jelly. */
+function makeSpec(size = 64) {
+  const cv = document.createElement('canvas')
+  cv.width = cv.height = size
+  const g = cv.getContext('2d')
+  const h = size / 2
+  const grd = g.createRadialGradient(h, h, 0, h, h, h)
+  grd.addColorStop(0, 'rgba(244,250,255,1)')
+  grd.addColorStop(0.22, 'rgba(226,240,255,0.6)')
+  grd.addColorStop(0.55, 'rgba(210,230,255,0.14)')
+  grd.addColorStop(1, 'rgba(210,230,255,0)')
+  g.fillStyle = grd
+  g.fillRect(0, 0, size, size)
+  return cv
+}
+/* The lamp's cone through the water, baked once: flat inside with a
+   defined edge, widening along its length, brightest where it meets the
+   lit water (u ≈ 0.86). Drawn rotated and stretched from below the frame. */
+const BEAM_SPOT = 0.86
 function makeBeam() {
   const W = 256
   const H = 128
@@ -102,16 +133,17 @@ function makeBeam() {
   const g = cv.getContext('2d')
   const img = g.createImageData(W, H)
   for (let j = 0; j < H; j++) {
-    const v = ((j + 0.5) / H) * 2 - 1
+    const v = Math.abs(((j + 0.5) / H) * 2 - 1)
     for (let i = 0; i < W; i++) {
       const u = (i + 0.5) / W
-      const w = 0.05 + 0.95 * u
-      const across = Math.exp(-Math.pow(v / (w * 0.6), 2))
-      const along = Math.pow(smooth(0, 0.8, u), 1.4) * (1 - smooth(0.8, 1, u))
+      const w = 0.035 + 0.965 * (u / BEAM_SPOT)
+      const q = v / w
+      const across = (1 - smooth(0.8, 1.0, q)) * (0.62 + 0.38 * Math.exp(-q * q * 2.2))
+      const along = Math.pow(smooth(0, BEAM_SPOT, u), 1.5) * (1 - smooth(BEAM_SPOT, 1, u))
       const o = (j * W + i) * 4
-      img.data[o] = 255
-      img.data[o + 1] = 238
-      img.data[o + 2] = 214
+      img.data[o] = C.lamp[0]
+      img.data[o + 1] = C.lamp[1]
+      img.data[o + 2] = C.lamp[2]
       img.data[o + 3] = Math.round(255 * across * along)
     }
   }
@@ -123,6 +155,21 @@ function dot(g, spr, x, y, r, a) {
   if (a <= 0.004) return
   g.globalAlpha = a > 1 ? 1 : a
   g.drawImage(spr, x - r, y - r, r * 2, r * 2)
+}
+/* Specular sprite under the current transform; multiplies the alpha. */
+function spec(g, x, y, rx, ry, rot, a) {
+  if (a <= 0.01) return
+  const ga = g.globalAlpha
+  const op = g.globalCompositeOperation
+  g.save()
+  g.translate(x, y)
+  g.rotate(rot)
+  g.globalAlpha = ga * Math.min(1, a)
+  g.globalCompositeOperation = 'lighter'
+  g.drawImage(SPR.spec, -rx, -ry, rx * 2, ry * 2)
+  g.restore()
+  g.globalAlpha = ga
+  g.globalCompositeOperation = op
 }
 
 /* Tapered stroke along a flat [x0,y0,x1,y1,…] polyline, chunked so the
@@ -144,6 +191,33 @@ function taper(g, pts, w0, w1, c, a0, a1, chunk = 5) {
   }
 }
 
+/* Fresnel rim: a body catches the lamp where the eye grazes its surface,
+   so its edge glows and its middle stays clear (jelly) or dark (skin). The
+   current path is stroked three times, wide and faint to thin and bright. */
+function rimLight(g, style, w) {
+  const ga = g.globalAlpha
+  const op = g.globalCompositeOperation
+  g.globalCompositeOperation = 'lighter'
+  g.lineJoin = 'round'
+  g.strokeStyle = style
+  g.globalAlpha = ga * 0.2
+  g.lineWidth = w * 3.6
+  g.stroke()
+  g.globalAlpha = ga
+  g.lineWidth = w
+  g.stroke()
+  g.globalAlpha = ga
+  g.globalCompositeOperation = op
+}
+/* A gradient across a body toward the light: bright on the lamp side. */
+function dirGrad(g, lx, ly, R, c, a1, a0) {
+  const grd = g.createLinearGradient(lx * R, ly * R, -lx * R, -ly * R)
+  grd.addColorStop(0, rgba(c, a1))
+  grd.addColorStop(0.45, rgba(c, (a0 + (a1 - a0) * 0.3).toFixed(3)))
+  grd.addColorStop(1, rgba(c, a0))
+  return grd
+}
+
 /* Closed smooth outline through points (midpoint quadratics). */
 function smoothClosed(g, P) {
   const n = P.length
@@ -157,6 +231,58 @@ function smoothClosed(g, P) {
     g.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
   }
   g.closePath()
+}
+
+/* A hanging filament: verlet points, anchored at one end, with a
+   follow-the-leader length constraint. Positions are in the animal's local
+   units; `mx, my` carries the points back by the animal's own swimming, so
+   the filament stays put in the water and trails behind it. */
+class Chain {
+  constructor(n, seg) {
+    this.n = n
+    this.seg = seg
+    this.p = new Float32Array(n * 2)
+    this.q = new Float32Array(n * 2)
+    this.ready = false
+  }
+  reset(x, y, dx, dy) {
+    const d = Math.hypot(dx, dy) || 1
+    for (let i = 0; i < this.n; i++) {
+      this.p[2 * i] = this.q[2 * i] = x + (dx / d) * this.seg * i
+      this.p[2 * i + 1] = this.q[2 * i + 1] = y + (dy / d) * this.seg * i
+    }
+    this.ready = true
+  }
+  step(ax, ay, mx, my, dt, t, f) {
+    const { p, q, n, seg } = this
+    if (!this.ready) this.reset(ax, ay, f.dx ?? 0.1, f.dy ?? 1)
+    p[0] = q[0] = ax
+    p[1] = q[1] = ay
+    if (dt > 0) {
+      const dt2 = dt * dt
+      const damp = Math.pow(f.damp ?? 0.93, dt * 60)
+      for (let i = 1; i < n; i++) {
+        const o = 2 * i
+        const x = p[o] + mx
+        const y = p[o + 1] + my
+        const vx = (x - q[o] - mx) * damp
+        const vy = (y - q[o + 1] - my) * damp
+        q[o] = x
+        q[o + 1] = y
+        const ph = t * f.w + i * f.k + f.ph
+        p[o] = x + vx + (f.gx + f.sx * Math.sin(ph)) * dt2
+        p[o + 1] = y + vy + (f.gy + f.sy * Math.cos(ph * 0.8)) * dt2
+      }
+    }
+    for (let i = 1; i < n; i++) {
+      const o = 2 * i
+      const dx = p[o] - p[o - 2]
+      const dy = p[o + 1] - p[o - 1]
+      const d = Math.hypot(dx, dy) || 1
+      p[o] = p[o - 2] + (dx / d) * seg
+      p[o + 1] = p[o - 1] + (dy / d) * seg
+    }
+  }
 }
 
 /* ============================================================== animals */
@@ -182,7 +308,10 @@ class Animal {
     this.reticle = -1
     this.lastLit = -99
     this.labelA = 0
+    this.pipA = 0
     this.color = C.cyan
+    this.pox = null
+    this.poy = 0
   }
   layout(cfg, W, H, unit) {
     this.cfg = cfg
@@ -192,6 +321,7 @@ class Animal {
     this.baseY = cfg.y * H
     this.side = cfg.side ?? 1
     this.fade = 0.5 + 0.5 * smooth(0.5, 1, cfg.z)
+    this.pox = null
   }
   shift(dy) {
     this.by = this.baseY + dy * this.z
@@ -220,11 +350,50 @@ class Animal {
     const s = Math.sin(-this.rot)
     return [(dx * c - dy * s) * k, (dx * s + dy * c) * k]
   }
+  /** unit vector (local) toward the light. With the lamp right on the
+   *  animal, it is lit from the camera side: from below, where Vesper is. */
+  ldir(L) {
+    const dx = L.x - this.x
+    const dy = L.y - this.y
+    const d = Math.hypot(dx, dy)
+    const k = Math.min(1, d / (this.radius * this.s * 1.1))
+    let vx = d > 0.01 ? (dx / d) * k : 0
+    let vy = (d > 0.01 ? (dy / d) * k : 0) + (1 - k) * 0.7
+    const m = Math.hypot(vx, vy) || 1
+    vx /= m
+    vy /= m
+    const c = Math.cos(-this.rot)
+    const s = Math.sin(-this.rot)
+    return [vx * c - vy * s, vx * s + vy * c]
+  }
+  /** the animal's own swimming since last frame, as a carry in local units */
+  carry() {
+    const ox = this.x - this.bx
+    const oy = this.y - this.by
+    if (this.pox === null) {
+      this.pox = ox
+      this.poy = oy
+    }
+    const dx = ox - this.pox
+    const dy = oy - this.poy
+    this.pox = ox
+    this.poy = oy
+    const c = Math.cos(-this.rot)
+    const s = Math.sin(-this.rot)
+    return [-(dx * c - dy * s) / this.s, -(dx * s + dy * c) / this.s]
+  }
   sample(lightAt) {
     return lightAt(this.x, this.y)
   }
   center() {
     return [this.x, this.y]
+  }
+  /** where its own light is, for the six-of-six constellation */
+  beacon() {
+    return this.center()
+  }
+  pinAt() {
+    return this.toScreen(this.anchor[0], this.anchor[1])
   }
   react() {}
   update() {}
@@ -233,17 +402,27 @@ class Animal {
 }
 
 /* ----------------------------------------------------- Atolla wyvillei */
+// The reference animal for the art direction: a clear bell with a crimson
+// central disc, the coronal groove, a ring of thick pedalia, a scalloped
+// margin, a crown of fine tentacles and one long trailing tentacle.
 class Atolla extends Animal {
   constructor() {
     super('atolla')
-    this.radius = 78
-    this.anchor = [52, -14]
-    this.ext = [66, 46]
+    this.radius = 80
+    this.anchor = [54, -12]
+    this.ext = [68, 50]
     this.color = C.blue
     this.alarmT = -1
     this.next = 3.5 + Math.random() * 2
     this.n = 26
     this.tw = Array.from({ length: this.n }, () => Math.random() * TAU)
+    this.tent = Array.from({ length: 22 }, () => ({
+      len: 20 + Math.random() * 16,
+      ph: Math.random() * TAU,
+      up: Math.random() < 0.6 ? 1 : -1,
+    }))
+    this.trail = new Chain(38, 6.4)
+    this.trailF = { gx: -24, gy: 150, sx: 120, sy: 30, w: 0.36, k: 0.12, ph: 0, dx: 0.25, dy: 1, damp: 0.9 }
   }
   react() {
     if (this.alarmT < 0 || this.alarmT > 3.2) this.alarmT = 0
@@ -261,124 +440,180 @@ class Atolla extends Animal {
     this.rot = 0.14 + 0.07 * Math.sin(t * 0.19 + k)
     this.x = this.bx + Math.sin(t * 0.11 + k) * 10 * this.s
     this.y = this.by + Math.sin(t * 0.15 + k * 2) * 12 * this.s - this.pulse * 2.2 * this.s
+    const { rx, ry, rim } = this.geo()
+    const th = 2.2
+    const [mx, my] = this.carry()
+    this.trailF.ph = k
+    this.trail.step(rx * 0.97 * Math.cos(th), rim + ry * 0.97 * Math.sin(th), mx, my, dt, t, this.trailF)
   }
   geo() {
     const p = this.pulse
-    return { rx: 60 * (1 + 0.05 * p), ry: 15 * (1 + 0.05 * p), top: -44 * (1 - 0.08 * p), rim: 8 }
+    return { rx: 60 * (1 + 0.05 * p), ry: 15 * (1 + 0.05 * p), top: -42 * (1 - 0.08 * p), rim: 8 }
+  }
+  beacon() {
+    const { rim } = this.geo()
+    return this.toScreen(0, rim)
+  }
+  tentacles(g, t, rx, ry, rim, front) {
+    g.lineCap = 'round'
+    g.lineWidth = 0.7
+    for (let k = 0; k < 22; k++) {
+      const th = (k / 22) * TAU + 0.07
+      const sn = Math.sin(th)
+      if (sn > 0 !== front) continue
+      const T = this.tent[k]
+      const c = Math.cos(th)
+      const x0 = rx * 0.99 * c
+      const y0 = rim + ry * 0.99 * sn
+      const sw = Math.sin(t * 0.7 + T.ph) * 3
+      // held out stiffly from the margin, then curling up (or down)
+      const ox = c * T.len
+      const oy = sn * T.len * 0.22
+      const cy = T.up * T.len * (T.up > 0 ? -0.55 : 0.45)
+      g.strokeStyle = front ? 'rgba(244,168,168,0.46)' : 'rgba(210,120,130,0.2)'
+      g.beginPath()
+      g.moveTo(x0, y0)
+      g.quadraticCurveTo(x0 + ox * 0.85, y0 + oy + 2, x0 + ox + sw, y0 + oy + cy)
+      g.stroke()
+    }
   }
   drawBody(g, t, L) {
     const { rx, ry, top, rim } = this.geo()
-    const [hx, hy] = this.hl(L, 24)
+    const [lx, ly] = this.ldir(L)
+    const [hx, hy] = this.hl(L, 20)
     this.begin(g)
+    const gy = rim - 10 // the coronal groove
+    const grx = rx * 0.72
+    const gry = ry * 0.72
 
-    // the single long tentacle Atolla trails (hypertrophied)
-    const pts = []
-    let x = rx * Math.cos(2.25)
-    let y = rim + ry * Math.sin(2.25)
-    for (let i = 0; i < 52; i++) {
-      pts.push(x, y)
-      const a = 1.62 + 0.62 * Math.sin(i * 0.08 - t * 0.33 + this.seed) + i * 0.016
-      x += Math.cos(a) * 6
-      y += Math.sin(a) * 6
-    }
-    taper(g, pts, 3.4, 0.5, [226, 92, 98], 0.8, 0.06)
+    // the long trailing tentacle, hanging behind
+    const P = this.trail.p
+    taper(g, P, 2.2, 0.45, [150, 30, 46], 0.6, 0.06, 4)
+    g.globalCompositeOperation = 'lighter'
+    taper(g, P, 0.7, 0.2, [255, 206, 206], 0.34, 0.02, 4)
+    g.globalCompositeOperation = 'source-over'
 
-    // the fringe of short tentacles
-    g.lineCap = 'round'
-    for (let k = 0; k < 24; k++) {
-      const th = (k / 24) * TAU + 0.13
-      const front = Math.sin(th) > 0
-      const sx = rx * Math.cos(th)
-      const sy = rim + ry * Math.sin(th)
-      const len = 18 + 7 * Math.sin(k * 1.7 + 0.4)
-      const sw = Math.sin(t * 0.8 + k * 0.9 + this.seed) * 3
-      g.strokeStyle = front ? 'rgba(232,112,116,0.55)' : 'rgba(200,80,90,0.28)'
-      g.lineWidth = 1.1
-      g.beginPath()
-      g.moveTo(sx, sy)
-      g.quadraticCurveTo(sx + Math.cos(th) * 12, sy + len * 0.45, sx + Math.cos(th) * 8 + sw, sy + len)
-      g.stroke()
-    }
-
-    // bell
-    g.beginPath()
-    g.moveTo(-rx, rim)
-    g.bezierCurveTo(-rx * 1.05, rim - 34, -rx * 0.56, top, 0, top)
-    g.bezierCurveTo(rx * 0.56, top, rx * 1.05, rim - 34, rx, rim)
-    const N = 66
-    for (let i = 1; i <= N; i++) {
-      const th = (i / N) * Math.PI
-      const lobe = 3.4 * Math.abs(Math.sin(th * 11))
-      g.lineTo(rx * Math.cos(th), rim + (ry + lobe) * Math.sin(th))
-    }
-    g.closePath()
-    const grd = g.createRadialGradient(hx, top * 0.42 + hy, 3, 0, top * 0.2, 84)
-    grd.addColorStop(0, 'rgba(226,82,88,0.97)')
-    grd.addColorStop(0.32, 'rgba(162,28,44,0.95)')
-    grd.addColorStop(0.72, 'rgba(96,8,26,0.93)')
-    grd.addColorStop(1, 'rgba(46,2,12,0.9)')
-    g.fillStyle = grd
-    g.fill()
-    g.strokeStyle = 'rgba(255,150,150,0.22)'
-    g.lineWidth = 1.4
-    g.stroke()
-
-    // the back of the rim, seen through the bell
-    g.strokeStyle = 'rgba(255,150,150,0.16)'
-    g.lineWidth = 1.2
+    // back of the crown, and the back of the margin seen through the bell
+    this.tentacles(g, t, rx, ry, rim, false)
+    g.lineWidth = 1
+    g.strokeStyle = 'rgba(255,176,176,0.14)'
     g.beginPath()
     g.ellipse(0, rim, rx * 0.98, ry, 0, Math.PI, TAU)
     g.stroke()
 
-    // stomach, deep red-violet, seen through the bell
-    g.globalCompositeOperation = 'multiply'
-    const sg = g.createRadialGradient(0, top * 0.4, 2, 0, top * 0.4, 30)
-    sg.addColorStop(0, 'rgba(70,10,40,0.95)')
-    sg.addColorStop(0.7, 'rgba(110,30,60,0.7)')
-    sg.addColorStop(1, 'rgba(255,255,255,0)')
-    g.fillStyle = sg
-    g.beginPath()
-    g.ellipse(0, top * 0.4, 30, 15, 0, 0, TAU)
-    g.fill()
-    g.globalCompositeOperation = 'source-over'
-
-    // coronal groove and the radial pedalia of the margin
-    g.strokeStyle = 'rgba(36,0,10,0.55)'
-    g.lineWidth = 2.4
-    g.beginPath()
-    g.ellipse(0, rim - 15, rx * 0.86, ry * 0.86, 0, 0.05, Math.PI - 0.05)
-    g.stroke()
-    g.strokeStyle = 'rgba(255,170,170,0.12)'
-    g.lineWidth = 1
-    g.beginPath()
-    g.ellipse(0, rim - 12.5, rx * 0.87, ry * 0.86, 0, 0.1, Math.PI - 0.1)
-    g.stroke()
-    g.strokeStyle = 'rgba(40,0,12,0.32)'
-    g.lineWidth = 1.1
-    for (let k = 0; k < 22; k++) {
-      const th = ((k + 0.5) / 22) * TAU
-      if (Math.sin(th) < 0.08) continue
-      const c = Math.cos(th)
-      const s = Math.sin(th)
+    // the bell: clear jelly with a crimson cast, its margin scalloped into lappets
+    const bell = () => {
       g.beginPath()
-      g.moveTo(rx * 0.86 * c, rim - 15 + ry * 0.86 * s)
-      g.lineTo(rx * 0.99 * c, rim + ry * s)
+      g.moveTo(-rx, rim)
+      g.bezierCurveTo(-rx * 1.02, rim - 28, -rx * 0.6, top, 0, top)
+      g.bezierCurveTo(rx * 0.6, top, rx * 1.02, rim - 28, rx, rim)
+      const N = 88
+      for (let i = 1; i <= N; i++) {
+        const th = (i / N) * Math.PI
+        const lobe = 3.2 * Math.pow(Math.abs(Math.sin(th * 11)), 0.6)
+        g.lineTo(rx * Math.cos(th), rim + (ry + lobe) * Math.sin(th))
+      }
+      g.closePath()
+    }
+    bell()
+    const jf = g.createRadialGradient(0, gy - 8, 6, 0, gy - 8, rx * 1.06)
+    jf.addColorStop(0, 'rgba(110,12,28,0.26)')
+    jf.addColorStop(0.62, 'rgba(128,18,36,0.3)')
+    jf.addColorStop(0.92, 'rgba(176,52,70,0.42)')
+    jf.addColorStop(1, 'rgba(206,92,104,0.5)')
+    g.fillStyle = jf
+    g.fill()
+    rimLight(g, dirGrad(g, lx, ly, 62, [255, 196, 200], 0.5, 0.14), 0.9)
+
+    // the ring of pedalia between groove and margin: thick lumps of jelly
+    for (let k = 0; k < 22; k++) {
+      const a0 = (k / 22) * TAU + 0.07
+      const a1 = ((k + 1) / 22) * TAU + 0.07
+      const am = (a0 + a1) / 2
+      if (Math.sin(am) < 0.04) continue
+      const c0 = Math.cos(a0)
+      const s0 = Math.sin(a0)
+      const c1 = Math.cos(a1)
+      const s1 = Math.sin(a1)
+      g.beginPath()
+      g.moveTo(grx * c0, gy + gry * s0)
+      g.quadraticCurveTo(grx * Math.cos(am) * 1.02, gy + gry * Math.sin(am) * 1.02, grx * c1, gy + gry * s1)
+      g.lineTo(rx * 0.96 * c1, rim + ry * 0.96 * s1)
+      g.quadraticCurveTo(rx * 1.0 * Math.cos(am), rim + ry * 1.06 * Math.sin(am), rx * 0.96 * c0, rim + ry * 0.96 * s0)
+      g.closePath()
+      const facing = 0.5 + 0.5 * (Math.cos(am) * lx + Math.sin(am) * ly)
+      const pg = g.createLinearGradient(grx * Math.cos(am), gy + gry * Math.sin(am), rx * Math.cos(am), rim + ry * Math.sin(am))
+      pg.addColorStop(0, `rgba(190,40,58,${(0.42 + 0.24 * facing).toFixed(3)})`)
+      pg.addColorStop(0.55, `rgba(140,20,40,${(0.36 + 0.12 * facing).toFixed(3)})`)
+      pg.addColorStop(1, 'rgba(120,20,38,0.16)')
+      g.fillStyle = pg
+      g.fill()
+      g.strokeStyle = 'rgba(36,0,10,0.34)'
+      g.lineWidth = 0.7
       g.stroke()
+      // each lump catches its own small highlight
+      spec(g, lerp(grx, rx, 0.36) * Math.cos(am), lerp(gy, rim, 0.36) + lerp(gry, ry, 0.36) * Math.sin(am), 3.6, 1.6, am + Math.PI / 2, 0.16 + 0.34 * facing)
     }
 
-    // lamp highlight: soft sheen + a specular arc on the dome
-    g.globalCompositeOperation = 'lighter'
-    const hg = g.createRadialGradient(hx * 0.8, top * 0.55 + hy * 0.5, 0, hx * 0.8, top * 0.55 + hy * 0.5, 38)
-    hg.addColorStop(0, 'rgba(255,226,214,0.22)')
-    hg.addColorStop(1, 'rgba(255,226,214,0)')
-    g.fillStyle = hg
-    g.fillRect(-rx, top, rx * 2, rim - top + ry)
-    g.strokeStyle = 'rgba(255,238,230,0.36)'
-    g.lineWidth = 1.5
+    // the central disc: the stomach's deep red pigment, domed inside the groove
     g.beginPath()
-    g.ellipse(0, rim - 4, rx * 0.9, (rim - top) * 0.94, 0, Math.PI * 1.14, Math.PI * 1.42)
+    g.moveTo(-grx, gy)
+    g.bezierCurveTo(-grx * 1.02, gy - 26, -grx * 0.56, top + 3, 0, top + 3)
+    g.bezierCurveTo(grx * 0.56, top + 3, grx * 1.02, gy - 26, grx, gy)
+    g.ellipse(0, gy, grx, gry, 0, 0, Math.PI)
+    g.closePath()
+    const cd = g.createRadialGradient(hx * 0.8, (top + gy) * 0.5 + hy * 0.5, 2, 0, (top + gy) * 0.5, grx * 1.15)
+    cd.addColorStop(0, 'rgba(156,24,40,0.93)')
+    cd.addColorStop(0.3, 'rgba(104,8,26,0.92)')
+    cd.addColorStop(0.75, 'rgba(58,2,14,0.92)')
+    cd.addColorStop(1, 'rgba(36,0,10,0.9)')
+    g.fillStyle = cd
+    g.fill()
+    rimLight(g, dirGrad(g, lx, ly, 46, [255, 170, 176], 0.3, 0.05), 0.7)
+    // the stomach, a darker mass deep in the disc
+    const st = g.createRadialGradient(0, gy - 6, 2, 0, gy - 6, grx * 0.7)
+    st.addColorStop(0, 'rgba(20,0,6,0.5)')
+    st.addColorStop(1, 'rgba(20,0,6,0)')
+    g.fillStyle = st
+    g.beginPath()
+    g.ellipse(0, gy - 6, grx * 0.7, (gy - top) * 0.55, 0, 0, TAU)
+    g.fill()
+
+    // the coronal groove: a dark crease with a lit lip below it
+    g.lineCap = 'round'
+    g.strokeStyle = 'rgba(26,0,8,0.62)'
+    g.lineWidth = 2
+    g.beginPath()
+    g.ellipse(0, gy, grx, gry, 0, 0.04, Math.PI - 0.04)
+    g.stroke()
+    g.globalCompositeOperation = 'lighter'
+    g.strokeStyle = 'rgba(255,190,190,0.2)'
+    g.lineWidth = 0.7
+    g.beginPath()
+    g.ellipse(0, gy + 1.6, grx * 1.01, gry * 1.02, 0, 0.12, Math.PI - 0.12)
+    g.stroke()
+    // the lit front edge of the margin
+    g.strokeStyle = 'rgba(255,206,206,0.24)'
+    g.lineWidth = 0.8
+    g.beginPath()
+    for (let i = 0; i <= 66; i++) {
+      const th = (i / 66) * Math.PI
+      const lobe = 3.2 * Math.pow(Math.abs(Math.sin(th * 11)), 0.6)
+      const x = rx * Math.cos(th)
+      const y = rim + (ry + lobe) * Math.sin(th)
+      if (i === 0) g.moveTo(x, y)
+      else g.lineTo(x, y)
+    }
     g.stroke()
     g.globalCompositeOperation = 'source-over'
+
+    // speculars: a soft window on the dome, a crisp glint at its crest
+    const sx = hx * 0.9
+    const sy = top * 0.62 + hy * 0.45
+    spec(g, sx, sy, 13, 4.5, 0.05 * hx, 0.22)
+    spec(g, sx * 0.9, sy - 1.5, 4.5, 1.5, 0.05 * hx, 0.6)
+
+    this.tentacles(g, t, rx, ry, rim, true)
     g.restore()
   }
   drawGlow(g, t, sp) {
@@ -388,9 +623,9 @@ class Atolla extends Animal {
     const phi = at < 0 ? 0 : at * 3.4 + at * at * 0.5
     this.begin(g)
     if (e > 0.01) {
-      g.globalAlpha = 0.24 * e
+      g.globalAlpha = 0.22 * e
       g.strokeStyle = 'rgb(58,168,255)'
-      g.lineWidth = 6
+      g.lineWidth = 5
       g.beginPath()
       g.ellipse(0, rim, rx, ry, 0, 0, TAU)
       g.stroke()
@@ -399,12 +634,12 @@ class Atolla extends Animal {
     for (let k = 0; k < this.n; k++) {
       const th = (k / this.n) * TAU
       const back = Math.sin(th) < 0 ? 0.55 : 1
-      const tw = 0.3 + 0.18 * Math.sin(t * 1.25 + this.tw[k])
+      const tw = 0.28 + 0.18 * Math.sin(t * 1.25 + this.tw[k])
       const d1 = angDiff(th, phi)
       const d2 = angDiff(th, phi + Math.PI)
       const wave = Math.exp(-(d1 * d1) / 0.16) + Math.exp(-(d2 * d2) / 0.16)
       const a = (tw + e * wave * 1.2) * back
-      dot(g, sp.blue, rx * Math.cos(th), rim + ry * Math.sin(th), 5.4 + 6 * e * wave, a)
+      dot(g, sp.blue, rx * Math.cos(th), rim + ry * Math.sin(th), 4.6 + 6 * e * wave, a)
     }
     g.restore()
   }
@@ -432,6 +667,12 @@ class Squid extends Animal {
         : [Math.cos(a) * r * 26, 6 + Math.abs(Math.sin(a)) * r * 16, Math.random() * TAU]
     })
     this.arms = Array.from({ length: 8 }, () => ({ a: 0, L: 0, tx: 0, ty: 0, wx: 0, wy: 0, bx: 0, by: 0, bend: 0 }))
+    // the two retractile velar filaments, unique to Vampyroteuthis
+    this.fil = [-1, 1].map((sx) => ({
+      sx,
+      c: new Chain(30, 6),
+      f: { gx: sx * 26, gy: 200, sx: 70, sy: 30, w: 0.5, k: 0.2, ph: sx * 1.7, dx: sx * 0.3, dy: 1, damp: 0.92 },
+    }))
   }
   react() {
     this.escT = 0
@@ -489,9 +730,11 @@ class Squid extends Animal {
       const sa = Math.sin(arm.a)
       arm.tx = ca * arm.L - sa * arm.bend
       arm.ty = 16 + sa * arm.L + ca * arm.bend
-      arm.wx = ca * arm.L * 0.8 - sa * arm.bend * 0.8
-      arm.wy = 16 + sa * arm.L * 0.8 + ca * arm.bend * 0.8
+      arm.wx = ca * arm.L * 0.66 - sa * arm.bend * 0.66
+      arm.wy = 16 + sa * arm.L * 0.66 + ca * arm.bend * 0.66
     }
+    const [mx, my] = this.carry()
+    for (const f of this.fil) f.c.step(f.sx * 11, 20, mx, my, dt, t, f.f)
     for (let i = this.mucus.length - 1; i >= 0; i--) {
       const m = this.mucus[i]
       m.age += dt
@@ -507,138 +750,196 @@ class Squid extends Animal {
       m.y += m.vy * dt
     }
   }
+  beacon() {
+    return this.toScreen(0, -56)
+  }
+  /** screen-space box of the glowing mucus, so labels can stay off it */
+  cloud() {
+    if (!this.mucus.length) return null
+    let x0 = Infinity
+    let y0 = Infinity
+    let x1 = -Infinity
+    let y1 = -Infinity
+    for (const m of this.mucus) {
+      if (m.age < 0 || m.age > m.life * 0.8) continue
+      const x = this.bx + m.x * this.s
+      const y = this.by + m.y * this.s
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+    if (x1 < x0) return null
+    const p = 26 * this.s
+    return { x: x0 - p, y: y0 - p, w: x1 - x0 + p * 2, h: y1 - y0 + p * 2 }
+  }
   drawBody(g, t, L) {
+    const [lx, ly] = this.ldir(L)
     const [hx, hy] = this.hl(L, 22)
     this.begin(g)
-    const wine = (cx, cy, r) => {
+    const A = this.arms
+    const skin = (cx, cy, r) => {
       const grd = g.createRadialGradient(cx + hx, cy + hy, 2, cx, cy, r)
-      grd.addColorStop(0, 'rgb(150,48,56)')
-      grd.addColorStop(0.4, 'rgb(88,16,28)')
-      grd.addColorStop(1, 'rgb(26,3,9)')
+      grd.addColorStop(0, 'rgb(96,20,30)')
+      grd.addColorStop(0.38, 'rgb(48,7,15)')
+      grd.addColorStop(1, 'rgb(14,2,5)')
       return grd
     }
-    // fins, like ears, on the mantle
+
+    // the two velar filaments, long and white, trailing behind
+    g.globalCompositeOperation = 'lighter'
+    for (const f of this.fil) taper(g, f.c.p, 0.9, 0.25, [255, 236, 228], 0.4, 0.03, 4)
+    g.globalCompositeOperation = 'source-over'
+
+    // fins, like ears: thin, translucent, veined
     for (const sx of [-1, 1]) {
       g.save()
-      g.translate(sx * 25, -62)
-      g.rotate(sx * (0.55 + 0.32 * this.fin))
-      g.fillStyle = 'rgba(122,34,44,0.92)'
+      g.translate(sx * 22, -66)
+      g.rotate(sx * (0.5 + 0.3 * this.fin))
       g.beginPath()
-      g.ellipse(sx * 12, 0, 17, 8.5, 0, 0, TAU)
+      g.moveTo(0, -6)
+      g.bezierCurveTo(sx * 10, -13, sx * 30, -10, sx * 32, 0)
+      g.bezierCurveTo(sx * 31, 8, sx * 12, 9, 0, 6)
+      g.closePath()
+      g.fillStyle = 'rgba(96,18,30,0.62)'
       g.fill()
-      g.strokeStyle = 'rgba(255,170,160,0.18)'
-      g.lineWidth = 1
-      g.stroke()
+      rimLight(g, 'rgba(255,170,170,0.3)', 0.6)
+      g.strokeStyle = 'rgba(20,0,6,0.4)'
+      g.lineWidth = 0.6
+      for (let r = 0; r < 4; r++) {
+        g.beginPath()
+        g.moveTo(sx * 2, 0)
+        g.quadraticCurveTo(sx * (8 + r * 3), -3 + r * 2, sx * (16 + r * 4.5), -7 + r * 4.6)
+        g.stroke()
+      }
       g.restore()
     }
-    // mantle
-    g.fillStyle = wine(0, -48, 70)
+
+    // mantle: velvety red-black skin, its sheen gathered at the silhouette
     g.beginPath()
-    g.moveTo(-25, -4)
-    g.bezierCurveTo(-32, -46, -15, -92, 0, -94)
-    g.bezierCurveTo(15, -92, 32, -46, 25, -4)
+    g.moveTo(-24, -2)
+    g.bezierCurveTo(-31, -46, -15, -92, 0, -94)
+    g.bezierCurveTo(15, -92, 31, -46, 24, -2)
     g.closePath()
+    g.fillStyle = skin(0, -48, 66)
     g.fill()
-    g.strokeStyle = 'rgba(255,206,196,0.2)'
-    g.lineWidth = 1.1
-    g.stroke()
-    // the web of the cloak
-    const A = this.arms
-    const wg = g.createRadialGradient(hx * 0.6, 20 + hy * 0.6, 4, 0, 16, 96)
-    wg.addColorStop(0, 'rgb(18,3,8)')
-    wg.addColorStop(0.4, 'rgb(52,8,18)')
-    wg.addColorStop(0.78, 'rgb(104,24,36)')
-    wg.addColorStop(1, 'rgb(60,8,20)')
+    rimLight(g, dirGrad(g, lx, ly, 56, [255, 170, 166], 0.46, 0.08), 0.85)
+
+    // the cloak: a web between the arms, near-black inside, thin at its edge
+    const wg = g.createRadialGradient(hx * 0.5, 18 + hy * 0.5, 4, 0, 16, 84)
+    wg.addColorStop(0, 'rgba(12,2,5,0.97)')
+    wg.addColorStop(0.5, 'rgba(34,4,10,0.95)')
+    wg.addColorStop(0.82, 'rgba(70,12,22,0.84)')
+    wg.addColorStop(1, 'rgba(118,30,40,0.6)')
     g.fillStyle = wg
     g.beginPath()
     g.moveTo(22, 6)
     g.lineTo(A[0].wx, A[0].wy)
     for (let i = 0; i < 7; i++) {
       const am = (A[i].a + A[i + 1].a) / 2
-      const Lm = ((A[i].L + A[i + 1].L) / 2) * (0.6 + 0.08 * this.open)
+      const Lm = ((A[i].L + A[i + 1].L) / 2) * (0.58 + 0.06 * this.open)
       g.quadraticCurveTo(Math.cos(am) * Lm, 16 + Math.sin(am) * Lm, A[i + 1].wx, A[i + 1].wy)
     }
     g.lineTo(-22, 6)
     g.closePath()
     g.fill()
-    g.strokeStyle = 'rgba(255,160,160,0.16)'
-    g.lineWidth = 1
-    g.stroke()
-    // arms, with their fleshy cirri
+    rimLight(g, 'rgba(255,150,150,0.26)', 0.7)
+
+    // arms, the ribs of the cloak, with fleshy cirri; black past the web
     const pts = []
     for (let i = 0; i < 8; i++) {
       const a = A[i]
       pts.length = 0
       const nx = -Math.sin(a.a)
       const ny = Math.cos(a.a)
-      for (let k = 0; k <= 10; k++) {
-        const u = k / 10
-        const bx = lerp(a.bx, a.tx, u) + nx * Math.sin(u * Math.PI) * 4
-        const by = lerp(a.by, a.ty, u) + ny * Math.sin(u * Math.PI) * 4
-        pts.push(bx, by)
+      for (let k = 0; k <= 12; k++) {
+        const u = k / 12
+        pts.push(lerp(a.bx, a.tx, u) + nx * Math.sin(u * Math.PI) * 4, lerp(a.by, a.ty, u) + ny * Math.sin(u * Math.PI) * 4)
       }
-      taper(g, pts, 7, 2.2, [124, 32, 44], 0.96, 0.96, 10)
-      g.strokeStyle = 'rgba(232,180,176,0.42)'
-      g.lineWidth = 0.9
-      for (let k = 3; k <= 8; k++) {
+      taper(g, pts, 5.4, 2.2, [58, 10, 18], 0.9, 0.9, 12)
+      taper(g, pts.slice(16), 3, 1.6, [10, 3, 5], 0.96, 0.96, 12)
+      g.globalCompositeOperation = 'lighter'
+      taper(g, pts.slice(0, 18), 0.6, 0.3, [255, 170, 160], 0.09, 0.03, 12)
+      g.globalCompositeOperation = 'source-over'
+      g.strokeStyle = 'rgba(226,186,180,0.24)'
+      g.lineWidth = 0.55
+      for (let k = 3; k <= 9; k++) {
         const px = pts[2 * k]
         const py = pts[2 * k + 1]
-        const ix = -px * 0.06
-        const iy = -(py - 16) * 0.06
         g.beginPath()
         g.moveTo(px, py)
-        g.lineTo(px + ix, py + iy)
+        g.lineTo(px - px * 0.07, py - (py - 16) * 0.07)
         g.stroke()
       }
-      g.fillStyle = 'rgba(240,222,212,0.9)'
+      // the light organ at the tip, pale when unlit
+      g.fillStyle = 'rgba(214,230,232,0.6)'
       g.beginPath()
-      g.arc(a.tx, a.ty, 2.3, 0, TAU)
+      g.arc(a.tx, a.ty, 1.7, 0, TAU)
       g.fill()
     }
+
     // head
-    g.fillStyle = wine(0, 2, 34)
     g.beginPath()
     g.ellipse(0, 4, 27, 19, 0, 0, TAU)
+    g.fillStyle = skin(0, 2, 32)
     g.fill()
-    // eyes: proportionally the largest of any animal
+    rimLight(g, dirGrad(g, lx, ly, 26, [255, 170, 166], 0.3, 0.04), 0.7)
+
+    // eyes: proportionally the largest of any animal. Deep blue globes; the
+    // cornea catches the lamp as a thin crescent, not a dot.
+    const la = Math.atan2(ly, lx)
     for (const sx of [-1, 1]) {
-      const ex = sx * 16.5
+      // set on the sides of the head, so each is seen a little edge-on
+      const ex = sx * 19
       const ey = 1
-      g.fillStyle = 'rgb(16,5,9)'
+      g.save()
+      g.translate(ex, ey)
+      g.scale(0.78, 1)
+      g.fillStyle = 'rgb(8,2,4)'
       g.beginPath()
-      g.ellipse(ex, ey, 9.6, 9, 0, 0, TAU)
+      g.arc(0, 0, 10.4, 0, TAU)
       g.fill()
-      const ig = g.createRadialGradient(ex + hx * 0.08, ey + hy * 0.08, 0.5, ex, ey, 7.4)
-      ig.addColorStop(0, 'rgb(104,170,214)')
-      ig.addColorStop(0.45, 'rgb(30,78,138)')
-      ig.addColorStop(1, 'rgb(8,16,32)')
+      const ig = g.createRadialGradient(-sx * 1.5, 0, 0, 0, 0, 9)
+      ig.addColorStop(0, 'rgb(2,4,10)')
+      ig.addColorStop(0.5, 'rgb(4,10,24)')
+      ig.addColorStop(0.8, 'rgb(14,40,76)')
+      ig.addColorStop(0.93, 'rgb(26,66,112)')
+      ig.addColorStop(1, 'rgb(8,14,26)')
       g.fillStyle = ig
       g.beginPath()
-      g.arc(ex, ey, 7.4, 0, TAU)
+      g.arc(0, 0, 9, 0, TAU)
       g.fill()
-      g.fillStyle = 'rgb(3,6,12)'
+      g.globalCompositeOperation = 'lighter'
+      g.strokeStyle = 'rgba(150,200,255,0.3)'
+      g.lineWidth = 0.8
       g.beginPath()
-      g.ellipse(ex, ey, 4.6, 3.2, 0, 0, TAU)
-      g.fill()
-      g.fillStyle = 'rgba(255,250,240,0.8)'
-      g.beginPath()
-      g.arc(ex - 2.8 + hx * 0.06, ey - 3.2 + hy * 0.06, 1.3, 0, TAU)
-      g.fill()
+      g.arc(0, 0, 7.6, la - 0.5, la + 0.5)
+      g.stroke()
+      g.globalCompositeOperation = 'source-over'
+      g.restore()
+      spec(g, ex + Math.cos(la) * 4.4, ey + Math.sin(la) * 5.2, 2.2, 0.9, la + Math.PI / 2, 0.32)
     }
-    g.fillStyle = 'rgba(240,226,220,0.5)'
+
+    // the two large photophores at the fin bases, under their flaps
+    for (const sx of [-1, 1]) {
+      g.fillStyle = 'rgba(200,214,206,0.4)'
+      g.beginPath()
+      g.ellipse(sx * 21, -56, 4.4, 2.8, sx * 0.4, 0, TAU)
+      g.fill()
+      g.strokeStyle = 'rgba(16,2,6,0.7)'
+      g.lineWidth = 1.4
+      g.beginPath()
+      g.ellipse(sx * 21, -56.6, 4.8, 3.2, sx * 0.4, Math.PI * 1.05, Math.PI * 1.95)
+      g.stroke()
+    }
+    g.fillStyle = 'rgba(226,214,208,0.28)'
     for (const [x, y] of this.specks) {
       g.beginPath()
-      g.arc(x, y, 0.9, 0, TAU)
+      g.arc(x, y, 0.7, 0, TAU)
       g.fill()
     }
-    // sheen
-    g.globalCompositeOperation = 'lighter'
-    const sh = g.createRadialGradient(hx, -40 + hy, 0, hx, -40 + hy, 36)
-    sh.addColorStop(0, 'rgba(255,214,200,0.16)')
-    sh.addColorStop(1, 'rgba(255,214,200,0)')
-    g.fillStyle = sh
-    g.fillRect(-40, -96, 80, 90)
-    g.globalCompositeOperation = 'source-over'
+    // soft sheen of wet skin on the mantle
+    spec(g, hx * 0.8, -52 + hy * 0.8, 12, 20, 0, 0.16)
     g.restore()
   }
   drawGlow(g, t, sp) {
@@ -669,10 +970,10 @@ class Squid extends Animal {
       dot(g, sp.cyan, x, y, 3.2, 0.06 + 0.4 * tw)
     }
     const f = 0.3 + 0.16 * Math.sin(t * 0.6 + k)
-    dot(g, sp.cyanSoft, -24, -56, 22, f)
-    dot(g, sp.cyanSoft, 24, -56, 22, f)
-    dot(g, sp.cyan, -22, -57, 5, f * 0.9)
-    dot(g, sp.cyan, 22, -57, 5, f * 0.9)
+    dot(g, sp.cyanSoft, -21, -56, 22, f)
+    dot(g, sp.cyanSoft, 21, -56, 22, f)
+    dot(g, sp.cyan, -21, -56, 5, f * 0.9)
+    dot(g, sp.cyan, 21, -56, 5, f * 0.9)
     g.restore()
   }
 }
@@ -682,11 +983,17 @@ class Angler extends Animal {
   constructor() {
     super('angler')
     this.radius = 96
-    this.anchor = [40, -40]
-    this.anchorL = [-40, -42]
-    this.ext = [92, 56]
+    this.anchor = [40, -44]
+    this.anchorL = [-40, -46]
+    this.ext = [92, 58]
     this.color = C.lure
     this.gapeT = -1
+    // faint texture in the velvet skin (local units, inside the body)
+    this.pores = Array.from({ length: 34 }, () => {
+      const a = Math.random() * TAU
+      const r = Math.sqrt(Math.random())
+      return [-12 + Math.cos(a) * r * 44, -4 + Math.sin(a) * r * 38, 0.5 + Math.random() * 0.8]
+    })
   }
   react() {
     this.gapeT = 0
@@ -703,9 +1010,8 @@ class Angler extends Animal {
     this.x = this.bx + Math.sin(t * 0.1 + k) * 8 * this.s
     this.y = this.by + Math.sin(t * 0.55 + k) * 4 * this.s
     const sw = Math.sin(t * 0.7 + k)
-    this.esca = [72 + 5 * sw, -68 + 4 * Math.sin(t * 0.9 + k)]
-    this.lure =
-      0.78 + 0.16 * Math.sin(t * 1.2 + k) + 0.06 * Math.sin(t * 7.3 + k * 3) * Math.sin(t * 0.5)
+    this.esca = [74 + 5 * sw, -74 + 4 * Math.sin(t * 0.9 + k)]
+    this.lure = 0.78 + 0.16 * Math.sin(t * 1.2 + k) + 0.06 * Math.sin(t * 7.3 + k * 3) * Math.sin(t * 0.5)
   }
   sample(lightAt) {
     const [x, y] = this.toScreen(10, 0)
@@ -714,152 +1020,228 @@ class Angler extends Animal {
   center() {
     return this.toScreen(10, -4)
   }
+  beacon() {
+    return this.luresAt()
+  }
   drawBody(g, t, L) {
+    const [lx, ly] = this.ldir(L)
     const [hx, hy] = this.hl(L, 26)
     const gp = this.gape
     this.begin(g)
     const ft = Math.sin(t * 1.4 + this.seed)
 
-    // caudal fin
-    g.fillStyle = 'rgba(42,32,30,0.85)'
-    g.beginPath()
-    g.moveTo(-62, -8)
-    g.quadraticCurveTo(-82, -26 + ft * 3, -98, -22 + ft * 4)
-    g.quadraticCurveTo(-92, 0 + ft * 2, -98, 22 + ft * 4)
-    g.quadraticCurveTo(-82, 24 + ft * 3, -62, 8)
-    g.closePath()
-    g.fill()
-    g.strokeStyle = 'rgba(150,126,110,0.3)'
-    g.lineWidth = 0.8
-    for (let r = -3; r <= 3; r++) {
+    // a fin: clear membrane over fine rays, lit at its edge
+    const fin = (pathFn, rays, base) => {
+      pathFn()
+      g.fillStyle = 'rgba(64,52,48,0.32)'
+      g.fill()
+      rimLight(g, 'rgba(255,236,220,0.16)', 0.5)
+      g.strokeStyle = 'rgba(176,156,144,0.34)'
+      g.lineWidth = 0.55
       g.beginPath()
-      g.moveTo(-64, r * 2.4)
-      g.lineTo(-95, r * 7 + ft * 4)
+      for (const [x, y] of rays) {
+        g.moveTo(base[0], base[1])
+        g.lineTo(x, y)
+      }
       g.stroke()
     }
-    // dorsal fin
-    g.fillStyle = 'rgba(46,36,32,0.85)'
-    g.beginPath()
-    g.moveTo(-36, -46)
-    g.quadraticCurveTo(-50, -56 + ft * 2, -58, -40)
-    g.lineTo(-50, -34)
-    g.closePath()
-    g.fill()
+    // caudal fin: a rounded fan
+    const tailRays = []
+    for (let r = -4; r <= 4; r++) tailRays.push([-100 + Math.abs(r) * 1.5, r * 6.2 + ft * 4 * (1 - Math.abs(r) / 8)])
+    fin(
+      () => {
+        g.beginPath()
+        g.moveTo(-70, -7)
+        g.quadraticCurveTo(-92, -32 + ft * 3, -101, -20 + ft * 4)
+        g.quadraticCurveTo(-106, ft * 4, -101, 20 + ft * 4)
+        g.quadraticCurveTo(-92, 32 + ft * 3, -70, 7)
+        g.closePath()
+      },
+      tailRays,
+      [-70, 0],
+    )
+    // soft dorsal and anal fins, set far back
+    fin(
+      () => {
+        g.beginPath()
+        g.moveTo(-36, -50)
+        g.quadraticCurveTo(-52, -64 + ft * 2, -64, -42)
+        g.lineTo(-58, -30)
+        g.closePath()
+      },
+      [
+        [-44, -60],
+        [-52, -60],
+        [-58, -52],
+        [-62, -44],
+      ],
+      [-46, -42],
+    )
+    fin(
+      () => {
+        g.beginPath()
+        g.moveTo(-40, 40)
+        g.quadraticCurveTo(-56, 50 - ft * 2, -64, 30)
+        g.lineTo(-58, 22)
+        g.closePath()
+      },
+      [
+        [-46, 46],
+        [-54, 44],
+        [-60, 36],
+      ],
+      [-48, 32],
+    )
 
-    // body
-    g.beginPath()
-    g.moveTo(60, -8)
-    g.bezierCurveTo(48, -42, 14, -60, -18, -52)
-    g.bezierCurveTo(-44, -46, -60, -28, -64, -10)
-    g.lineTo(-66, 8)
-    g.bezierCurveTo(-58, 32, -24, 52, 14, 50)
-    g.bezierCurveTo(44, 48, 66, 32 + 8 * gp, 77, 12 + 15 * gp)
-    g.lineTo(71, 10 + 13 * gp)
-    g.quadraticCurveTo(44, 12 + 6 * gp, 16, 6)
-    g.quadraticCurveTo(40, 0, 60, -8)
-    g.closePath()
-    const sk = g.createRadialGradient(hx, -8 + hy, 3, 0, -2, 78)
-    sk.addColorStop(0, 'rgb(104,86,78)')
-    sk.addColorStop(0.32, 'rgb(52,42,40)')
-    sk.addColorStop(0.72, 'rgb(22,17,17)')
-    sk.addColorStop(1, 'rgb(8,6,6)')
+    // body: a humped, globular silhouette, the lower jaw jutting past the upper
+    const body = () => {
+      g.beginPath()
+      g.moveTo(58, -10)
+      g.bezierCurveTo(52, -38, 30, -58, 2, -60)
+      g.bezierCurveTo(-26, -62, -52, -42, -62, -16)
+      g.quadraticCurveTo(-66, -8, -72, -7)
+      g.lineTo(-72, 7)
+      g.quadraticCurveTo(-64, 10, -56, 24)
+      g.bezierCurveTo(-42, 48, -8, 56, 22, 50)
+      g.bezierCurveTo(46, 44, 66, 30 + 8 * gp, 80, 10 + 16 * gp)
+      g.lineTo(74, 7 + 14 * gp)
+      g.quadraticCurveTo(46, 12 + 7 * gp, 14, 4)
+      g.quadraticCurveTo(38, -2, 58, -10)
+      g.closePath()
+    }
+    body()
+    const sk = g.createRadialGradient(hx, -8 + hy, 3, 0, -4, 84)
+    sk.addColorStop(0, 'rgb(64,52,48)')
+    sk.addColorStop(0.3, 'rgb(30,25,24)')
+    sk.addColorStop(0.7, 'rgb(12,10,10)')
+    sk.addColorStop(1, 'rgb(4,4,4)')
     g.fillStyle = sk
     g.fill()
-    g.strokeStyle = 'rgba(255,226,206,0.26)'
-    g.lineWidth = 1.3
+    rimLight(g, dirGrad(g, lx, ly, 70, [236, 236, 230], 0.42, 0), 0.9)
+
+    // velvet skin: faint pores, a lateral line, a gill slit
+    g.fillStyle = 'rgba(200,184,170,0.1)'
+    for (const [x, y, r] of this.pores) {
+      g.beginPath()
+      g.arc(x, y, r, 0, TAU)
+      g.fill()
+    }
+    g.fillStyle = 'rgba(200,176,156,0.24)'
+    for (let i = 0; i < 10; i++) {
+      g.beginPath()
+      g.arc(14 - i * 8.2, -20 + Math.pow(i / 9, 1.6) * 18, 0.8, 0, TAU)
+      g.fill()
+    }
+    g.strokeStyle = 'rgba(0,0,0,0.6)'
+    g.lineWidth = 1.2
+    g.beginPath()
+    g.moveTo(-14, 6)
+    g.quadraticCurveTo(-18, 16, -14, 26)
     g.stroke()
 
-    // the mouth's dark cavity
-    g.fillStyle = 'rgb(18,6,8)'
+    // the mouth's dark cavity, its lips catching the lamp
     g.beginPath()
-    g.moveTo(16, 6)
-    g.quadraticCurveTo(40, 0, 60, -8)
-    g.lineTo(64, -2)
-    g.lineTo(71, 10 + 13 * gp)
-    g.quadraticCurveTo(44, 12 + 6 * gp, 16, 6)
+    g.moveTo(16, 5)
+    g.quadraticCurveTo(40, -1, 60, -9)
+    g.lineTo(64, -3)
+    g.lineTo(74, 7 + 14 * gp)
+    g.quadraticCurveTo(46, 12 + 7 * gp, 16, 5)
     g.closePath()
+    const mg = g.createLinearGradient(16, 0, 74, 0)
+    mg.addColorStop(0, 'rgb(8,2,3)')
+    mg.addColorStop(1, 'rgb(40,10,12)')
+    g.fillStyle = mg
     g.fill()
+    g.globalCompositeOperation = 'lighter'
+    g.strokeStyle = 'rgba(255,226,210,0.2)'
+    g.lineWidth = 0.8
+    g.beginPath()
+    g.moveTo(16, 3.6)
+    g.quadraticCurveTo(38, -3.4, 59, -11)
+    g.moveTo(17, 6.4)
+    g.quadraticCurveTo(46, 13.6 + 7 * gp, 75, 8.6 + 14 * gp)
+    g.stroke()
+    g.globalCompositeOperation = 'source-over'
 
-    // needle teeth, glassy
-    g.fillStyle = 'rgba(248,242,230,0.96)'
-    const tooth = (x, y, dx, dy, w) => {
+    // fangs: long, slender, glassy, curving back toward the throat
+    const fang = (x, y, len, dir, w) => {
+      const tx = x - len * 0.3
+      const ty = y + dir * len
       g.beginPath()
       g.moveTo(x - w, y)
-      g.lineTo(x + dx, y + dy)
-      g.lineTo(x + w, y)
+      g.quadraticCurveTo(x - w * 0.4, y + dir * len * 0.62, tx, ty)
+      g.quadraticCurveTo(x + w * 1.1, y + dir * len * 0.5, x + w, y)
       g.closePath()
       g.fill()
     }
-    for (let i = 0; i < 8; i++) {
-      const u = 0.22 + (i / 7) * 0.76
-      const x = lerp(16, 60, u)
-      const y = lerp(6, -8, u) + Math.sin(u * Math.PI) * -3
-      const len = 4 + 10 * Math.pow(u, 1.4)
-      tooth(x, y, -1.5, len, 1.1)
+    const UP = [5, 9, 6, 12, 7, 14, 9, 15, 10]
+    const LO = [6, 11, 7, 14, 8, 16, 11]
+    g.fillStyle = 'rgba(226,224,214,0.58)'
+    for (let i = 0; i < UP.length; i++) {
+      const u = 0.18 + (i / (UP.length - 1)) * 0.8
+      fang(lerp(16, 60, u), lerp(5, -9, u) - Math.sin(u * Math.PI) * 2.4, UP[i], 1, 0.95)
     }
-    for (let i = 0; i < 7; i++) {
-      const u = 0.25 + (i / 6) * 0.72
-      const x = lerp(16, 71, u)
-      const y = lerp(6, 10 + 13 * gp, u) + Math.sin(u * Math.PI) * (3 + 3 * gp)
-      const len = 4 + 9 * Math.pow(u, 1.3)
-      tooth(x, y, -1, -len, 1.1)
+    for (let i = 0; i < LO.length; i++) {
+      const u = 0.22 + (i / (LO.length - 1)) * 0.76
+      fang(lerp(16, 74, u), lerp(5, 7 + 14 * gp, u) + Math.sin(u * Math.PI) * (3 + 3 * gp), LO[i], -1, 1)
     }
 
-    // pectoral fin
+    // pectoral fin: a small fan of rays
     g.save()
-    g.translate(-6, 12)
+    g.translate(-6, 14)
     g.rotate(0.3 + 0.25 * Math.sin(t * 1.9 + this.seed))
-    g.fillStyle = 'rgba(70,56,50,0.7)'
-    g.beginPath()
-    g.moveTo(0, 0)
-    g.quadraticCurveTo(-14, -6, -20, 4)
-    g.quadraticCurveTo(-12, 12, 0, 6)
-    g.closePath()
-    g.fill()
+    const pr = []
+    for (let r = 0; r < 6; r++) pr.push([-20 + r * 1.2, -4 + r * 2.6])
+    fin(
+      () => {
+        g.beginPath()
+        g.moveTo(0, 0)
+        g.quadraticCurveTo(-16, -9, -22, 0)
+        g.quadraticCurveTo(-16, 12, 0, 6)
+        g.closePath()
+      },
+      pr,
+      [0, 3],
+    )
     g.restore()
 
-    // eye
-    g.fillStyle = 'rgb(8,8,12)'
+    // eye: small, dark, a faint ring of reflection
+    const ig = g.createRadialGradient(33, -29, 0, 33, -29, 3.6)
+    ig.addColorStop(0, 'rgb(2,2,4)')
+    ig.addColorStop(0.6, 'rgb(6,8,12)')
+    ig.addColorStop(0.86, 'rgb(64,80,96)')
+    ig.addColorStop(1, 'rgb(12,12,14)')
+    g.fillStyle = ig
     g.beginPath()
-    g.arc(32, -26, 3.4, 0, TAU)
+    g.arc(33, -29, 3.6, 0, TAU)
     g.fill()
-    g.fillStyle = 'rgba(190,224,255,0.65)'
-    g.beginPath()
-    g.arc(31.2, -27, 1, 0, TAU)
-    g.fill()
-
-    // lateral line
-    g.fillStyle = 'rgba(190,160,140,0.22)'
-    for (let i = 0; i < 9; i++) {
-      const x = 14 - i * 8.5
-      const y = -18 + Math.pow(i / 8, 1.6) * 16
-      g.beginPath()
-      g.arc(x, y, 0.9, 0, TAU)
-      g.fill()
-    }
+    spec(g, 33 + lx * 1.6, -29 + ly * 1.6, 1.4, 0.7, Math.atan2(ly, lx) + Math.PI / 2, 0.5)
 
     // illicium (the rod) and esca (the lure)
     const [ex, ey] = this.esca
-    g.strokeStyle = 'rgb(70,54,46)'
-    g.lineWidth = 2.4
+    g.strokeStyle = 'rgb(54,44,40)'
+    g.lineWidth = 2
     g.lineCap = 'round'
     g.beginPath()
-    g.moveTo(24, -50)
-    g.quadraticCurveTo(36, -90, ex, ey)
+    g.moveTo(26, -54)
+    g.quadraticCurveTo(38, -96, ex, ey)
     g.stroke()
-    g.fillStyle = 'rgb(214,186,146)'
+    g.globalCompositeOperation = 'lighter'
+    g.strokeStyle = 'rgba(255,230,210,0.16)'
+    g.lineWidth = 0.6
+    g.stroke()
+    g.globalCompositeOperation = 'source-over'
+    const eg = g.createRadialGradient(ex - 1.5, ey - 2, 0.5, ex, ey, 7)
+    eg.addColorStop(0, 'rgba(255,236,200,0.95)')
+    eg.addColorStop(0.6, 'rgba(206,160,110,0.7)')
+    eg.addColorStop(1, 'rgba(120,84,56,0.5)')
+    g.fillStyle = eg
     g.beginPath()
-    g.ellipse(ex, ey, 5.5, 6.5, 0.3, 0, TAU)
+    g.ellipse(ex, ey, 5.6, 6.6, 0.3, 0, TAU)
     g.fill()
 
-    // sheen
-    g.globalCompositeOperation = 'lighter'
-    const sh = g.createRadialGradient(hx * 0.9, -14 + hy * 0.9, 0, hx * 0.9, -14 + hy * 0.9, 30)
-    sh.addColorStop(0, 'rgba(255,224,200,0.14)')
-    sh.addColorStop(1, 'rgba(255,224,200,0)')
-    g.fillStyle = sh
-    g.fillRect(-70, -60, 150, 115)
-    g.globalCompositeOperation = 'source-over'
+    // the soft sheen of wet skin on the hump
+    spec(g, hx * 0.9 - 4, -26 + hy * 0.9, 20, 12, -0.3, 0.12)
     g.restore()
   }
   luresAt() {
@@ -937,55 +1319,82 @@ class Dragon extends Animal {
   center() {
     return this.toScreen(10, 0)
   }
+  beacon() {
+    return this.redAt()
+  }
   drawBody(g, t, L) {
+    const [lx, ly] = this.ldir(L)
     const [hx, hy] = this.hl(L, 30)
     this.begin(g)
     const tl = this.tail
-    // caudal fin, forked
-    g.fillStyle = 'rgba(40,32,30,0.85)'
+    // fins: clear membranes over fine rays
+    const membrane = () => {
+      g.fillStyle = 'rgba(58,50,48,0.3)'
+      g.fill()
+      rimLight(g, 'rgba(255,236,220,0.14)', 0.5)
+    }
     g.beginPath()
     g.moveTo(118, tl - 3.5)
-    g.lineTo(146, tl - 17)
-    g.quadraticCurveTo(136, tl, 146, tl + 17)
+    g.lineTo(148, tl - 18)
+    g.quadraticCurveTo(137, tl, 148, tl + 18)
     g.lineTo(118, tl + 3.5)
     g.closePath()
-    g.fill()
+    membrane()
+    g.strokeStyle = 'rgba(176,160,150,0.3)'
+    g.lineWidth = 0.5
+    g.beginPath()
+    for (let r = -3; r <= 3; r++) {
+      if (r === 0) continue
+      g.moveTo(120, tl + r * 0.8)
+      g.lineTo(146 - Math.abs(r) * 0.6, tl + r * 5.6)
+    }
+    g.stroke()
     // dorsal and anal fins, set far back as in all dragonfishes
     const fin = (i0, i1, P, dir) => {
       g.beginPath()
       g.moveTo(P[i0][0], P[i0][1])
-      g.lineTo(P[i0][0] + 10, P[i0][1] + dir * 14)
-      g.lineTo(P[i1][0] + 4, P[i1][1] + dir * 6)
+      g.lineTo(P[i0][0] + 10, P[i0][1] + dir * 15)
+      g.lineTo(P[i1][0] + 5, P[i1][1] + dir * 7)
       g.lineTo(P[i1][0], P[i1][1])
       g.closePath()
-      g.fill()
+      membrane()
+      g.strokeStyle = 'rgba(176,160,150,0.28)'
+      g.lineWidth = 0.5
+      g.beginPath()
+      for (let r = 0; r <= 4; r++) {
+        const u = r / 4
+        const bx = lerp(P[i0][0], P[i1][0], u)
+        const by = lerp(P[i0][1], P[i1][1], u)
+        g.moveTo(bx, by)
+        g.lineTo(bx + lerp(10, 5, u), by + dir * lerp(15, 7, u))
+      }
+      g.stroke()
     }
-    g.fillStyle = 'rgba(46,38,34,0.8)'
     fin(23, 26, this.top, -1)
     fin(22, 26, this.bot, 1)
-    // body
-    // the head has no floor to its mouth: the outline runs from the snout
-    // along the upper jaw to the gape corner, then back along the belly
+    // body: scaleless black skin with a sheen band that follows the lamp.
+    // The head has no floor to its mouth: the outline runs from the snout
+    // along the upper jaw to the gape corner, then back along the belly.
     const belly = this.bot.filter((p) => p[0] > -60).reverse()
     const al = 0.06 + 0.24 * this.open
     const outline = [...this.top, [122, tl], ...belly, [-58, 10], [-70, 6], [-86, 3.5], [-98, 1], [-103, -3]]
     smoothClosed(g, outline)
+    const band = clamp(0.4 - ly * 0.12, 0.2, 0.6)
     const bg = g.createLinearGradient(0, -22, 0, 24)
-    bg.addColorStop(0, 'rgb(18,15,15)')
-    bg.addColorStop(0.36, 'rgb(76,64,56)')
-    bg.addColorStop(0.5, 'rgb(46,38,34)')
-    bg.addColorStop(1, 'rgb(10,9,9)')
+    bg.addColorStop(0, 'rgb(6,6,7)')
+    bg.addColorStop(band, 'rgb(50,46,46)')
+    bg.addColorStop(Math.min(0.95, band + 0.2), 'rgb(22,20,20)')
+    bg.addColorStop(1, 'rgb(5,5,6)')
     g.fillStyle = bg
     g.fill()
-    g.strokeStyle = 'rgba(255,230,210,0.24)'
-    g.lineWidth = 1.2
-    g.stroke()
+    rimLight(g, dirGrad(g, lx, ly, 110, [236, 240, 236], 0.4, 0.02), 0.8)
+    spec(g, hx - 20, band * 46 - 22, 34, 3, 0, 0.16)
     // ventral photophores (unlit, seen as pale beads)
-    g.fillStyle = 'rgba(210,200,180,0.35)'
+    g.fillStyle = 'rgba(206,200,184,0.3)'
     for (let i = 4; i < 25; i++) {
       const [x, y] = this.bot[i]
       g.beginPath()
-      g.arc(x, y - 2.6, 1.05, 0, TAU)
+      g.arc(x, y - 2.6, 0.95, 0, TAU)
       g.fill()
     }
     // the loose jaw: a bony frame with no floor, hinged far back
@@ -993,79 +1402,76 @@ class Dragon extends Animal {
     const Hy = 9
     const Jx = Hx - Math.cos(al) * 64
     const Jy = Hy + Math.sin(al) * 64
-    g.strokeStyle = 'rgb(112,96,86)'
-    g.lineWidth = 3.6
+    g.strokeStyle = 'rgb(84,74,68)'
+    g.lineWidth = 3.2
     g.lineCap = 'round'
     g.beginPath()
     g.moveTo(Hx, Hy)
     g.lineTo(Jx, Jy)
     g.stroke()
-    g.strokeStyle = 'rgba(255,236,220,0.3)'
-    g.lineWidth = 1
+    g.globalCompositeOperation = 'lighter'
+    g.strokeStyle = 'rgba(255,240,226,0.26)'
+    g.lineWidth = 0.8
     g.beginPath()
-    g.moveTo(Hx, Hy - 1.4)
-    g.lineTo(Jx, Jy - 1.4)
+    g.moveTo(Hx, Hy - 1.3)
+    g.lineTo(Jx, Jy - 1.3)
     g.stroke()
-    g.fillStyle = 'rgba(236,228,212,0.9)'
+    g.globalCompositeOperation = 'source-over'
+    // fangs: slender needles
+    g.fillStyle = 'rgba(228,224,212,0.62)'
+    const needle = (x, y, dx, dy, w) => {
+      g.beginPath()
+      g.moveTo(x - w, y)
+      g.quadraticCurveTo(x - w * 0.3 + dx * 0.4, y + dy * 0.6, x + dx, y + dy)
+      g.quadraticCurveTo(x + w * 1.1, y + dy * 0.5, x + w, y)
+      g.closePath()
+      g.fill()
+    }
     for (let i = 0; i < 5; i++) {
       const u = 0.45 + i * 0.12
-      const x = lerp(Hx, Jx, u)
-      const y = lerp(Hy, Jy, u)
-      const len = 5 + i * 1.6
-      g.beginPath()
-      g.moveTo(x - 1, y)
-      g.lineTo(x - 2, y - len)
-      g.lineTo(x + 1.2, y)
-      g.closePath()
-      g.fill()
+      needle(lerp(Hx, Jx, u), lerp(Hy, Jy, u), -1.4, -(5 + i * 1.7), 0.9)
     }
-    for (let i = 0; i < 3; i++) {
-      const x = -96 + i * 6
-      g.beginPath()
-      g.moveTo(x - 1, 2)
-      g.lineTo(x - 2.4, 2 + 7 + i)
-      g.lineTo(x + 1.2, 2)
-      g.closePath()
-      g.fill()
-    }
-    // eye
-    g.fillStyle = 'rgb(12,12,14)'
+    for (let i = 0; i < 3; i++) needle(-96 + i * 6, 2, -1.6, 7 + i * 1.4, 0.85)
+    // eye: large, dark, a green-grey ring of reflection
+    const ig = g.createRadialGradient(-86, -8, 0, -86, -8, 6.4)
+    ig.addColorStop(0, 'rgb(2,3,4)')
+    ig.addColorStop(0.6, 'rgb(8,12,12)')
+    ig.addColorStop(0.86, 'rgb(34,48,44)')
+    ig.addColorStop(1, 'rgb(10,12,12)')
+    g.fillStyle = ig
     g.beginPath()
     g.arc(-86, -8, 6.4, 0, TAU)
     g.fill()
-    g.strokeStyle = 'rgba(196,206,196,0.55)'
-    g.lineWidth = 1.1
-    g.stroke()
-    g.fillStyle = 'rgba(255,255,255,0.75)'
+    const la = Math.atan2(ly, lx)
+    g.globalCompositeOperation = 'lighter'
+    g.strokeStyle = 'rgba(200,230,220,0.22)'
+    g.lineWidth = 0.6
     g.beginPath()
-    g.arc(-88, -10, 1.3, 0, TAU)
-    g.fill()
-    // the red suborbital photophore (brown when not lit), the small postorbital one
-    g.fillStyle = 'rgb(104,42,30)'
+    g.arc(-86, -8, 5.2, la - 0.5, la + 0.5)
+    g.stroke()
+    g.globalCompositeOperation = 'source-over'
+    // the red suborbital photophore (glossy, dark when unlit), the small postorbital one
+    const rg = g.createRadialGradient(-85, 4, 0.5, -84, 5, 6.8)
+    rg.addColorStop(0, 'rgb(150,44,32)')
+    rg.addColorStop(1, 'rgb(54,12,10)')
+    g.fillStyle = rg
     g.beginPath()
     g.ellipse(-84, 5, 6.6, 4, -0.25, 0, TAU)
     g.fill()
-    g.fillStyle = 'rgb(176,196,186)'
+    spec(g, -84 + lx * 2, 5 + ly * 1.4, 2.2, 1, -0.25, 0.4)
+    g.fillStyle = 'rgb(150,176,168)'
     g.beginPath()
-    g.arc(-72, -5, 2.6, 0, TAU)
+    g.arc(-72, -5, 2.5, 0, TAU)
     g.fill()
     // pectoral fin rays
-    g.strokeStyle = 'rgba(160,140,126,0.35)'
-    g.lineWidth = 0.7
-    for (let r = 0; r < 4; r++) {
+    g.strokeStyle = 'rgba(160,140,126,0.32)'
+    g.lineWidth = 0.55
+    for (let r = 0; r < 5; r++) {
       g.beginPath()
       g.moveTo(-58, 14)
-      g.lineTo(-40 + r * 3, 22 + r * 2 + Math.sin(t * 1.6 + r) * 1.5)
+      g.lineTo(-40 + r * 2.6, 22 + r * 2 + Math.sin(t * 1.6 + r) * 1.5)
       g.stroke()
     }
-    // sheen
-    g.globalCompositeOperation = 'lighter'
-    const sh = g.createRadialGradient(hx, hy - 4, 0, hx, hy - 4, 40)
-    sh.addColorStop(0, 'rgba(255,226,200,0.14)')
-    sh.addColorStop(1, 'rgba(255,226,200,0)')
-    g.fillStyle = sh
-    g.fillRect(-100, -30, 230, 60)
-    g.globalCompositeOperation = 'source-over'
     g.restore()
   }
   redAt() {
@@ -1096,7 +1502,8 @@ class Dragon extends Animal {
     g.fill()
     dot(g, sp.redSoft, ox, oy, 34, 0.5 * r)
     dot(g, sp.red, ox, oy, 15, 0.95 * r)
-    dot(g, sp.cyan, -72, -5, 9, 0.75 + 0.2 * Math.sin(t * 1.7 + this.seed))
+    dot(g, sp.cyanSoft, -72, -5, 10, 0.35)
+    dot(g, sp.cyan, -72, -5, 5.5, 0.6 + 0.2 * Math.sin(t * 1.7 + this.seed))
     for (let i = 4; i < 25; i += 2) {
       const [x, y] = this.bot[i]
       dot(g, sp.blue, x, y - 2.6, 3.4, 0.22 + 0.14 * Math.sin(t * 1.3 + i))
@@ -1106,20 +1513,26 @@ class Dragon extends Animal {
 }
 
 /* ------------------------------------------ Lampocteis cruentiventer */
+// A lobate comb jelly: a clear, laterally flattened body with a blood-red
+// gut, two broad oral lobes, small auricles, and eight comb rows whose
+// beating cilia split the lamp into running rainbows.
 class Comb extends Animal {
   constructor() {
     super('comb')
     this.radius = 70
-    this.anchor = [30, -36]
-    this.ext = [48, 56]
-    this.color = [234, 246, 244]
+    this.anchor = [30, -38]
+    this.ext = [50, 58]
+    this.color = C.ink
     this.sparkT = 6 + Math.random() * 4
     this.spark = -1
+    this.sparkRow = 0
   }
   update(t, dt) {
     const k = this.seed
     this.flap = Math.sin(t * 0.85 + k)
-    this.rot = -0.12 + 0.12 * Math.sin(t * 0.11 + k)
+    this.flap2 = Math.sin(t * 0.85 + k + 0.9)
+    this.spin = t * 0.07 + k
+    this.rot = -0.14 + 0.12 * Math.sin(t * 0.11 + k)
     this.x = this.bx + Math.sin(t * 0.1 + k) * 10 * this.s
     this.y = this.by + Math.sin(t * 0.13 + k) * 14 * this.s
     this.sparkT -= dt
@@ -1133,94 +1546,160 @@ class Comb extends Animal {
       if (this.spark > 1.4) this.spark = -1
     }
   }
+  /** half-width of the body at height y (local) */
   hw(y) {
-    return y < -10 ? 34 * Math.sqrt(Math.max(0, 1 - ((y + 10) / 47) ** 2)) : 34 + (y + 10) * 0.28
+    return y < -14 ? 27 * Math.sqrt(Math.max(0, 1 - ((y + 14) / 47) ** 2)) : 27 - ((y + 14) / 44) * 12
+  }
+  beacon() {
+    return this.toScreen(0, -10)
   }
   drawBody(g, t, L) {
-    const [hx, hy] = this.hl(L, 20)
-    const f = this.flap
+    const [lx, ly] = this.ldir(L)
+    const [hx, hy] = this.hl(L, 18)
     this.begin(g)
+    // an oral lobe: a broad, thin flap draping from the mouth end, with
+    // the looping canals lobate comb jellies carry in their lobes
+    const lobe = (sx, f) => {
+      g.beginPath()
+      g.moveTo(sx * 22, -10)
+      g.bezierCurveTo(sx * (36 + 3 * f), 0, sx * (46 + 6 * f), 24 + 4 * f, sx * (42 + 6 * f), 46 + 3 * f)
+      g.bezierCurveTo(sx * (38 + 4 * f), 62 + 2 * f, sx * 14, 66, sx * 4, 50)
+      g.bezierCurveTo(sx * 0, 42, sx * 4, 34, sx * 10, 28)
+      g.closePath()
+    }
+    const canal = (sx, f) => {
+      g.beginPath()
+      g.moveTo(sx * 20, -2)
+      g.bezierCurveTo(sx * (34 + 3 * f), 8, sx * (40 + 5 * f), 28, sx * (36 + 5 * f), 46)
+      g.bezierCurveTo(sx * (32 + 3 * f), 58, sx * 16, 60, sx * 10, 48)
+      g.bezierCurveTo(sx * 6, 38, sx * 22, 34, sx * 24, 22)
+      g.bezierCurveTo(sx * 26, 12, sx * 18, 10, sx * 16, 18)
+      g.strokeStyle = 'rgba(255,196,220,0.15)'
+      g.lineWidth = 0.6
+      g.stroke()
+    }
+    // the far lobe first, dimmer
+    lobe(-1, this.flap)
+    const lf = g.createLinearGradient(0, 0, 0, 64)
+    lf.addColorStop(0, 'rgba(150,60,110,0.1)')
+    lf.addColorStop(1, 'rgba(150,60,110,0.03)')
+    g.fillStyle = lf
+    g.fill()
+    rimLight(g, 'rgba(255,200,226,0.14)', 0.5)
+    canal(-1, this.flap)
+
+    // body: clear jelly
     const body = () => {
       g.beginPath()
-      g.moveTo(0, -57)
-      g.bezierCurveTo(22, -57, 35, -34, 35, -10)
-      g.bezierCurveTo(35, 8, 44 + f * 3, 20, 47 + f * 4, 38)
-      g.bezierCurveTo(48, 54, 28, 60, 15, 47)
-      g.quadraticCurveTo(7, 37, 0, 35)
-      g.quadraticCurveTo(-7, 37, -15, 47)
-      g.bezierCurveTo(-28, 60, -48, 54, -47 - f * 4, 38)
-      g.bezierCurveTo(-44 - f * 3, 20, -35, 8, -35, -10)
-      g.bezierCurveTo(-35, -34, -22, -57, 0, -57)
+      g.moveTo(0, -61)
+      g.bezierCurveTo(16, -61, 27, -42, 27, -16)
+      g.bezierCurveTo(27, 4, 21, 20, 14, 31)
+      g.quadraticCurveTo(0, 36, -14, 31)
+      g.bezierCurveTo(-21, 20, -27, 4, -27, -16)
+      g.bezierCurveTo(-27, -42, -16, -61, 0, -61)
       g.closePath()
     }
     body()
-    const grd = g.createRadialGradient(hx, -12 + hy, 2, 0, -4, 70)
-    grd.addColorStop(0, 'rgba(196,72,116,0.55)')
-    grd.addColorStop(0.5, 'rgba(122,24,70,0.46)')
-    grd.addColorStop(1, 'rgba(70,8,44,0.4)')
-    g.fillStyle = grd
+    const bf = g.createRadialGradient(0, -14, 4, 0, -14, 52)
+    bf.addColorStop(0, 'rgba(120,40,90,0.08)')
+    bf.addColorStop(0.75, 'rgba(160,70,120,0.12)')
+    bf.addColorStop(1, 'rgba(220,150,190,0.3)')
+    g.fillStyle = bf
     g.fill()
-    g.strokeStyle = 'rgba(255,196,220,0.34)'
-    g.lineWidth = 1.2
-    g.stroke()
-    // oral lobes' inner folds
-    g.strokeStyle = 'rgba(255,170,200,0.16)'
-    g.lineWidth = 1
-    for (const sx of [-1, 1]) {
-      g.beginPath()
-      g.moveTo(sx * 10, 30)
-      g.bezierCurveTo(sx * 30, 26, sx * (40 + f * 3), 38, sx * 30, 50)
-      g.stroke()
+    rimLight(g, dirGrad(g, lx, ly, 50, [255, 214, 232], 0.5, 0.18), 0.8)
+
+    // the meridional canals under the comb rows (all eight, around the body)
+    const ROWS = 8
+    const pos = []
+    for (let r = 0; r < ROWS; r++) {
+      const ph = ((r + 0.5) / ROWS) * TAU + this.spin
+      pos.push([Math.sin(ph), Math.cos(ph)])
     }
-    // the bloody belly
-    const sg = g.createRadialGradient(-2, -12, 1, 0, -6, 26)
-    sg.addColorStop(0, 'rgba(150,10,30,0.95)')
-    sg.addColorStop(0.7, 'rgba(96,0,20,0.92)')
-    sg.addColorStop(1, 'rgba(60,0,14,0.0)')
+    g.strokeStyle = 'rgba(255,190,214,0.1)'
+    g.lineWidth = 0.6
+    for (const [u, c] of pos) {
+      g.beginPath()
+      for (let y = -54; y <= 24; y += 6) {
+        const x = u * this.hw(y) * 0.94
+        if (y === -54) g.moveTo(x, y)
+        else g.lineTo(x, y)
+      }
+      g.globalAlpha *= c > 0 ? 1 : 0.5
+      g.stroke()
+      g.globalAlpha /= c > 0 ? 1 : 0.5
+    }
+
+    // the bloody belly: a deep red gut that hides what it has eaten
+    g.beginPath()
+    g.moveTo(0, -36)
+    g.bezierCurveTo(9, -36, 11, -16, 10, 2)
+    g.bezierCurveTo(9, 16, 5, 24, 0, 26)
+    g.bezierCurveTo(-5, 24, -9, 16, -10, 2)
+    g.bezierCurveTo(-11, -16, -9, -36, 0, -36)
+    g.closePath()
+    const sg = g.createRadialGradient(hx * 0.3, -10 + hy * 0.3, 1, 0, -6, 30)
+    sg.addColorStop(0, 'rgba(190,24,52,0.94)')
+    sg.addColorStop(0.5, 'rgba(120,6,32,0.92)')
+    sg.addColorStop(1, 'rgba(60,0,18,0.86)')
     g.fillStyle = sg
-    g.beginPath()
-    g.ellipse(0, -6, 11, 25, 0, 0, TAU)
     g.fill()
-    g.strokeStyle = 'rgba(160,50,70,0.5)'
-    g.lineWidth = 2
-    g.beginPath()
-    g.moveTo(0, 18)
-    g.lineTo(0, 34)
-    g.stroke()
+    rimLight(g, 'rgba(255,140,160,0.24)', 0.6)
+    spec(g, hx * 0.3 - 2, -18 + hy * 0.3, 2.6, 7, 0.1, 0.36)
+    // the statocyst at the aboral pole
+    spec(g, 0, -57, 1.6, 1.6, 0, 0.7)
+
+    // auricles: small ciliated flaps beside the mouth
+    g.strokeStyle = 'rgba(255,214,232,0.34)'
+    g.lineWidth = 0.7
+    for (const sx of [-1, 1]) {
+      for (const k of [0, 1]) {
+        const w = Math.sin(t * 2.4 + k * 1.3 + sx) * 2
+        g.beginPath()
+        g.moveTo(sx * (11 + k * 3), 22 + k * 3)
+        g.quadraticCurveTo(sx * (20 + k * 2), 22 + k * 5 + w, sx * (17 + k * 3), 32 + k * 4)
+        g.stroke()
+      }
+    }
+
+    // the near lobe, over the body
+    lobe(1, this.flap2)
+    g.fillStyle = lf
+    g.fill()
+    rimLight(g, dirGrad(g, lx, ly, 40, [255, 210, 230], 0.34, 0.08), 0.5)
+    canal(1, this.flap2)
+
     // eight comb rows: the lamp's light diffracted into travelling rainbows
-    const rows = [-0.93, -0.7, -0.42, -0.14, 0.14, 0.42, 0.7, 0.93]
     g.globalCompositeOperation = 'lighter'
     g.lineCap = 'round'
-    for (let r = 0; r < rows.length; r++) {
-      const u = rows[r]
-      const fade = 1 - Math.abs(u) * 0.45
-      // the band: a spectrum sliding down the row
-      const lg = g.createLinearGradient(0, -50, 0, 26)
+    for (let r = 0; r < ROWS; r++) {
+      const [u, c] = pos[r]
+      const vis = c > 0 ? 0.45 + 0.55 * c : 0.22
+      const lg = g.createLinearGradient(0, -52, 0, 26)
       for (let q = 0; q <= 5; q++) {
         const hue = (((r * 52 + q * 70 - t * 160) % 360) + 360) % 360
-        lg.addColorStop(q / 5, `hsla(${hue.toFixed(0)},100%,62%,${(0.34 * fade).toFixed(3)})`)
+        lg.addColorStop(q / 5, `hsla(${hue.toFixed(0)},100%,64%,${(0.26 * vis).toFixed(3)})`)
       }
       g.strokeStyle = lg
-      g.lineWidth = 3 * fade
+      g.lineWidth = 2.2 * vis
       g.beginPath()
-      for (let y = -50; y <= 26; y += 3) {
+      for (let y = -52; y <= 26; y += 3) {
         const x = u * this.hw(y)
-        if (y === -50) g.moveTo(x, y)
+        if (y === -52) g.moveTo(x, y)
         else g.lineTo(x, y)
       }
       g.stroke()
       // the comb plates flash as each metachronal wave passes
-      for (let p = 0; p < 22; p++) {
-        const y = -49 + p * 3.4
+      g.lineWidth = 1.3
+      for (let p = 0; p < 23; p++) {
+        const y = -51 + p * 3.4
         const x = u * this.hw(y)
         const wave = Math.pow(0.5 + 0.5 * Math.sin(p * 0.7 - t * 5.6 + r * 0.8), 4)
         if (wave < 0.06) continue
         const hue = (((r * 52 + p * 18 - t * 160) % 360) + 360) % 360
-        g.strokeStyle = `hsla(${hue.toFixed(0)},100%,${(66 + 20 * wave).toFixed(0)}%,${(wave * fade).toFixed(3)})`
-        g.lineWidth = 1.6
+        g.strokeStyle = `hsla(${hue.toFixed(0)},100%,${(68 + 20 * wave).toFixed(0)}%,${(wave * vis).toFixed(3)})`
         g.beginPath()
-        g.moveTo(x - 2.6 * fade, y)
-        g.lineTo(x + 2.6 * fade, y + 0.5)
+        g.moveTo(x - 2.2 * vis, y)
+        g.lineTo(x + 2.2 * vis, y + 0.5)
         g.stroke()
       }
     }
@@ -1229,8 +1708,8 @@ class Comb extends Animal {
   }
   drawGlow(g, t, sp) {
     if (this.spark < 0) return
-    const rows = [-0.93, -0.7, -0.42, -0.14, 0.14, 0.42, 0.7, 0.93]
-    const u = rows[this.sparkRow]
+    const ph = ((this.sparkRow + 0.5) / 8) * TAU + this.spin
+    const u = Math.sin(ph)
     const e = smooth(0, 0.15, this.spark) * (1 - smooth(0.3, 1.4, this.spark))
     this.begin(g)
     for (let p = 0; p < 17; p += 3) {
@@ -1364,66 +1843,68 @@ class Siphonophore extends Animal {
     const p = this.pts[this.anchorIdx]
     return p && this.anchorIdx > 0 ? [p.x, p.y] : [this.x, this.y]
   }
-  labelPoint() {
+  beacon() {
+    const p = this.pts[Math.floor(this.pts.length * 0.35)]
+    return p ? [p.x, p.y] : [this.x, this.y]
+  }
+  pinAt() {
     const [x, y] = this.center()
-    return [x, y - 18 * this.s]
+    return [x, y - 12 * this.s]
   }
   drawBody(g, t, L) {
     const s = this.s
     const R = L.r + 80 * s
     const k = this.seed
-    // stem
-    g.strokeStyle = 'rgba(226,238,255,0.5)'
-    g.lineWidth = Math.max(0.8, 1.1 * s)
+    // stem: a fine glassy thread
     g.beginPath()
     g.moveTo(this.x, this.y)
     for (const p of this.pts) g.lineTo(p.x, p.y)
+    g.strokeStyle = 'rgba(226,238,255,0.42)'
+    g.lineWidth = Math.max(0.7, 0.9 * s)
     g.stroke()
-    // cormidia: bract, polyp, fishing tentacle
+    rimLight(g, 'rgba(200,226,255,0.1)', Math.max(0.6, 0.8 * s))
+    // cormidia: bract, polyp, fishing tentacle with its side branches
     for (let i = 0; i < this.pts.length; i++) {
       const p = this.pts[i]
       if (Math.abs(p.x - L.x) > R || Math.abs(p.y - L.y) > R + 60 * s) continue
       const ang = Math.atan2(p.ty, p.tx)
-      // tentacle with tentilla
       const sw = Math.sin(t * 0.5 + i * 0.9 + k)
-      g.strokeStyle = 'rgba(255,196,176,0.3)'
-      g.lineWidth = Math.max(0.6, 0.7 * s)
+      g.strokeStyle = 'rgba(255,214,200,0.26)'
+      g.lineWidth = Math.max(0.5, 0.6 * s)
       g.beginPath()
       g.moveTo(p.x, p.y + 4 * s)
-      let tx = p.x
-      let ty = p.y + 4 * s
-      for (let q = 1; q <= 8; q++) {
-        const u = q / 8
-        tx = p.x + sw * 9 * s * u * u + Math.sin(u * 3 + t * 0.6 + i) * 2 * s
-        ty = p.y + 4 * s + u * 64 * s
-        g.lineTo(tx, ty)
+      for (let q = 1; q <= 10; q++) {
+        const u = q / 10
+        g.lineTo(p.x + sw * 9 * s * u * u + Math.sin(u * 3 + t * 0.6 + i) * 2 * s, p.y + 4 * s + u * 70 * s)
       }
       g.stroke()
-      g.fillStyle = 'rgba(255,168,140,0.5)'
-      for (let q = 2; q <= 8; q += 2) {
-        const u = q / 8
-        const x = p.x + sw * 9 * s * u * u + Math.sin(u * 3 + t * 0.6 + i) * 2 * s
-        const y = p.y + 4 * s + u * 64 * s
-        g.beginPath()
-        g.arc(x + 2 * s, y, 1.3 * s, 0, TAU)
-        g.fill()
-      }
-      // gastrozooid
-      g.fillStyle = 'rgba(255,150,96,0.62)'
+      // tentilla: tiny coiled side branches
+      g.strokeStyle = 'rgba(255,190,170,0.3)'
+      g.lineWidth = Math.max(0.4, 0.5 * s)
       g.beginPath()
-      g.ellipse(p.x + 1 * s, p.y + 7 * s, 2.6 * s, 6 * s, 0.1 * sw, 0, TAU)
+      for (let q = 2; q <= 9; q++) {
+        const u = q / 10
+        const x = p.x + sw * 9 * s * u * u + Math.sin(u * 3 + t * 0.6 + i) * 2 * s
+        const y = p.y + 4 * s + u * 70 * s
+        g.moveTo(x, y)
+        g.quadraticCurveTo(x + 4 * s, y + 1 * s, x + 3 * s, y + 4 * s)
+      }
+      g.stroke()
+      // gastrozooid: a translucent peach polyp
+      g.fillStyle = 'rgba(255,170,120,0.36)'
+      g.beginPath()
+      g.ellipse(p.x + 1 * s, p.y + 7 * s, 2.4 * s, 5.6 * s, 0.1 * sw, 0, TAU)
       g.fill()
-      // bract
+      // bract: a clear shield, rim-lit
       g.save()
       g.translate(p.x, p.y)
       g.rotate(ang)
-      g.fillStyle = 'rgba(190,226,255,0.16)'
-      g.strokeStyle = 'rgba(226,244,255,0.5)'
-      g.lineWidth = Math.max(0.6, 0.8 * s)
       g.beginPath()
-      g.ellipse(0, -3 * s, 10 * s, 5.5 * s, 0, 0, TAU)
+      g.ellipse(0, -3 * s, 10 * s, 5.4 * s, 0, 0, TAU)
+      g.fillStyle = 'rgba(170,214,255,0.06)'
       g.fill()
-      g.stroke()
+      rimLight(g, 'rgba(226,244,255,0.24)', Math.max(0.5, 0.6 * s))
+      spec(g, -3 * s, -6 * s, 3.4 * s, 1.1 * s, 0, 0.3)
       g.restore()
     }
     // two glassy swimming bells at the head
@@ -1436,25 +1917,26 @@ class Siphonophore extends Animal {
       g.translate(cx, cy)
       g.rotate(this.rot)
       g.scale(s * pul, s / pul)
-      const bg = g.createRadialGradient(-4, -3, 1, 0, 0, 22)
-      bg.addColorStop(0, 'rgba(220,240,255,0.26)')
-      bg.addColorStop(0.7, 'rgba(160,210,255,0.1)')
-      bg.addColorStop(1, 'rgba(160,210,255,0.05)')
-      g.fillStyle = bg
-      g.strokeStyle = 'rgba(232,246,255,0.62)'
-      g.lineWidth = 1
       g.beginPath()
       g.ellipse(0, 0, 21, 15, 0, 0, TAU)
+      const bg = g.createRadialGradient(-4, -3, 1, 0, 0, 22)
+      bg.addColorStop(0, 'rgba(200,230,255,0.05)')
+      bg.addColorStop(0.75, 'rgba(170,214,255,0.08)')
+      bg.addColorStop(1, 'rgba(200,232,255,0.22)')
+      g.fillStyle = bg
       g.fill()
-      g.stroke()
-      g.strokeStyle = 'rgba(232,246,255,0.26)'
+      rimLight(g, 'rgba(226,244,255,0.3)', 0.7)
+      // the nectosac and its canals, seen through
       g.beginPath()
       g.ellipse(3, 0, 12, 8, 0, 0, TAU)
+      g.strokeStyle = 'rgba(226,246,255,0.24)'
+      g.lineWidth = 0.7
       g.stroke()
       g.beginPath()
       g.moveTo(-18, 0)
-      g.lineTo(15, 0)
+      g.quadraticCurveTo(-4, -2, 15, 0)
       g.stroke()
+      spec(g, -6, -8, 7, 2.2, -0.15, 0.5)
       g.restore()
     }
   }
@@ -1560,7 +2042,7 @@ export function init(ctx) {
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches && !ctx.isTouch
   section.classList.add('is-live', reduced ? 'is-static' : 'is-float')
 
-  const hint = reduced ? 'Here are six of the animals that make it.' : fine ? null : 'Tap the dark to see who made it.'
+  const hint = reduced ? 'Here are the animals that made them.' : fine ? null : 'Tap the dark to see who made them.'
   if (hint) section.querySelectorAll('[data-hint]').forEach((el) => (el.textContent = hint))
 
   const sp = {
@@ -1568,12 +2050,16 @@ export function init(ctx) {
     blue: makeSprite(C.blue),
     lure: makeSprite(C.lure),
     red: makeSprite(C.red, 64, 0.7),
+    ink: makeSprite(C.ink, 64, 0.8),
     lamp: makeSprite(C.lamp, 32),
     cyanSoft: makeSoft(C.cyan),
     blueSoft: makeSoft(C.blue),
     lureSoft: makeSoft(C.lure, 128),
     redSoft: makeSoft(C.red),
+    inkSoft: makeSoft(C.ink),
+    spec: makeSpec(),
   }
+  SPR = sp
   const beamTex = makeBeam()
 
   const animals = [new Siphonophore(), new Atolla(), new Comb(), new Angler(), new Dragon(), new Squid()]
@@ -1581,12 +2067,24 @@ export function init(ctx) {
   const labels = new Map()
   section.querySelectorAll('.creatures__specimen').forEach((li) => {
     const a = byId[li.dataset.animal]
-    if (a) labels.set(a, { el: li, btn: li.querySelector('button'), w: 200, h: 80, x: -1e4, y: -1e4, on: false, found: false })
+    if (!a) return
+    labels.set(a, {
+      el: li,
+      btn: li.querySelector('button'),
+      name: li.querySelector('.creatures__common')?.textContent.trim() || a.id,
+      w: 200,
+      h: 80,
+      x: -1e4,
+      y: -1e4,
+      on: false,
+    })
   })
   const pips = new Map([...section.querySelectorAll('[data-pip]')].map((el) => [el.dataset.pip, el]))
   const foundEl = section.querySelector('[data-found]')
   const noteEl = section.querySelector('[data-note]')
   const countEl = section.querySelector('.creatures__count')
+  const announceEl = section.querySelector('[data-announce]')
+  const logEl = section.querySelector('.creatures__log')
   const litEls = [...section.querySelectorAll('.creatures__lit')]
   const intro = section.querySelector('.creatures__intro')
 
@@ -1600,6 +2098,8 @@ export function init(ctx) {
   let t = 8.0
   let shift = 0
   let lastShift = 0
+  let lastSY = window.scrollY
+  let dScroll = 0 // page scroll since last frame (px): the descent speed
   let running = false
   let visible = false
   let active = false
@@ -1610,19 +2110,23 @@ export function init(ctx) {
   let bottomInset = 24
   let leftInset = 20
   let obstacles = []
+  let glowObs = []
   let logRect = null
   let introRect = null
 
-  const lamp = { x: 0, y: 0, r: 220, on: 0, onT: -1, want: false, mode: 'idle' }
+  // pow: the lamp's own state (off, flickering on, on); on: what it gives
+  // after the six-of-six dimming
+  const lamp = { x: 0, y: 0, r: 220, on: 0, pow: 0, onT: -1, want: false, mode: 'idle' }
   const pointer = { cx: 0, cy: 0, t: -1e9, inside: false }
   const touch = { x: 0, y: 0, t: -1e9 }
   const idle = { target: null, last: null, hold: 0, px: 0, py: 0 }
+  const finale = { t: -1, relit: false, pinged: false, pingT: 0, px: 0, py: 0 }
   let focusA = null
+  let focusSince = 0
 
-  const lightAt = (x, y) => {
-    const d = Math.hypot(x - lamp.x, y - lamp.y) / lamp.r
-    return lamp.on * (1 - smooth(0.18, 1, d))
-  }
+  // the lamp's pool: flat in the middle, a defined edge
+  const fall = (d) => Math.pow(1 - smooth(0.4, 1, d), 1.25)
+  const lightAt = (x, y) => lamp.on * fall(Math.hypot(x - lamp.x, y - lamp.y) / lamp.r)
 
   // offscreen buffers: lamp-sized body layer, small self-light layer
   const bodyC = document.createElement('canvas')
@@ -1633,7 +2137,7 @@ export function init(ctx) {
   let maskSide = 0
 
   // marine snow, lit only inside the beam
-  const SN = 150
+  const SN = 190
   const snow = new Float32Array(SN * 4)
   // plankton flashes, ambient living light
   const flashes = Array.from({ length: 14 }, () => ({ x: 0, y: 0, age: 1, life: 1, r: 3, c: 0 }))
@@ -1643,7 +2147,7 @@ export function init(ctx) {
     for (let i = 0; i < SN; i++) {
       snow[i * 4] = Math.random() * W
       snow[i * 4 + 1] = Math.random() * H
-      snow[i * 4 + 2] = 0.25 + Math.random() * 0.75
+      snow[i * 4 + 2] = Math.pow(Math.random(), 1.6)
       snow[i * 4 + 3] = Math.random() * TAU
     }
   }
@@ -1656,7 +2160,7 @@ export function init(ctx) {
     H = Math.max(1, Math.round(canvas.clientHeight))
     mobile = W < 768
     L = mobile ? LAYOUTS.mobile : LAYOUTS.desktop
-    dpr = Math.min(ctx.dpr || 1, mobile ? 1.5 : 1.5)
+    dpr = Math.min(ctx.dpr || 1, 1.5)
     canvas.width = Math.round(W * dpr)
     canvas.height = Math.round(H * dpr)
     unit = L.unit(W, H)
@@ -1686,9 +2190,6 @@ export function init(ctx) {
     for (const lab of labels.values()) {
       lab.w = lab.el.offsetWidth
       lab.h = lab.el.offsetHeight
-      const nm = lab.el.querySelector('.creatures__common')
-      lab.nw = nm ? nm.offsetWidth : lab.w
-      lab.nh = nm ? nm.offsetHeight : 22
       lab.x = lab.y = -1e4
     }
     for (const el of litEls) {
@@ -1709,7 +2210,7 @@ export function init(ctx) {
       introRect = { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2, intro: true }
       obstacles.push(introRect)
     }
-    const lg = section.querySelector('.creatures__log')?.getBoundingClientRect()
+    const lg = logEl?.getBoundingClientRect()
     logRect = lg ? { x: lg.left - r.left - pad, y: lg.top - r.top - pad, w: lg.width + pad * 2, h: lg.height + pad * 2 } : null
     if (logRect) obstacles.push(logRect)
     const hud = document.querySelector('.hud__readout')?.getBoundingClientRect()
@@ -1729,16 +2230,16 @@ export function init(ctx) {
       maskSide = side
       const h = side / 2
       maskGrad = bg.createRadialGradient(h, h, 0, h, h, h)
-      for (let i = 0; i <= 10; i++) {
-        const d = i / 10
-        maskGrad.addColorStop(d, `rgba(0,0,0,${(1 - smooth(0.18, 1, d)).toFixed(3)})`)
+      for (let i = 0; i <= 12; i++) {
+        const d = i / 12
+        maskGrad.addColorStop(d, `rgba(0,0,0,${fall(d).toFixed(3)})`)
       }
     }
     return side
   }
 
   function beamOrigin() {
-    return [W * 0.5 + (lamp.x - W * 0.5) * 0.2, H * 1.18]
+    return [W * 0.5 + (lamp.x - W * 0.5) * 0.2, H * 1.2]
   }
   function drawBeam() {
     const on = lamp.on
@@ -1751,17 +2252,19 @@ export function init(ctx) {
     g.save()
     g.translate(ox, oy)
     g.rotate(Math.atan2(dy, dx))
-    const half = lamp.r * 1.55
-    g.globalAlpha = on * 0.2
-    g.drawImage(beamTex, 0, -half, d / 0.8, half * 2)
+    const half = lamp.r * 1.04
+    g.globalAlpha = on * 0.11
+    g.drawImage(beamTex, 0, -half, d / BEAM_SPOT, half * 2)
     g.restore()
-    // the pool of lit water around the spot: backscatter
-    const R = lamp.r * 1.35
+    // where the cone meets the water around the animals: backscatter, a
+    // flat pool with a defined edge
+    const R = lamp.r
     const hz = g.createRadialGradient(lamp.x, lamp.y, 0, lamp.x, lamp.y, R)
-    hz.addColorStop(0, 'rgba(255,236,210,0.16)')
-    hz.addColorStop(0.3, 'rgba(255,236,210,0.09)')
-    hz.addColorStop(0.6, 'rgba(255,236,210,0.03)')
-    hz.addColorStop(1, 'rgba(255,236,210,0)')
+    hz.addColorStop(0, 'rgba(214,234,255,0.075)')
+    hz.addColorStop(0.5, 'rgba(214,234,255,0.058)')
+    hz.addColorStop(0.8, 'rgba(214,234,255,0.032)')
+    hz.addColorStop(0.94, 'rgba(214,234,255,0.01)')
+    hz.addColorStop(1, 'rgba(214,234,255,0)')
     g.fillStyle = hz
     g.globalAlpha = on
     g.fillRect(lamp.x - R, lamp.y - R, R * 2, R * 2)
@@ -1787,9 +2290,6 @@ export function init(ctx) {
     if (!any) return
     bg.setTransform(1, 0, 0, 1, 0, 0)
     bg.globalAlpha = 1
-    bg.globalCompositeOperation = 'source-atop'
-    bg.fillStyle = 'rgba(255,204,160,0.1)'
-    bg.fillRect(0, 0, side, side)
     bg.globalCompositeOperation = 'destination-in'
     bg.fillStyle = maskGrad
     bg.fillRect(0, 0, side, side)
@@ -1839,32 +2339,61 @@ export function init(ctx) {
     const u = clamp(((x - ox) * dx + (y - oy) * dy) / d2)
     const px = ox + dx * u
     const py = oy + dy * u
-    const w = 14 + lamp.r * 0.92 * u
+    const w = 10 + lamp.r * 1.0 * u
     const off = Math.hypot(x - px, y - py) / w
-    return lamp.on * (1 - smooth(0.2, 1, off)) * u * u * 0.6
+    return lamp.on * (1 - smooth(0.78, 1, off)) * Math.pow(u, 1.6) * 0.5
   }
 
-  function drawSnow(dt, dShift) {
+  // Marine snow: we are sinking, so it rises past the lamp as streaks.
+  function drawSnow(dt) {
+    const move = reduced ? 0 : 1
     g.globalCompositeOperation = 'lighter'
+    g.lineCap = 'round'
+    g.strokeStyle = 'rgb(222,238,255)'
     for (let i = 0; i < SN; i++) {
       const o = i * 4
       const z = snow[o + 2]
-      // we are sinking, so the snow appears to rise past us
-      snow[o + 1] += (-(5 + 12 * z) * dt + dShift * z) * (reduced ? 0 : 1)
-      snow[o] += Math.sin(t * 0.3 + snow[o + 3]) * 3 * dt
-      if (snow[o + 1] < -10) {
-        snow[o + 1] += H + 20
+      const vy = (-(10 + 34 * z) * dt - dScroll * (0.22 + 0.5 * z)) * move
+      const vx = Math.sin(t * 0.3 + snow[o + 3]) * 4 * dt * move
+      snow[o + 1] += vy
+      snow[o] += vx
+      if (snow[o + 1] < -30) {
+        snow[o + 1] += H + 60
         snow[o] = Math.random() * W
-      } else if (snow[o + 1] > H + 10) {
-        snow[o + 1] -= H + 20
+      } else if (snow[o + 1] > H + 30) {
+        snow[o + 1] -= H + 60
         snow[o] = Math.random() * W
       }
+      if (lamp.on < 0.01) continue
       const x = snow[o]
       const y = snow[o + 1]
-      if (lamp.on < 0.01) continue
       const l = lightAt(x, y) + beamLight(x, y)
-      if (l < 0.02) continue
-      dot(g, sp.lamp, x, y, 1.6 + 3.2 * z, l * (0.18 + 0.62 * z))
+      if (l < 0.035) continue
+      const a = Math.min(1, l * (0.14 + 0.62 * z))
+      // at rest a speck (the nearest ones smear a little); as the sub sinks
+      // faster, a streak along its motion, as a camera sees it: a bright
+      // head and a tail that fades
+      const speed = dt > 0 ? Math.abs(vy) / dt : 0
+      const len = reduced ? 0 : Math.min(56, speed * 0.06 * (0.3 + z))
+      if (len < 2) {
+        dot(g, sp.lamp, x, y, 1.1 + 2.3 * z, a)
+        continue
+      }
+      const dir = vy > 0 ? -1 : 1
+      const tx = x - vx * 2
+      const mx = lerp(x, tx, 0.4)
+      const my = y + dir * len * 0.4
+      g.lineWidth = 0.6 + 1.1 * z
+      g.globalAlpha = a * 0.8
+      g.beginPath()
+      g.moveTo(x, y)
+      g.lineTo(mx, my)
+      g.stroke()
+      g.globalAlpha = a * 0.28
+      g.beginPath()
+      g.moveTo(mx, my)
+      g.lineTo(tx, y + dir * len)
+      g.stroke()
     }
     g.globalAlpha = 1
     g.globalCompositeOperation = 'source-over'
@@ -1902,7 +2431,6 @@ export function init(ctx) {
     g.globalCompositeOperation = 'source-over'
     g.lineCap = 'butt'
     for (const a of animals) {
-      // acquisition reticle when an animal is found
       // found: a thin ring of the animal's own light closes in and fades
       if (a.reticle >= 0 && a.reticle < 1.4) {
         const u = a.reticle / 1.4
@@ -1917,7 +2445,25 @@ export function init(ctx) {
         g.arc(cx, cy, r, 0, TAU)
         g.stroke()
       }
-      // leader line to the specimen label
+      // found, not lit: a small pip in the animal's own light
+      if (a.pipA > 0.02) {
+        const [px, py] = a.pinAt()
+        g.globalCompositeOperation = 'lighter'
+        dot(g, a.id === 'comb' ? sp.inkSoft : a.id === 'angler' ? sp.lureSoft : a.id === 'dragon' ? sp.redSoft : a.color === C.blue ? sp.blueSoft : sp.cyanSoft, px, py, 9, 0.5 * a.pipA)
+        g.globalCompositeOperation = 'source-over'
+        g.globalAlpha = 0.9 * a.pipA
+        g.fillStyle = rgba(a.color, 1)
+        g.beginPath()
+        g.arc(px, py, 1.9, 0, TAU)
+        g.fill()
+        g.globalAlpha = 0.4 * a.pipA
+        g.strokeStyle = rgba(a.color, 1)
+        g.lineWidth = 0.8
+        g.beginPath()
+        g.arc(px, py, 5, 0, TAU)
+        g.stroke()
+      }
+      // leader line to the open label
       const lab = labels.get(a)
       if (!lab || a.labelA < 0.02 || lab.sx === undefined) continue
       const ax = lab.sx
@@ -1950,12 +2496,74 @@ export function init(ctx) {
     g.globalAlpha = 1
   }
 
+  // Six of six: the six lights pulse in the order they were logged, joined
+  // like a constellation, then a sonar ping rolls out across the dark.
+  const F_START = 1.0
+  const F_STEP = 0.5
+  const F_PING = F_START + 5 * F_STEP + 0.45
+  const F_RELIT = 5.0
+  const glowOf = (a) =>
+    a.id === 'comb' ? [sp.inkSoft, sp.ink] : a.id === 'angler' ? [sp.lureSoft, sp.lure] : a.id === 'dragon' ? [sp.redSoft, sp.red] : a.color === C.blue ? [sp.blueSoft, sp.blue] : [sp.cyanSoft, sp.cyan]
+  function drawFinale() {
+    const ft = finale.t
+    if (ft < 0) return
+    const out = 1 - smooth(F_RELIT - 0.8, F_RELIT + 0.6, ft)
+    g.globalCompositeOperation = 'lighter'
+    let prev = null
+    for (let i = 0; i < LOG_ORDER.length; i++) {
+      const a = byId[LOG_ORDER[i]]
+      const [x, y] = a.beacon()
+      const ti = F_START + i * F_STEP
+      if (prev) {
+        const k = smooth(ti - F_STEP * 0.9, ti, ft)
+        if (k > 0 && out > 0) {
+          g.globalAlpha = 0.34 * out
+          g.strokeStyle = 'rgb(186,228,255)'
+          g.lineWidth = 0.8
+          g.beginPath()
+          g.moveTo(prev[0], prev[1])
+          g.lineTo(lerp(prev[0], x, k), lerp(prev[1], y, k))
+          g.stroke()
+        }
+      }
+      const on = smooth(ti - 0.06, ti + 0.12, ft) * out
+      if (on > 0) {
+        const burst = ft > ti ? Math.exp(-(ft - ti) * 2.6) : 0
+        const [soft, core] = glowOf(a)
+        dot(g, soft, x, y, (60 + 50 * burst) * Math.max(0.7, a.s), on * (0.3 + 0.6 * burst))
+        dot(g, core, x, y, 9 + 12 * burst, on * (0.6 + 0.4 * burst))
+        g.globalAlpha = 0.5 * on
+        g.strokeStyle = 'rgb(186,228,255)'
+        g.lineWidth = 0.8
+        g.beginPath()
+        g.arc(x, y, 7 + 3 * burst, 0, TAU)
+        g.stroke()
+      }
+      prev = [x, y]
+    }
+    // the ping: two rings rolling out from the last light
+    if (finale.pinged) {
+      const R = Math.hypot(W, H)
+      for (const lag of [0, 0.22]) {
+        const u = (ft - finale.pingT - lag) / 2.2
+        if (u <= 0 || u >= 1) continue
+        g.globalAlpha = 0.32 * Math.pow(1 - u, 1.6)
+        g.strokeStyle = 'rgb(160,230,255)'
+        g.lineWidth = 1.2
+        g.beginPath()
+        g.arc(finale.px, finale.py, 20 + R * (1 - Math.pow(1 - u, 2.2)), 0, TAU)
+        g.stroke()
+      }
+    }
+    g.globalAlpha = 1
+    g.globalCompositeOperation = 'source-over'
+  }
+
   function render(dt) {
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
     g.globalCompositeOperation = 'source-over'
     g.globalAlpha = 1
     g.clearRect(0, 0, W, H)
-    const dShift = shift - lastShift
     if (lamp.on > 0.01) {
       drawBeam()
       drawBodies()
@@ -1968,11 +2576,12 @@ export function init(ctx) {
     const [rx, ry] = dr.redAt()
     selfLight(dr, rx, ry, 46 * dr.s, 'rgba(255,40,30,0.6)', 0.42 * dr.red)
 
-    drawSnow(dt, dShift)
+    drawSnow(dt)
     g.globalCompositeOperation = 'lighter'
     for (const a of animals) a.drawGlow(g, t, sp)
     g.globalAlpha = 1
     drawFlashes(dt)
+    drawFinale()
     drawOverlays()
   }
 
@@ -2015,11 +2624,21 @@ export function init(ctx) {
     if (lamp.want) {
       if (lamp.onT < 0) lamp.onT = 0
       lamp.onT += dt
-      lamp.on = reduced ? 1 : flicker(lamp.onT)
+      lamp.pow = reduced ? 1 : flicker(lamp.onT)
     } else {
       lamp.onT = -1
-      lamp.on = Math.max(0, lamp.on - dt * 2.5)
+      lamp.pow = Math.max(0, lamp.pow - dt * 2.5)
     }
+    // six of six: the lamp dims for the constellation, then flickers back
+    let dim = 1
+    if (finale.t >= 0) {
+      if (finale.t < F_RELIT) dim = 1 - 0.9 * smooth(0, 0.9, finale.t)
+      else if (!finale.relit) {
+        finale.relit = true
+        if (lamp.want) lamp.onT = 0
+      }
+    }
+    lamp.on = lamp.pow * dim
     if (reduced) return
 
     const rect = stage.getBoundingClientRect()
@@ -2076,15 +2695,34 @@ export function init(ctx) {
 
   /* ----------------------------------------------------- discoveries */
   const NOTES = {
-    start: 'Vesper passes all six on the way down, between 200 and 4,000 m.',
-    one: 'One more. Look for color, not light.',
+    start: 'Vesper logged all six on the way down, between 610 and 2,870 m. Down here the water is emptier.',
     all: 'All six found. In one survey off California, about three quarters of the animals seen in open water could make light.',
     still:
-      'Vesper passes all six on the way down, between 200 and 4,000\u00a0m. In one survey off California, about three quarters of the animals seen in open water could make light.',
+      'Vesper logged all six on the way down, between 610 and 2,870 m. In one survey off California, about three quarters of the animals seen in open water could make light.',
   }
-  function setFound(a, quiet = false) {
+  const LAST_HINT = {
+    comb: 'One more. Look for color, not light.',
+    squid: 'One more. Look for glowing arm tips.',
+    siphonophore: 'One more. Look for a string of blue lights.',
+    angler: 'One more. Look for the warm light.',
+    dragon: 'One more. Look for the red light.',
+    atolla: 'One more. Look for a ring of blue.',
+  }
+  function noteFor() {
+    if (foundCount >= 6) return NOTES.all
+    if (foundCount === 5) {
+      const last = animals.find((a) => !a.found)
+      return (last && LAST_HINT[last.id]) || NOTES.start
+    }
+    return NOTES.start
+  }
+  // `by`: 'quiet' (still frame), 'idle' (the lamp found it on its own), or
+  // 'visitor' (pointer, touch or keyboard). Only the visitor's finds are
+  // announced to assistive tech.
+  function setFound(a, by = 'visitor') {
     if (a.found) return
     a.found = true
+    const quiet = by === 'quiet'
     a.reticle = quiet ? -1 : 0
     foundCount++
     const lab = labels.get(a)
@@ -2092,17 +2730,44 @@ export function init(ctx) {
     pips.get(a.id)?.classList.add('is-found')
     if (foundEl) foundEl.textContent = String(foundCount)
     if (countEl) countEl.dataset.count = String(foundCount)
-    if (noteEl) noteEl.textContent = foundCount === 6 ? NOTES.all : foundCount === 5 ? NOTES.one : NOTES.start
+    if (noteEl) noteEl.textContent = noteFor()
     section.dataset.found = String(foundCount)
+    if (by === 'visitor' && announceEl && lab) {
+      announceEl.textContent = foundCount === 6 ? `${lab.name} found. All six found.` : `${lab.name} found. ${foundCount} of 6.`
+    }
     if (!quiet) {
       a.react()
       const r = stage.getBoundingClientRect()
       const [cx, cy] = a.center()
       ctx.emit('sonar', { x: r.left + cx, y: r.top + cy, strength: 0.28 })
+      if (foundCount === 6) startFinale()
+    }
+  }
+  function startFinale() {
+    if (reduced) return
+    finale.t = 0
+    finale.relit = false
+    finale.pinged = false
+    logEl?.classList.add('is-complete')
+  }
+  function updateFinale(dt) {
+    if (finale.t < 0) return
+    finale.t += dt
+    if (!finale.pinged && finale.t >= F_PING) {
+      finale.pinged = true
+      finale.pingT = finale.t
+      ;[finale.px, finale.py] = byId[LOG_ORDER[LOG_ORDER.length - 1]].beacon()
+      const r = stage.getBoundingClientRect()
+      ctx.emit('sonar', { x: r.left + finale.px, y: r.top + finale.py, strength: 0.6 })
+    }
+    if (finale.t > F_RELIT + 2.4) {
+      finale.t = -1
+      logEl?.classList.remove('is-complete')
     }
   }
 
   function updateAnimals(dt, now) {
+    const by = lamp.mode === 'idle' ? 'idle' : 'visitor'
     for (const a of animals) {
       a.shift(shift)
       a.update(t, dt)
@@ -2110,9 +2775,12 @@ export function init(ctx) {
       a.light = a.sample(lightAt)
       if (a.light > 0.5) {
         a.litFor += dt
-        if (a.litFor > 0.35 && !a.found) setFound(a)
+        if (a.litFor > 0.35 && !a.found) setFound(a, by)
       } else a.litFor = Math.max(0, a.litFor - dt * 2)
       if (a.light > 0.3) a.lastLit = now
+      // keyboard: a short dwell on its button counts, even if the lamp (or
+      // the scroll) is still on its way
+      if (a === focusA && !a.found && now - focusSince > 400) setFound(a, 'visitor')
     }
   }
 
@@ -2133,6 +2801,8 @@ export function init(ctx) {
       const oy = o.intro ? o.y + introY : o.y
       c += overlap(x, y, w, h, { x: o.x, y: oy, w: o.w, h: o.h }) * 2
     }
+    // glowing clouds: text over them is hard to read
+    for (const o of glowObs) c += overlap(x, y, w, h, o) * 1.6
     for (const o of placed) c += overlap(x, y, w, h, o) * 1.5
     for (const b of animals) {
       if (b === self || b.id === 'siphonophore') continue
@@ -2160,9 +2830,9 @@ export function init(ctx) {
     }
     const ex = a.ext[0] * a.s
     const ey = a.ext[1] * a.s
-    const gap = mobile ? 14 : 24
-    const w = lab.on ? lab.w : lab.nw
-    const h = lab.on ? lab.h : lab.nh
+    const gap = 24
+    const w = lab.w
+    const h = lab.h
     lab.cw = w
     const yS = cy - Math.min(ey * 0.55, h * 0.3)
     const xC = cx + 26
@@ -2201,6 +2871,17 @@ export function init(ctx) {
     lab.mode = best.k
     return [x, y]
   }
+  function moveLabel(lab, x, y) {
+    lab.x = x
+    lab.y = y
+    lab.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+  }
+  function setOn(a, lab, on) {
+    if (on === lab.on) return
+    lab.on = on
+    lab.el.classList.toggle('is-on', on)
+    if (on && a.id === 'siphonophore') a.anchorIdx = a.litIdx
+  }
 
   const placed = []
   function updateLabels(dt, now) {
@@ -2209,11 +2890,18 @@ export function init(ctx) {
       for (const lab of labels.values()) lab.el.classList.add('is-found', 'is-on')
       return
     }
-    // one full label at a time: the most lit (or focused) found animal
+    // glowing clouds labels should stay off
+    glowObs = []
+    const cl = byId.squid.cloud()
+    if (cl) glowObs.push(cl)
+    // one full label at a time: the most lit (or focused) found animal.
+    // During the six-of-six moment only a focused label stays.
+    const quiet = finale.t >= 0 && finale.t < F_RELIT + 0.4
     let best = null
     let bestL = 0.3
     for (const a of animals) {
       if (!a.found && a !== focusA) continue
+      if (quiet && a !== focusA) continue
       const [, cy] = a.center()
       if (a !== focusA && (cy < 0 || cy > H)) continue
       const l = a === focusA ? 2 : a.light + (now - a.lastLit < 1800 ? 0.2 : 0)
@@ -2227,26 +2915,19 @@ export function init(ctx) {
     for (const a of order) {
       const lab = labels.get(a)
       if (!lab) continue
-      const on = reduced || a === best
-      if (on !== lab.on) {
-        lab.on = on
-        lab.el.classList.toggle('is-on', on)
-        if (on && a.id === 'siphonophore') a.anchorIdx = a.litIdx
-      }
-      const target = on ? 1 : a.found && !mobile ? 0.32 : 0
-      a.labelA += (target - a.labelA) * ease(0.08, dt)
+      const on = a === best
+      setOn(a, lab, on)
+      a.labelA += ((on ? 1 : 0) - a.labelA) * ease(0.08, dt)
+      const pip = a.found && !on && !quiet ? 1 : 0
+      a.pipA += (pip - a.pipA) * ease(0.06, dt)
       if (a.labelA < 0.01 && !on) continue
       const [tx, ty] = placeLabel(a, lab)
       const far = lab.x < -1e3 || Math.abs(tx - lab.x) > W * 0.5
-      const e = far || reduced ? 1 : ease(0.14, dt)
+      const e = far ? 1 : ease(0.14, dt)
       const x = lab.x + (tx - lab.x) * e
       const y = lab.y + (ty - lab.y) * e
-      placed.push({ x: tx - 6, y: ty - 4, w: (lab.cw || lab.w) + 12, h: (lab.on ? lab.h : lab.nh) + 8 })
-      if (Math.abs(x - lab.x) > 0.2 || Math.abs(y - lab.y) > 0.2 || far) {
-        lab.x = x
-        lab.y = y
-        lab.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-      }
+      placed.push({ x: tx - 6, y: ty - 4, w: (lab.cw || lab.w) + 12, h: lab.h + 8 })
+      if (Math.abs(x - lab.x) > 0.2 || Math.abs(y - lab.y) > 0.2 || far) moveLabel(lab, x, y)
     }
   }
 
@@ -2289,7 +2970,7 @@ export function init(ctx) {
       if (fine && pointer.inside) {
         lamp.x = pointer.cx - r.left
         lamp.y = pointer.cy - r.top
-      } else {
+      } else if (!focusA) {
         ;[lamp.x, lamp.y] = byId.squid.center()
         lamp.x -= lamp.r * 0.25
       }
@@ -2299,6 +2980,9 @@ export function init(ctx) {
   function updateScroll() {
     const r = section.getBoundingClientRect()
     const vh = window.innerHeight
+    const sy = window.scrollY
+    dScroll = clamp(sy - lastSY, -90, 90)
+    lastSY = sy
     // read live geometry every frame: robust to other sections changing
     // the page height after their own triggers were measured
     progress = clamp(-r.top / Math.max(1, r.height - vh))
@@ -2345,6 +3029,7 @@ export function init(ctx) {
     lastNow = now
     t += dt
     updateScroll()
+    updateFinale(dt)
     updateLamp(dt, now)
     updateAnimals(dt, now)
     updateLabels(dt, now)
@@ -2375,13 +3060,13 @@ export function init(ctx) {
     const now = performance.now()
     updateScroll()
     lamp.want = true
-    lamp.on = 1
+    lamp.pow = lamp.on = 1
     if (focusA) [lamp.x, lamp.y] = focusA.center()
     for (const a of animals) {
       a.shift(0)
       a.update(t, 0)
       a.light = a.sample(lightAt)
-      if (!a.found) setFound(a, true)
+      if (!a.found) setFound(a, 'quiet')
     }
     if (noteEl) noteEl.textContent = NOTES.still
     updateLabels(1, now)
@@ -2443,7 +3128,8 @@ export function init(ctx) {
     { passive: true },
   )
 
-  // Keyboard: every animal is a real button. Focus glides the lamp to it.
+  // Keyboard: every animal is a real button. Focus shows its label at once,
+  // beside the animal, and glides the lamp (and the scene) to it.
   function bringIntoView(a) {
     if (reduced) return
     const r = section.getBoundingClientRect()
@@ -2456,9 +3142,33 @@ export function init(ctx) {
     const top = r.top + window.scrollY
     ctx.scrollTo(top + p * Math.max(0, r.height - vh), { duration: 1.4 })
   }
+  function showNow(a) {
+    if (reduced) return
+    const lab = labels.get(a)
+    if (!lab) return
+    // bring positions up to date even if the loop has not run yet
+    updateScroll()
+    for (const b of animals) {
+      b.shift(shift)
+      b.update(t, 0)
+    }
+    for (const [b, l] of labels) {
+      if (b !== a && l.on) {
+        setOn(b, l, false)
+        b.labelA = 0
+      }
+    }
+    setOn(a, lab, true)
+    a.labelA = Math.max(a.labelA, 0.05)
+    placed.length = 0
+    const [x, y] = placeLabel(a, lab)
+    moveLabel(lab, x, y)
+  }
   for (const [a, lab] of labels) {
     lab.btn.addEventListener('focus', () => {
       focusA = a
+      focusSince = performance.now()
+      showNow(a)
       bringIntoView(a)
       if (reduced) still()
     })
@@ -2467,7 +3177,9 @@ export function init(ctx) {
     })
     lab.btn.addEventListener('click', () => {
       focusA = a
+      showNow(a)
       bringIntoView(a)
+      if (!a.found && !reduced) setFound(a, 'visitor')
       if (reduced) still()
     })
   }
@@ -2476,7 +3188,7 @@ export function init(ctx) {
   measure()
   if (reduced) {
     lamp.want = true
-    lamp.on = 1
+    lamp.pow = lamp.on = 1
     still()
   } else {
     // place every animal before the first frame so nothing pops
@@ -2497,5 +3209,12 @@ export function init(ctx) {
   })
 
   // handy for QA in the console
-  section.__creatures = { animals: byId, lamp, found: () => foundCount, cost: () => cost }
+  section.__creatures = {
+    animals: byId,
+    lamp,
+    finale,
+    found: () => foundCount,
+    cost: () => cost,
+    findAll: () => LOG_ORDER.forEach((id) => setFound(byId[id], 'visitor')),
+  }
 }

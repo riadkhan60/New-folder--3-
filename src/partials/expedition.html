@@ -1,4 +1,8 @@
 <section id="expedition" class="expedition" data-depth-start="6000" data-depth-end="8000" aria-labelledby="expedition-title">
+  <!-- The red-light switch at 6,000 m: a wash of red lamp light across the
+       water, played once as the dive crosses 6,000 m (expedition.js). -->
+  <div class="exp__wash" aria-hidden="true"></div>
+
   <div class="exp wrap">
     <header class="exp__head">
       <h2 id="expedition-title" class="exp__title">Nine days, one&nbsp;dive</h2>
@@ -6,15 +10,18 @@
         The Hadal expedition sails from Apra Harbor, Guam, to the Challenger Deep and back.
         Almost all of it is preparation for twelve hours under water.
       </p>
-    </header>
 
-    <div class="exp__lamps">
-      <span class="exp__lamp" aria-hidden="true"><span class="exp__lamp-core"></span></span>
-      <p class="exp__lamps-text">
-        Below 6,000 metres, Vesper switches to red observation lamps. Most deep-sea animals
-        cannot see red light, so we can watch them without blinding them.
-      </p>
-    </div>
+      <div class="exp__lamps" data-exp-lamps>
+        <span class="exp__lamp" aria-hidden="true">
+          <span class="exp__lamp-glow"></span>
+          <svg class="exp__lamp-svg" viewBox="0 0 80 80" focusable="false"></svg>
+        </span>
+        <p class="exp__lamps-text">
+          Below 6,000 metres, Vesper switches to red observation lamps. Most deep-sea animals
+          cannot see red light, so we can watch them without blinding them.
+        </p>
+      </div>
+    </header>
 
     <div class="exp__log" data-exp-log>
       <!-- The tether: built in JS from the positions of the days below. -->
@@ -32,6 +39,28 @@
               captain and the science team over dinner.
             </p>
           </div>
+          <!-- MV Lantern alongside, Vesper in her cradle under the A-frame -->
+          <figure class="exp__sketch exp__sketch--ship" aria-hidden="true">
+            <svg viewBox="0 0 360 206" focusable="false">
+              <path class="exp__sk-faint" d="M8 140 H352" />
+              <path class="exp__sk-contour" d="M14 156 q8 -4 16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0 t16 0" />
+              <path class="exp__sk-line" d="M34 118 L300 118 L332 102" />
+              <path class="exp__sk-line" d="M34 118 L39 148 L284 150 C306 150 322 140 332 102" />
+              <path class="exp__sk-line" d="M196 118 V92 H262 L282 108 V118" />
+              <path class="exp__sk-line" d="M208 92 V76 H252 L262 92" />
+              <path class="exp__sk-line" d="M214 84 H250 M206 104 H266" />
+              <path class="exp__sk-line" d="M232 76 V44 M222 54 H242" />
+              <path class="exp__sk-line" d="M44 118 L60 62 L78 118 M52 92 H70" />
+              <path class="exp__sk-mark" d="M60 62 V92" />
+              <path class="exp__sk-line" d="M92 118 V106 Q92 96 104 96 H134 Q148 96 148 108 V118" />
+              <path class="exp__sk-line" d="M100 96 V90 H118 V96" />
+              <circle class="exp__sk-port" cx="138" cy="106" r="4.5" />
+              <path class="exp__sk-line" d="M34 182 H332 M34 176 v12 M332 176 v12" />
+              <text class="exp__sk-label" x="183" y="200" text-anchor="middle">68 m</text>
+              <text class="exp__sk-label exp__sk-label--it" x="248" y="34">MV Lantern</text>
+              <text class="exp__sk-label" x="96" y="82">Vesper</text>
+            </svg>
+          </figure>
         </li>
 
         <li class="exp__day" data-day="2">
@@ -46,15 +75,15 @@
             </p>
           </div>
           <figure class="exp__sketch exp__sketch--chart" aria-hidden="true">
-            <svg viewBox="0 0 360 250" focusable="false">
+            <svg viewBox="0 0 360 230" focusable="false">
               <path class="exp__sk-faint" d="M18 214 C 70 206 110 196 150 196 C 214 196 262 170 296 128 C 322 96 336 60 344 14" />
               <text class="exp__sk-label exp__sk-label--it" x="214" y="210">Mariana Trench</text>
               <path class="exp__sk-line" d="M248 52 l-6 5 -4 7 -6 4 -3 7 -5 4 1 4 6 -2 5 -6 4 -7 5 -4 4 -8 2 -6 z" />
               <text class="exp__sk-label" x="262" y="56">Guam</text>
               <path class="exp__sk-route" d="M232 76 L 118 190" />
               <path class="exp__sk-mark" d="M110 182 l16 16 M126 182 l-16 16" />
-              <text class="exp__sk-label" x="40" y="176">Challenger Deep</text>
-              <path class="exp__sk-line" d="M24 26 h60 M24 22 v8 M84 22 v8" />
+              <text class="exp__sk-label" x="102" y="180" text-anchor="end">Challenger Deep</text>
+              <path class="exp__sk-line" d="M24 26 h54 M24 22 v8 M78 22 v8" />
               <text class="exp__sk-label" x="24" y="46">100 km</text>
               <path class="exp__sk-line" d="M330 196 v-26 M324 178 l6 -8 6 8" />
               <text class="exp__sk-label" x="326" y="214">N</text>
@@ -74,6 +103,31 @@
               alongside the ship.
             </p>
           </div>
+          <!-- the pressure sphere in section: 90 mm titanium wall, 1.5 m inside -->
+          <figure class="exp__sketch exp__sketch--sphere" aria-hidden="true">
+            <svg viewBox="0 0 360 224" focusable="false">
+              <defs>
+                <pattern id="exp-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <path d="M0 0 V5" />
+                </pattern>
+              </defs>
+              <path class="exp__sk-hatch" fill-rule="evenodd" d="M150 25 A87 87 0 1 1 149.99 25 Z M150 34 A78 78 0 1 0 150.01 34 Z" />
+              <path class="exp__sk-line" d="M150 25 A87 87 0 1 1 149.99 25" />
+              <path class="exp__sk-line" d="M150 34 A78 78 0 1 1 149.99 34" />
+              <path class="exp__sk-port" d="M225.7 131.3 L236.5 130.6 L230.9 147.8 L222.6 140.9 Z M211.3 160.5 L221.4 164.2 L209.4 177.6 L204.6 167.9 Z M186.3 181.2 L194.0 188.7 L177.6 196.1 L177.2 185.3 Z" />
+              <path class="exp__sk-line" d="M76 112 H224 M76 106 v12 M224 106 v12" />
+              <text class="exp__sk-label" x="150" y="100" text-anchor="middle">1.5 m</text>
+              <circle class="exp__sk-line" cx="118" cy="140" r="7" />
+              <circle class="exp__sk-line" cx="150" cy="134" r="7" />
+              <circle class="exp__sk-line" cx="182" cy="140" r="7" />
+              <path class="exp__sk-line" d="M106 162 q12 -15 24 0 M138 156 q12 -15 24 0 M170 162 q12 -15 24 0" />
+              <path class="exp__sk-faint" d="M88 168 H212" />
+              <path class="exp__sk-line" d="M213 59 L242 40 H252" />
+              <text class="exp__sk-label" x="256" y="44">Titanium, 90 mm</text>
+              <path class="exp__sk-line" d="M238 152 L252 166 H258" />
+              <text class="exp__sk-label" x="262" y="170">Three viewports</text>
+            </svg>
+          </figure>
         </li>
 
         <li class="exp__day" data-day="4">
@@ -87,6 +141,28 @@
               blue outside the viewports fade to black long before you reach the bottom.
             </p>
           </div>
+          <!-- the practice dive, beside a strip of the daylight it leaves behind -->
+          <figure class="exp__sketch exp__sketch--twilight" aria-hidden="true">
+            <svg viewBox="0 0 360 224" focusable="false">
+              <defs>
+                <linearGradient id="exp-daylight" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#6fd8ea" stop-opacity="0.9" />
+                  <stop offset="0.2" stop-color="#0e6f86" stop-opacity="0.75" />
+                  <stop offset="0.55" stop-color="#072c4c" stop-opacity="0.45" />
+                  <stop offset="1" stop-color="#051b35" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <rect class="exp__sk-fill" x="20" y="24" width="12" height="160" rx="2" fill="url(#exp-daylight)" />
+              <path class="exp__sk-contour" d="M48 24 H340" />
+              <path class="exp__sk-faint" d="M48 56 H340 M48 184 H340" />
+              <text class="exp__sk-label" x="196" y="51" text-anchor="middle">200 m</text>
+              <text class="exp__sk-label" x="340" y="200" text-anchor="end">1,000 m</text>
+              <text class="exp__sk-label" x="48" y="16">0 h</text>
+              <text class="exp__sk-label" x="340" y="16" text-anchor="end">5 h</text>
+              <path class="exp__sk-mark" d="M48 24 L86 104 Q92 112 100 113 L110 116 Q118 119 122 128 L142 176 Q146 184 156 184 L238 184 Q248 184 252 176 L340 24" />
+              <text class="exp__sk-label exp__sk-label--it" x="20" y="214">Daylight ends near 1,000 m</text>
+            </svg>
+          </figure>
         </li>
 
         <li class="exp__day" data-day="5">
@@ -130,11 +206,13 @@
           </div>
 
           <!-- The plunge: the tether swings out to full depth and back, like a
-               dive profile turned on its side (time runs down, depth runs right). -->
+               dive profile turned on its side (time runs down, depth runs right).
+               A live depth figure rides with it. -->
           <div class="exp__plunge" data-exp-plunge>
-            <p class="exp__deep" data-exp-deep>
-              <span class="exp__deep-in"><span class="exp__deep-n">10,935</span><span class="exp__deep-u">&#8201;m</span></span>
-            </p>
+            <p class="visually-hidden">On the floor, Vesper is 10,935 metres down.</p>
+            <div class="exp__deep" data-exp-deep aria-hidden="true">
+              <p class="exp__deep-in"><span class="exp__deep-n" data-exp-deep-n>10,935</span><span class="exp__deep-u">&#8201;m</span></p>
+            </div>
             <p class="exp__phase exp__phase--down" data-exp-phase>About 4&nbsp;h down</p>
             <p class="exp__phase exp__phase--floor" data-exp-phase>Up to 4&nbsp;h on the&nbsp;floor</p>
             <p class="exp__phase exp__phase--up" data-exp-phase>About 4&nbsp;h up</p>
@@ -182,6 +260,20 @@
               looking at the water they were under two days before.
             </p>
           </div>
+          <!-- from the rail: the horizon, a low sun, the swell -->
+          <figure class="exp__sketch exp__sketch--deck" aria-hidden="true">
+            <svg viewBox="0 0 360 210" focusable="false">
+              <path class="exp__sk-line" d="M10 96 H350" />
+              <path class="exp__sk-line" d="M230 96 A20 20 0 0 1 270 96" />
+              <path class="exp__sk-faint" d="M238 106 h24 M242 114 h16 M246 122 h8" />
+              <path class="exp__sk-contour" d="M14 116 q11 -3 22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0 t22 0" />
+              <path class="exp__sk-contour" d="M8 140 q16 -6 32 0 t32 0 t32 0 t32 0 t32 0 t32 0 t32 0 t32 0 t32 0 t32 0 t32 0" />
+              <path class="exp__sk-line" d="M2 170 q22 -9 44 0 t44 0 t44 0 t44 0 t44 0 t44 0 t44 0 t44 0" />
+              <path class="exp__sk-line" d="M0 190 H360 M30 190 V210 M130 190 V210 M230 190 V210 M330 190 V210" />
+              <path class="exp__sk-mark" d="M40 62 L62 40 M50 40 H62 V52" />
+              <text class="exp__sk-label exp__sk-label--it" x="72" y="50">North-east, to Apra Harbor</text>
+            </svg>
+          </figure>
         </li>
 
         <li class="exp__day" data-day="9">
@@ -195,6 +287,33 @@
               signed by your pilot.
             </p>
           </div>
+          <!-- your dive log, signed and stamped -->
+          <figure class="exp__sketch exp__sketch--log" aria-hidden="true">
+            <svg viewBox="0 0 360 224" focusable="false">
+              <path class="exp__sk-line" d="M44 14 H300 V210 H44 Z" />
+              <text class="exp__sk-label exp__sk-label--it" x="62" y="40">Dive log</text>
+              <text class="exp__sk-label" x="282" y="40" text-anchor="end">Vesper</text>
+              <path class="exp__sk-contour" d="M62 50 H282" />
+              <text class="exp__sk-label" x="62" y="76">Site</text>
+              <text class="exp__sk-label exp__sk-label--ink" x="282" y="76" text-anchor="end">Challenger Deep</text>
+              <path class="exp__sk-faint" d="M62 86 H282" />
+              <text class="exp__sk-label" x="62" y="106">Water outside</text>
+              <text class="exp__sk-label exp__sk-label--ink" x="282" y="106" text-anchor="end">2.5 °C</text>
+              <path class="exp__sk-faint" d="M62 116 H282" />
+              <text class="exp__sk-label" x="62" y="136">Guests</text>
+              <text class="exp__sk-label exp__sk-label--ink" x="282" y="136" text-anchor="end">2</text>
+              <path class="exp__sk-faint" d="M62 146 H282" />
+              <path class="exp__sk-mark" d="M70 180 c8 -22 16 -24 13 -5 c-2 12 9 -16 20 -13 c9 3 -3 16 7 11 c11 -6 13 -19 24 -13 c7 4 2 12 13 7 c9 -4 18 -7 30 -2" />
+              <path class="exp__sk-faint" d="M62 188 H190" />
+              <text class="exp__sk-label" x="62" y="202">Pilot</text>
+              <g transform="rotate(-14 244 170)">
+                <circle class="exp__sk-mark" cx="244" cy="170" r="32" />
+                <circle class="exp__sk-mark exp__sk-mark--thin" cx="244" cy="170" r="27" />
+                <text class="exp__sk-label exp__sk-label--stamp" x="244" y="169" text-anchor="middle">Noctiluca</text>
+                <text class="exp__sk-label exp__sk-label--stamp" x="244" y="181" text-anchor="middle">Guam</text>
+              </g>
+            </svg>
+          </figure>
         </li>
       </ol>
     </div>

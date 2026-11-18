@@ -8,14 +8,18 @@
  * scrubbed): Twilight, then Abyss, then Hadal, last and deepest. The Hadal
  * line turns from blue-green to red at 6,000 m, where the lamps change.
  *
- * Each curve is a button (roving tabindex, arrow keys move between them).
- * Hover, focus or click selects it: the line glows, the others step back,
- * the water it covers fills faintly, and the panel reads it out. A small
- * submersible rides the selected profile in real time-scale, with a live
- * depth and elapsed-time readout. "Reserve a dive" emits `select-profile`
- * and scrolls to #reserve.
+ * Then, while the stage holds, a small submersible rides the chosen profile
+ * with your scroll. The water it has passed through fills in behind it in the
+ * real colours of the water column (depth.js colorAt: teal → black), and the
+ * animals you would meet on that line (the ones from #life, and the hadal
+ * ones) light up as it reaches them.
  *
- * Reduced motion: curves fully drawn, no sticky stage, no travelling sub.
+ * Choosing: hover only previews (the line and its row light up); a click,
+ * Enter/Space, or the arrow keys commit. "Reserve a dive" always sends the
+ * committed profile (`select-profile`) and scrolls to #reserve. Only a commit
+ * is announced, through a short visually hidden status line.
+ *
+ * Reduced motion: curves fully drawn, water filled, no sticky stage, no sub.
  */
 import '../styles/profiles.css'
 
@@ -42,6 +46,7 @@ const PROFILES = [
     r: [0, 22, 18, 26, 26, 0],
     tagAt: 1.95,
     tagAnchor: 'start',
+    pins: [{ h: 1.45, label: 'Vampire squid' }],
   },
   {
     id: 'abyss',
@@ -56,6 +61,10 @@ const PROFILES = [
     pts: [[0, 0], [2, 5500], [7, 5500], [9, 0]],
     r: [0, 34, 34, 0],
     tagAt: 4.7,
+    pins: [
+      { h: 0.8, label: 'Atolla jellyfish' },
+      { h: 4.4, label: 'Sea cucumbers', pos: 'above' },
+    ],
   },
   {
     id: 'hadal',
@@ -69,10 +78,18 @@ const PROFILES = [
     see: 'Snailfish on the way down, the deepest-living fish known. On the floor, amphipods gather in the red light, and xenophyophores grow as wide as your hand from a single cell.',
     pts: [[0, 0], [4, 10935], [8, 10935], [12, 0]],
     r: [0, 40, 40, 0],
-    tagAt: 6,
+    tagAt: 6.4,
+    pins: [
+      { h: 2.93, label: 'Snailfish' },
+      { h: 4.9, label: 'Amphipods', pos: 'below' },
+    ],
   },
 ]
 const BY_ID = Object.fromEntries(PROFILES.map((p) => [p.id, p]))
+
+// [start, end] of each piece within the scrubbed timeline (0–1)
+const WINDOWS = { twilight: [0.04, 0.2], abyss: [0.14, 0.34], hadal: [0.26, 0.5] }
+const RIDE = [0.53, 0.97]
 
 function el(name, attrs = {}, parent) {
   const n = document.createElementNS(SVGNS, name)
@@ -134,6 +151,8 @@ function yAtX(lut, x) {
   return Y[lo] + (Y[hi] - Y[lo]) * t
 }
 
+const hit = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+
 export function init(ctx) {
   const root = document.getElementById('dives')
   if (!root) return
@@ -142,16 +161,19 @@ export function init(ctx) {
 
   const fig = root.querySelector('[data-pf-chart]')
   const svg = root.querySelector('.pf__svg')
+  const list = root.querySelector('[data-pf-list]')
   const opts = [...root.querySelectorAll('[data-pf-opt]')]
   const panel = root.querySelector('[data-pf-panel]')
   const inner = root.querySelector('[data-pf-inner]')
   const reserve = root.querySelector('[data-pf-reserve]')
+  const status = root.querySelector('[data-pf-status]')
+  const hint = root.querySelector('[data-pf-hint]')
+  const hintText = root.querySelector('[data-pf-hint-text]')
   const field = (k) => root.querySelector(`[data-pf="${k}"]`)
   const F = {
     name: field('name'),
     where: field('where'),
     depth: field('depth'),
-    depthText: field('depth-text'),
     dive: field('dive'),
     trip: field('trip'),
     seats: field('seats'),
@@ -161,23 +183,24 @@ export function init(ctx) {
   }
   if (!fig || !svg) return
   if (reduced) root.classList.add('is-static')
+  if (hintText && ctx.isTouch) hintText.textContent = 'Tap a line to read it out'
 
-  let selected = 'hadal'
-  let touched = false // the visitor has chosen something
+  let selected = 'hadal' // the committed choice: the only one Reserve sends
+  let peek = null // what the pointer is hovering (a preview, never sent)
+  let touched = false // the visitor has committed a choice
   let G = null
   let tl = null
-  let inView = false
   let drawnAll = reduced
+  let ride = reduced ? 1 : 0
   const drawnState = { twilight: false, abyss: false, hadal: false }
+  const colorAt = ctx.depth?.colorAt
 
   /* --------------------------------------------------------------- panel */
-  const counter = { v: BY_ID[selected].depth }
   let panelTl = null
-  let countTw = null
   function fillPanel(p) {
     F.name.textContent = p.name
     F.where.textContent = p.where
-    F.depthText.textContent = fmt(p.depth)
+    F.depth.textContent = `${fmt(p.depth)} m`
     F.dive.textContent = `${p.hours} hours`
     F.trip.textContent = p.trip
     F.seats.textContent = String(p.seats)
@@ -189,29 +212,20 @@ export function init(ctx) {
     panel.dataset.profile = p.id
     if (!animate || reduced) {
       fillPanel(p)
-      counter.v = p.depth
-      F.depth.textContent = fmt(p.depth)
       return
     }
     panelTl?.kill()
-    countTw?.kill()
     panelTl = gsap
       .timeline()
       .to(inner, { opacity: 0, y: -6, duration: 0.16, ease: 'power2.in', onComplete: () => fillPanel(p) })
       .to(inner, { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' })
-    countTw = gsap.to(counter, {
-      v: p.depth,
-      duration: 1.1,
-      ease: 'expo.out',
-      onUpdate: () => (F.depth.textContent = fmt(Math.round(counter.v / 5) * 5)),
-      onComplete: () => (F.depth.textContent = fmt(p.depth)),
-    })
   }
 
   /* ------------------------------------------------------------ selection */
-  function select(id, { animate = true, focus = false } = {}) {
+  function select(id, { animate = true, focus = false, announce = false } = {}) {
     if (!BY_ID[id]) return
     const changed = id !== selected
+    const from = changed && G ? subXY() : null
     selected = id
     root.dataset.sel = id
     opts.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pfOpt === id)))
@@ -226,8 +240,29 @@ export function init(ctx) {
     }
     if (changed) {
       renderPanel(BY_ID[id], animate)
-      restartSub()
+      if (from && animate && !reduced) glideFrom(from)
+      else placeSub()
     }
+    if (announce && status) {
+      const p = BY_ID[id]
+      status.textContent = `${p.name} selected: ${fmt(p.depth)} metres, ${p.hours}-hour dive, ${p.price} per guest.`
+    }
+  }
+
+  // commit a choice (click, Enter/Space, arrow keys, or the form)
+  function choose(id, o = {}) {
+    touched = true
+    select(id, { announce: true, ...o })
+    syncDim()
+  }
+
+  // hover preview: light the line and its row, change nothing else
+  function setPeek(id) {
+    if (id === peek) return
+    peek = id
+    opts.forEach((b) => b.classList.toggle('is-peek', b.dataset.pfOpt === id))
+    if (G) for (const c of Object.values(G.curves)) c.g.classList.toggle('is-peek', c.id === id)
+    svg.classList.toggle('has-peek', !!id)
   }
 
   /* ---------------------------------------------------------------- chart */
@@ -236,7 +271,7 @@ export function init(ctx) {
     const H = Math.round(fig.clientHeight)
     if (W < 40 || H < 40) return
     const narrow = W < 520
-    const m = { t: 34, r: narrow ? 90 : 104, b: 14, l: 6 }
+    const m = { t: 34, r: narrow ? 90 : 104, b: 30, l: 6 }
     svg.classList.toggle('is-narrow', narrow)
     const pw = W - m.l - m.r
     const ph = H - m.t - m.b
@@ -251,13 +286,19 @@ export function init(ctx) {
     const hg = el('linearGradient', { id: 'pf-hadal-grad', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(RED_FROM - 500), x2: 0, y2: Y(RED_FROM + 500) }, defs)
     el('stop', { offset: 0, style: 'stop-color:var(--pf-twilight)' }, hg)
     el('stop', { offset: 1, style: 'stop-color:var(--pf-hadal)' }, hg)
-    for (const p of PROFILES) {
-      const ag = el('linearGradient', { id: `pf-area-${p.id}`, gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(0), x2: 0, y2: Y(p.depth) }, defs)
-      const deepC = p.id === 'hadal' ? 'var(--pf-hadal)' : `var(--pf-${p.id})`
-      const topC = p.id === 'hadal' ? 'var(--pf-twilight)' : `var(--pf-${p.id})`
-      el('stop', { offset: 0, style: `stop-color:${topC};stop-opacity:0` }, ag)
-      el('stop', { offset: 1, style: `stop-color:${deepC};stop-opacity:0.16` }, ag)
+    // the water column itself, in the colours depth.js paints the page with
+    const wg = el('linearGradient', { id: 'pf-water', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(0), x2: 0, y2: Y(Y_MAX) }, defs)
+    for (const d of [0, 90, 200, 550, 1000, 2200, 4000, 6000, 8000, 10935]) {
+      const c = colorAt ? colorAt(d).css : 'rgb(4 20 44)'
+      el('stop', { offset: (d / Y_MAX).toFixed(4), style: `stop-color:${c};stop-opacity:${d < 1000 ? 0.92 : 0.85}` }, wg)
     }
+    // a thin wash of lamp light on top of the water, so the deep end of a
+    // filled profile still reads against a black page
+    const lg = el('linearGradient', { id: 'pf-lamp', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(0), x2: 0, y2: Y(Y_MAX) }, defs)
+    el('stop', { offset: 0, style: 'stop-color:var(--pf-sel);stop-opacity:0' }, lg)
+    el('stop', { offset: 1, style: 'stop-color:var(--pf-sel);stop-opacity:0.2' }, lg)
+    const clip = el('clipPath', { id: 'pf-ride-clip', clipPathUnits: 'userSpaceOnUse' }, defs)
+    const clipRect = el('rect', { x: 0, y: 0, width: reduced ? W : 0, height: H }, clip)
     const sg = el('radialGradient', { id: 'pf-sub-glow' }, defs)
     el('stop', { offset: 0, style: 'stop-color:var(--pf-sel);stop-opacity:0.55' }, sg)
     el('stop', { offset: 1, style: 'stop-color:var(--pf-sel);stop-opacity:0' }, sg)
@@ -314,7 +355,9 @@ export function init(ctx) {
         },
         curvesG,
       )
-      const area = el('path', { class: 'pf__area', d: `${d} Z`, fill: `url(#pf-area-${p.id})` }, g)
+      const area = el('g', { class: 'pf__area', 'clip-path': 'url(#pf-ride-clip)' }, g)
+      el('path', { d: `${d} Z`, fill: 'url(#pf-water)' }, area)
+      el('path', { d: `${d} Z`, fill: 'url(#pf-lamp)' }, area)
       const halo = el('path', { class: 'pf__halo', d }, g)
       const line = el('path', { class: 'pf__line', d }, g)
       if (p.id === 'hadal') {
@@ -334,10 +377,36 @@ export function init(ctx) {
       const td = el('tspan', { class: 'pf__tag-depth', dx: 8 }, tn)
       td.textContent = `${fmt(p.depth)} m`
 
-      curves[p.id] = { id: p.id, g, line, halo, area, tag, lut: null, p }
+      curves[p.id] = { id: p.id, g, line, halo, area, tag, tn, lut: null, p, pins: [] }
+    }
+    for (const c of Object.values(curves)) c.lut = sampleX(c.line)
+
+    /* what you meet along each line (shown for the chosen one) */
+    for (const c of Object.values(curves)) {
+      const pg = el('g', { class: 'pf__pins', 'aria-hidden': 'true' }, c.g)
+      for (const pin of c.p.pins || []) {
+        const x = X(pin.h)
+        const y = yAtX(c.lut, x)
+        const g = el('g', { class: 'pf__pin' }, pg)
+        el('circle', { class: 'pf__pin-dot', cx: x.toFixed(1), cy: y.toFixed(1), r: 3 }, g)
+        const pos = pin.pos || 'right'
+        const t = el(
+          'text',
+          {
+            class: 'pf__pin-label',
+            x: (pos === 'right' ? x + 9 : x).toFixed(1),
+            y: (pos === 'above' ? y - 10 : pos === 'below' ? y + 18 : y + 4).toFixed(1),
+            'text-anchor': pos === 'right' ? 'start' : 'middle',
+          },
+          g,
+        )
+        t.textContent = pin.label
+        c.pins.push({ h: pin.h, g, t, box: null, passed: null, hidden: false })
+      }
     }
 
-    /* the little sub */
+    /* the little sub, and the edge of the water behind it */
+    const scan = el('line', { class: 'pf__scan', 'aria-hidden': 'true', x1: 0, x2: 0, y1: Y(0), y2: Y(Y_MAX) }, svg)
     const sub = el('g', { class: 'pf__sub', 'aria-hidden': 'true' }, svg)
     const subG = el('g', {}, sub)
     el('circle', { class: 'pf__sub-glow', r: 26 }, subG)
@@ -348,20 +417,28 @@ export function init(ctx) {
     const readD = el('text', { class: 'pf__sub-read', x: 16, y: -2 }, sub)
     const readT = el('text', { class: 'pf__sub-read pf__sub-read--t', x: 16, y: 12 }, sub)
 
-    G = { W, H, m, pw, ph, X, Y, curves, sub, subG, readD, readT }
+    G = { W, H, m, pw, ph, X, Y, curves, sub, subG, scan, readD, readT, clipRect }
     for (const id in drawnState) drawnState[id] = false // fresh DOM: re-apply classes
-    for (const c of Object.values(curves)) c.lut = sampleX(c.line)
+
+    // label boxes for collision checks (measured once per build)
+    for (const c of Object.values(curves)) {
+      c.tagBox = safeBox(c.tn)
+      c.tagHidden = false
+      for (const pin of c.pins) pin.box = safeBox(pin.t)
+    }
 
     /* events */
     for (const c of Object.values(curves)) {
       c.g.addEventListener('pointerenter', (e) => {
-        if (e.pointerType === 'mouse') choose(c.id)
+        if (e.pointerType === 'mouse') setPeek(c.id)
+      })
+      c.g.addEventListener('pointerleave', (e) => {
+        if (e.pointerType === 'mouse' && peek === c.id) setPeek(null)
       })
       c.g.addEventListener('click', () => {
         choose(c.id)
         ping(c)
       })
-      c.g.addEventListener('focus', () => choose(c.id))
       c.g.addEventListener('keydown', (e) => {
         const order = PROFILES.map((p) => p.id)
         const i = order.indexOf(c.id)
@@ -380,19 +457,26 @@ export function init(ctx) {
     }
 
     select(selected, { animate: false })
+    setPeek(peek)
     makeTimeline()
     syncDim()
+    placeSub()
+  }
+
+  function safeBox(t) {
+    try {
+      const b = t.getBBox()
+      return { x: b.x - 3, y: b.y - 2, width: b.width + 6, height: b.height + 4 }
+    } catch {
+      return null
+    }
   }
 
   // While the lines are drawing, all of them burn at full strength; once the
   // last one lands (or the visitor chooses), the unselected ones step back.
   function syncDim() {
     svg.classList.toggle('has-sel', reduced || drawnAll || touched)
-  }
-  function choose(id, opts) {
-    touched = true
-    select(id, opts)
-    syncDim()
+    hint?.classList.toggle('is-on', drawnAll && !touched)
   }
 
   function ping(c) {
@@ -401,9 +485,6 @@ export function init(ctx) {
   }
 
   /* ----------------------------------------------------------- draw on scroll */
-  // [start, end] of each curve's draw within the scrubbed timeline (0–1)
-  const WINDOWS = { twilight: [0.1, 0.36], abyss: [0.3, 0.6], hadal: [0.5, 0.9] }
-
   function setDrawn(id, on) {
     if (drawnState[id] === on) return
     drawnState[id] = on
@@ -435,91 +516,149 @@ export function init(ctx) {
         if (all !== drawnAll) {
           drawnAll = all
           syncDim()
-          updateSub()
         }
+        ride = clamp((t - RIDE[0]) / (RIDE[1] - RIDE[0]))
+        placeSub()
       },
       scrollTrigger: sticky
         ? { trigger: root, start: 'top 55%', end: 'bottom bottom', scrub: 0.6 }
-        : { trigger: fig, start: 'top 85%', end: 'bottom 60%', scrub: 0.6 },
+        : { trigger: fig, start: 'top 82%', end: 'bottom 22%', scrub: 0.6 },
     })
-    tl.fromTo(grid, { opacity: 0 }, { opacity: 1, duration: 0.12 }, 0)
+    tl.fromTo(grid, { opacity: 0 }, { opacity: 1, duration: 0.08 }, 0)
     for (const p of PROFILES) {
       const c = curves[p.id]
       const [a, b] = WINDOWS[p.id]
       tl.fromTo([c.line, c.halo], { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: b - a, ease: 'power1.inOut' }, a)
-      tl.fromTo(c.tag, { opacity: 0 }, { opacity: 1, duration: 0.06 }, b - 0.04)
+      tl.fromTo(c.tag, { opacity: 0 }, { opacity: 1, duration: 0.04 }, b - 0.03)
     }
-    tl.to({}, { duration: 0.1 }, 0.9) // hold everything drawn for the last stretch
+    tl.to({}, { duration: 0.03 }, 0.97) // the stage holds for the ride
     gsap.set(tags, { opacity: 0 })
     tl.progress(0).progress(tl.scrollTrigger ? tl.scrollTrigger.progress : 0)
   }
 
   /* ------------------------------------------------------------ the sub */
-  let loop = null
-  const st = { t: 0 }
+  // The sub rides the committed profile with the scroll. Switching profiles
+  // glides it across from where it was.
+  const glide = { k: 0, x: 0, y: 0 }
+  let glideTw = null
+  function subXY() {
+    const c = G.curves[selected]
+    const x = G.X(ride * c.p.hours)
+    return { x, y: yAtX(c.lut, x) }
+  }
+  function glideFrom(from) {
+    glideTw?.kill()
+    glide.k = 1
+    glide.x = from.x
+    glide.y = from.y
+    glideTw = gsap.to(glide, { k: 0, duration: 0.9, ease: 'expo.out', onUpdate: placeSub })
+    placeSub()
+  }
+
   function placeSub() {
     if (!G) return
     const c = G.curves[selected]
-    const { X, Y, m, pw, ph, subG, sub, readD, readT } = G
-    const h = st.t * c.p.hours
-    const x = X(h)
-    const y = yAtX(c.lut, x)
+    const { X, m, pw, ph, subG, sub, scan, readD, readT, clipRect, curves } = G
+    const on = !reduced && drawnAll
+    if (on !== G.subOn) {
+      G.subOn = on
+      sub.classList.toggle('is-on', on)
+    }
+    const scanOn = on && ride > 0.003 && ride < 0.997
+    if (scanOn !== G.scanOn) {
+      G.scanOn = scanOn
+      scan.classList.toggle('is-on', scanOn)
+    }
+
+    // the water fills in behind the sub (all of it when there is no sub)
+    const h = ride * c.p.hours
+    let x = X(h)
+    let y = yAtX(c.lut, x)
+    clipRect.setAttribute('width', (reduced ? G.W : Math.max(0, x - m.l + 1)).toFixed(1))
+    if (scanOn) {
+      scan.setAttribute('x1', x.toFixed(1))
+      scan.setAttribute('x2', x.toFixed(1))
+      scan.setAttribute('y2', G.Y(c.p.depth).toFixed(1))
+    }
+
+    // animals along the chosen line light up as the sub reaches them
+    for (const cc of Object.values(curves)) {
+      for (const pin of cc.pins) {
+        const passed = reduced || (cc === c && ride > 0 && h >= pin.h - 0.02)
+        if (passed !== pin.passed) {
+          pin.passed = passed
+          pin.g.classList.toggle('is-passed', passed)
+        }
+      }
+    }
+    if (!on) {
+      setHidden(c, null)
+      return
+    }
+
+    if (glide.k > 0) {
+      x = x + (glide.x - x) * glide.k
+      y = y + (glide.y - y) * glide.k
+    }
     subG.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`)
     const depth = clamp((y - m.t) / ph) * Y_MAX
     const shown = depth > c.p.depth - 15 ? c.p.depth : Math.round(depth / 10) * 10
     const mins = Math.round(h * 60)
     readD.textContent = `${fmt(shown)} m`
     readT.textContent = `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} min`
-    const left = x > m.l + pw - 96
-    const ry = y < m.t + 30 ? y + 18 : y
+
+    // readout sits above the sub (below it near the surface), on the open side
+    const left = x > m.l + pw - 92
+    const below = y < m.t + 34
+    const rx = x + (left ? -14 : 14)
+    const y1 = below ? y + 22 : y - 22
     for (const t of [readD, readT]) {
       t.setAttribute('text-anchor', left ? 'end' : 'start')
-      t.setAttribute('x', (x + (left ? -16 : 16)).toFixed(1))
+      t.setAttribute('x', rx.toFixed(1))
     }
-    readD.setAttribute('y', (ry - 2).toFixed(1))
-    readT.setAttribute('y', (ry + 12).toFixed(1))
+    readD.setAttribute('y', y1.toFixed(1))
+    readT.setAttribute('y', (y1 + 13).toFixed(1))
+    const box = { x: left ? rx - 74 : rx, y: y1 - 11, width: 74, height: 28 }
+    setHidden(c, box)
   }
-  function restartSub() {
-    st.t = 0
-    loop?.kill()
-    loop = null
-    updateSub()
-  }
-  function updateSub() {
-    if (!G) return
-    const run = !reduced && inView && drawnAll && !document.hidden
-    G.sub.classList.toggle('is-on', run)
-    if (run) {
-      if (!loop) {
-        const hours = BY_ID[selected].hours
-        loop = gsap.to(st, {
-          t: 1,
-          duration: 3 + hours * 0.95,
-          ease: 'none',
-          repeat: -1,
-          repeatDelay: 0.8,
-          onUpdate: placeSub,
-          onRepeat: () => (st.t = 0),
-        })
-        placeSub()
-      } else loop.resume()
-    } else loop?.pause()
+
+  // a label under the moving readout steps back while it passes
+  function setHidden(c, box) {
+    for (const cc of Object.values(G.curves)) {
+      const tagOff = !!box && !!cc.tagBox && hit(box, cc.tagBox)
+      if (tagOff !== cc.tagHidden) {
+        cc.tagHidden = tagOff
+        cc.tag.classList.toggle('is-under', tagOff)
+      }
+      for (const pin of cc.pins) {
+        const off = !!box && cc === c && !!pin.box && hit(box, pin.box)
+        if (off !== pin.hidden) {
+          pin.hidden = off
+          pin.g.classList.toggle('is-under', off)
+        }
+      }
+    }
   }
 
   /* -------------------------------------------------------------- wiring */
-  opts.forEach((b) =>
+  opts.forEach((b) => {
+    const id = b.dataset.pfOpt
     b.addEventListener('click', () => {
-      choose(b.dataset.pfOpt)
-      if (G) ping(G.curves[b.dataset.pfOpt])
-    }),
-  )
-  opts.forEach((b) =>
+      choose(id)
+      if (G) ping(G.curves[id])
+    })
     b.addEventListener('pointerenter', (e) => {
-      if (e.pointerType === 'mouse') choose(b.dataset.pfOpt)
-    }),
-  )
+      if (e.pointerType === 'mouse') setPeek(id)
+    })
+    b.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse' && peek === id) setPeek(null)
+    })
+  })
+  list?.addEventListener('pointerleave', () => setPeek(null))
+  svg.addEventListener('pointerleave', () => setPeek(null))
 
   reserve?.addEventListener('click', () => {
+    setPeek(null)
     ctx.emit('select-profile', { id: selected })
     ctx.scrollTo('#reserve')
   })
@@ -527,16 +666,6 @@ export function init(ctx) {
   ctx.on('select-profile', (d) => {
     if (d?.id && d.id !== selected) choose(d.id, { animate: true })
   })
-
-  const io = new IntersectionObserver(
-    ([entry]) => {
-      inView = entry.isIntersecting
-      updateSub()
-    },
-    { threshold: 0.05 },
-  )
-  io.observe(fig)
-  document.addEventListener('visibilitychange', updateSub)
 
   build()
   syncDim()
@@ -552,12 +681,17 @@ export function init(ctx) {
     lastH = h
     clearTimeout(rT)
     rT = setTimeout(() => {
-      loop?.kill()
-      loop = null
       build()
-      updateSub()
       if (!reduced) ScrollTrigger.refresh()
     }, 160)
   })
   ro.observe(fig)
+  document.fonts?.ready?.then(() => {
+    // label boxes depend on the webfont's metrics
+    if (!G) return
+    for (const c of Object.values(G.curves)) {
+      c.tagBox = safeBox(c.tn)
+      for (const pin of c.pins) pin.box = safeBox(pin.t)
+    }
+  })
 }

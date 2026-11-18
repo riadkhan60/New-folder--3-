@@ -81,7 +81,7 @@
 /* --------------------------------------------------------------- payoff */
 .manifesto__payoff {
   grid-row: 1;
-  grid-column: 2 / span 10;
+  grid-column: 3 / -1;
   align-self: center;
   max-width: 13.5em;
   font-family: var(--font-display);
@@ -140,7 +140,7 @@
     grid-column: 2 / span 11;
   }
   .manifesto__payoff {
-    grid-column: 1 / span 12;
+    grid-column: 2 / -1;
   }
 }
 

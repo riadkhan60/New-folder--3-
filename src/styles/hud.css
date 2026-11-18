@@ -311,13 +311,6 @@
 .hud.is-compact .hud__ghost.hud__band,
 .hud.is-compact .hud__ghost.hud__rows { display: grid; }
 
-/* measuring a layout must never start a transition */
-.hud.is-measuring,
-.hud.is-measuring * {
-  transition: none !important;
-  animation: none !important;
-}
-
 /* lower screens: drop the band, keep the readings */
 @media (max-height: 860px) {
   .hud__band { display: none; }

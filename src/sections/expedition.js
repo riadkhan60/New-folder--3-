@@ -10,11 +10,20 @@
  * profile turned on its side, time running down the page and depth running
  * across it (4 h down, up to 4 h on the floor, 4 h up). The shallow part of
  * that swing is blue-green, the deep part red, because that is where the
- * lamps change. A small readout rides beside the signal with the depth and
- * the elapsed dive time, and "10,935 m" compresses as the signal falls
- * towards it, then lights when the signal reaches the floor.
+ * lamps change. A live depth figure rises into view and counts with the
+ * signal, squeezed narrower and heavier as it goes deeper (the site's
+ * pressure compression, in one number); it is plain ink with no lamp glow,
+ * because the lit 10,935 m belongs to the finale. A small readout rides
+ * beside the signal with the elapsed time (and the depth on the way up),
+ * stepping round the phase captions so they never collide.
  *
- * Reduced motion: the tether is drawn, every day is lit, nothing moves.
+ * The section opens with the switch to red lamps. When the dive crosses
+ * 6,000 m going down, Vesper's lamp head (22 LEDs) flickers white, goes dark
+ * for a beat, and comes back red, LED by LED, while a wash of red light
+ * blooms across the water from it. Going back up it quietly returns to white.
+ *
+ * Reduced motion: the tether is drawn, every day is lit, the lamps are red,
+ * nothing moves.
  */
 import '../styles/expedition.css'
 
@@ -22,6 +31,8 @@ const SVGNS = 'http://www.w3.org/2000/svg'
 const MAX = 10935
 const DIVE_HOURS = 12
 const RED_FROM = 6000
+const SWITCH_AT = 6005 // the lamp moment plays as the HUD reads past 6,000 m
+const LEDS = 22
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
 const fmt = (m) => Math.round(m).toLocaleString('en-US')
 
@@ -83,6 +94,8 @@ function atY(lut, y) {
   return { len: L[lo] + (L[hi] - L[lo]) * t, x: X[lo] + (X[hi] - X[lo]) * t }
 }
 
+const hit = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+
 function el(name, attrs = {}, parent) {
   const n = document.createElementNS(SVGNS, name)
   for (const k in attrs) n.setAttribute(k, attrs[k])
@@ -100,6 +113,7 @@ export function init(ctx) {
   const days = [...root.querySelectorAll('.exp__day')]
   const plunge = root.querySelector('[data-exp-plunge]')
   const deep = root.querySelector('[data-exp-deep]')
+  const deepN = root.querySelector('[data-exp-deep-n]')
   const phases = [...root.querySelectorAll('[data-exp-phase]')]
   const readout = root.querySelector('.exp__readout')
   if (!log || !svg || !days.length || !plunge) return
@@ -116,13 +130,92 @@ export function init(ctx) {
   const readD = readout?.querySelector('.exp__readout-d')
   const readT = readout?.querySelector('.exp__readout-t')
 
+  /* ------------------------------------------- the red-light switch */
+  const lamps = root.querySelector('[data-exp-lamps]')
+  const lampSvg = lamps?.querySelector('.exp__lamp-svg')
+  const lampGlow = lamps?.querySelector('.exp__lamp-glow')
+  const wash = root.querySelector('.exp__wash')
+  const leds = []
+  if (lampSvg) {
+    el('circle', { class: 'exp__lamp-housing', cx: 40, cy: 40, r: 38 }, lampSvg)
+    el('circle', { class: 'exp__lamp-bezel', cx: 40, cy: 40, r: 31 }, lampSvg)
+    for (let i = 0; i < LEDS; i++) {
+      const a = (i / LEDS) * Math.PI * 2 - Math.PI / 2
+      leds.push(el('circle', { class: 'exp__led', cx: (40 + Math.cos(a) * 24.5).toFixed(2), cy: (40 + Math.sin(a) * 24.5).toFixed(2), r: 2.35 }, lampSvg))
+    }
+    el('circle', { class: 'exp__lamp-lens', cx: 40, cy: 40, r: 12 }, lampSvg)
+  }
+  let lampRed = null
+  let lampTl = null
+  function washFrom() {
+    if (!wash || !lamps) return
+    const r = lamps.querySelector('.exp__lamp').getBoundingClientRect()
+    wash.style.setProperty('--wx', `${(r.left + r.width / 2).toFixed(0)}px`)
+    wash.style.setProperty('--wy', `${(r.top + r.height / 2).toFixed(0)}px`)
+    gsap.killTweensOf(wash)
+    gsap
+      .timeline()
+      .fromTo(wash, { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1.3, duration: 0.8, ease: 'power2.out' })
+      .to(wash, { opacity: 0, duration: 2.2, ease: 'power2.inOut' }, 0.75)
+  }
+  function setLamps(red, show) {
+    if (!lamps || red === lampRed) return
+    lampRed = red
+    lampTl?.kill()
+    lampTl = null
+    if (!red) {
+      lamps.classList.remove('is-red')
+      gsap.set([...leds, lampGlow], { clearProps: 'opacity' })
+      if (wash) {
+        gsap.killTweensOf(wash)
+        gsap.set(wash, { opacity: 0 })
+      }
+      return
+    }
+    if (!show) {
+      lamps.classList.add('is-red')
+      gsap.set([...leds, lampGlow], { clearProps: 'opacity' })
+      return
+    }
+    // white lamps flicker, a dark beat, then red, LED by LED, and the wash
+    lampTl = gsap
+      .timeline({ defaults: { ease: 'none' } })
+      .set(leds, { opacity: 1 })
+      .to(leds, { opacity: 0.12, duration: 0.05 }, 0.05)
+      .to(leds, { opacity: 1, duration: 0.05 }, 0.13)
+      .to(leds, { opacity: 0.3, duration: 0.04 }, 0.26)
+      .to(leds, { opacity: 0.9, duration: 0.05 }, 0.32)
+      .to([...leds, lampGlow], { opacity: 0, duration: 0.14, ease: 'power2.in' }, 0.46)
+      .add(() => lamps.classList.add('is-red'), 0.62)
+      .to(leds, { opacity: 1, duration: 0.22, ease: 'power2.out', stagger: 0.024 }, 1.0)
+      .to(lampGlow, { opacity: 0.55, duration: 1.1, ease: 'power2.out' }, 1.0)
+      .add(washFrom, 1.0)
+  }
+  if (reduced) lamps?.classList.add('is-red')
+  else if (ctx.depth?.onChange) {
+    let lastD = null
+    let lastT = 0
+    ctx.depth.onChange((s) => {
+      const now = performance.now()
+      // descent speed in metres per second (frame rate independent)
+      const speed = lastD === null ? Infinity : Math.abs(s.depth - lastD) / Math.max(0.016, (now - lastT) / 1000)
+      lastD = s.depth
+      lastT = now
+      const red = s.depth >= SWITCH_AT
+      if (red === lampRed) return
+      // first reading, or a jump through 6,000 m (a nav link): just set it
+      const show = lampRed === false && red && speed < 3000
+      setLamps(red, show)
+    })
+  }
+
   /* ---------------------------------------------------------- sketches */
   const sketches = new Map()
   days.forEach((day) => {
     const fig = day.querySelector('.exp__sketch')
     if (!fig) return
     const draw = [...fig.querySelectorAll('.exp__sk-line, .exp__sk-contour, .exp__sk-mark, .exp__sk-port, .exp__sk-beams path')]
-    const fade = [...fig.querySelectorAll('.exp__sk-faint, .exp__sk-route, .exp__sk-label')]
+    const fade = [...fig.querySelectorAll('.exp__sk-faint, .exp__sk-route, .exp__sk-label, .exp__sk-hatch, .exp__sk-fill')]
     if (!reduced) {
       if (draw.length) gsap.set(draw, { drawSVG: '0%' })
       if (fade.length) gsap.set(fade, { opacity: 0 })
@@ -157,7 +250,12 @@ export function init(ctx) {
     const deepFrac = (parseFloat(getComputedStyle(plunge).getPropertyValue('--pl-deep')) || 88) / 100
     const D = pr.left - lr.left + pr.width * deepFrac
     const h = pBot - pTop
-    return { W, H, T, D, pTop, pBot, h, nodes }
+    // the phase captions, so the readout can step round them
+    const phaseBoxes = phases.map((p) => {
+      const r = p.getBoundingClientRect()
+      return { x: r.left - lr.left - 6, y: r.top - lr.top - 4, width: r.width + 12, height: r.height + 8 }
+    })
+    return { W, H, T, D, pTop, pBot, h, nodes, phaseBoxes }
   }
 
   function build() {
@@ -229,7 +327,19 @@ export function init(ctx) {
     const segB = mk(dB, 'exp__c-track')
     const lut = sample(segP[2])
 
-    G = { ...g, yA1, yB0, lut, segA, segP, segB, floorTop: pTop + h / 3, floorBot: pTop + (2 * h) / 3 }
+    // readout size, measured once with its widest text
+    let readW = 110
+    if (readout && readD && readT) {
+      const was = [readD.textContent, readT.textContent]
+      readout.classList.remove('is-time')
+      readD.textContent = '10,935 m'
+      readT.textContent = '10 h 00 min'
+      readW = readout.offsetWidth || readW
+      ;[readD.textContent, readT.textContent] = was
+      readout.classList.toggle('is-time', readTime)
+    }
+
+    G = { ...g, yA1, yB0, lut, segA, segP, segB, floorTop: pTop + h / 3, floorBot: pTop + (2 * h) / 3, readW }
 
     if (reduced) return
     makeTimeline()
@@ -242,8 +352,11 @@ export function init(ctx) {
   let floor = false
   let diving = false
   let shallow = false
-  let lastDeepT = -1
+  let near = false
+  let deepRed = false
+  let lastDeepM = -1
   let readLeft = false
+  let readTime = false
 
   function makeTimeline() {
     if (tl) {
@@ -274,7 +387,7 @@ export function init(ctx) {
 
   function paint(y) {
     if (!G) return
-    const { T, D, yA1, yB0, lut, nodes, pTop, h, floorTop, W } = G
+    const { T, D, yA1, yB0, lut, nodes, pTop, h, floorTop, floorBot, W } = G
 
     // the signal
     let x = T
@@ -312,14 +425,28 @@ export function init(ctx) {
       floor = onFloor
       plunge.classList.toggle('is-floor', onFloor)
     }
+    const depthM = clamp((x - T) / (D - T)) * MAX
+    const shownM = depthM > MAX - 12 ? MAX : Math.round(depthM / 10) * 10
+
+    // the live depth figure: counts with the signal, squeezed by the depth
     if (deep) {
-      const t = Math.round(clamp((y - (pTop - h * 0.12)) / (floorTop - (pTop - h * 0.12))) * 100) / 100
-      if (t !== lastDeepT) {
-        lastDeepT = t
-        const e = 1 - Math.pow(1 - t, 2)
+      // on screen from just before the dive until the signal leaves the floor
+      const isNear = y > pTop - h * 0.3 && y < floorBot + h * 0.04
+      if (isNear !== near) {
+        near = isNear
+        plunge.classList.toggle('is-near', isNear)
+      }
+      if (shownM !== lastDeepM) {
+        lastDeepM = shownM
+        if (deepN) deepN.textContent = fmt(shownM)
+        const e = Math.pow(shownM / MAX, 0.8)
         deep.style.setProperty('--deep-wdth', (118 - 68 * e).toFixed(1))
-        deep.style.setProperty('--deep-wght', Math.round(300 + 560 * e))
-        deep.style.setProperty('--deep-t', t)
+        deep.style.setProperty('--deep-wght', Math.round(300 + 480 * e))
+        const red = shownM >= RED_FROM
+        if (red !== deepRed) {
+          deepRed = red
+          deep.classList.toggle('is-red', red)
+        }
       }
     }
 
@@ -330,22 +457,40 @@ export function init(ctx) {
       plunge.classList.toggle('is-diving', inDive)
       readout?.classList.toggle('is-on', inDive)
     }
-    const depthM = clamp((x - T) / (D - T)) * MAX
     const isShallow = inDive && depthM < RED_FROM
     if (isShallow !== shallow) {
       shallow = isShallow
       signal.classList.toggle('is-shallow', isShallow)
     }
     if (inDive && readout) {
-      // keep the readout on the open side of the line (inside the swing on phones)
-      const left = x > W - 190 || (W < 560 && x > 150)
+      // while the big figure is on screen (down and on the floor) the
+      // readout only keeps time; on the way up it gives the depth too
+      const timeOnly = y < floorBot
+      if (timeOnly !== readTime) {
+        readTime = timeOnly
+        readout.classList.toggle('is-time', timeOnly)
+      }
+      // keep the readout on the open side of the line (inside the swing on
+      // phones), and step round the phase captions
+      const rw = G.readW
+      const top = timeOnly ? y - 10 : y - 18
+      const rh = timeOnly ? 20 : 38
+      const side = (l, dy = 0) => (l ? { x: x - rw, y: top + dy, width: rw - 18, height: rh } : { x: x + 18, y: top + dy, width: rw - 18, height: rh })
+      const collides = (b) => G.phaseBoxes.some((p) => hit(b, p))
+      let left = x > W - 190 || (W < 560 && x > 150)
+      let dy = 0
+      if (collides(side(left))) {
+        const other = side(!left)
+        if (!collides(other) && other.x >= 0 && other.x + other.width <= W) left = !left
+        else dy = collides(side(left, 44)) ? -44 : 44
+      }
       if (left !== readLeft) {
         readLeft = left
         readout.classList.toggle('is-left', left)
       }
-      readout.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+      readout.style.transform = `translate3d(${x.toFixed(1)}px, ${(y + dy).toFixed(1)}px, 0)`
       const mins = Math.round(clamp((y - pTop) / h) * DIVE_HOURS * 60)
-      readD.textContent = `${fmt(depthM > MAX - 12 ? MAX : Math.round(depthM / 10) * 10)} m`
+      readD.textContent = `${fmt(shownM)} m`
       readT.textContent = `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} min`
     }
   }

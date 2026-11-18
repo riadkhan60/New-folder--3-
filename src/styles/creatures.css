@@ -1,14 +1,15 @@
 /* ==========================================================================
    CREATURES (#life) — 4,000 → 6,000 m. Lights off.
-   A sticky, near-black stage. The canvas draws only what glows until the
-   sub's lamp (the pointer) shows the bodies. Each animal is a real button +
-   fact; JS floats it beside its animal once found (.is-float).
+   A sticky, near-black stage: Vesper's descent log. The canvas draws only
+   what glows until the sub's lamp (the pointer) shows the bodies. Each
+   animal is a real button + fact; JS floats the lit one beside its animal
+   (.is-float). Found animals keep only a pip, drawn on the canvas.
    Without JS, or with reduced motion (.is-static), the six read as a list
    under a still frame of the scene.
    ========================================================================== */
 
 #life.creatures {
-  --life-warm: #fff4e6; /* the lamp's white, on lit text */
+  --life-lamp: #f3f9ff; /* the lamp's cool white, on lit text */
   --life-top: calc(76px + clamp(1.25rem, 5vh, 3.25rem));
   --life-scene: 100svh; /* height of the still scene (static mode) */
   position: relative;
@@ -62,6 +63,12 @@
   z-index: 0;
   pointer-events: none;
 }
+/* the lamp's cone fades out with the darkness at the stage's edges while it
+   enters and leaves, instead of being cut by the canvas edge */
+#life.is-float .creatures__canvas {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge, 0px), #000 calc(100% - var(--edge-b, 0px)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge, 0px), #000 calc(100% - var(--edge-b, 0px)), transparent 100%);
+}
 #life.is-static .creatures__canvas {
   bottom: auto;
   height: var(--life-scene);
@@ -102,7 +109,7 @@
    exactly over it is revealed where the lamp falls (mask follows --mx/--my). */
 .creatures__title .creatures__base {
   display: block;
-  color: rgb(234 246 244 / 0.5);
+  color: rgb(234 246 244 / 0.84);
 }
 .creatures__lede .creatures__base {
   display: block;
@@ -115,7 +122,8 @@
   display: block;
   position: absolute;
   inset: 0;
-  color: var(--life-warm);
+  color: var(--life-lamp);
+  text-shadow: 0 0 22px rgb(196 226 255 / 0.4);
   opacity: var(--lamp, 0);
   -webkit-mask-image: radial-gradient(
     circle calc(var(--lr, 220) * 1px) at calc(var(--mx, -999) * 1px) calc(var(--my, -999) * 1px),
@@ -183,9 +191,22 @@
   transition: opacity 0.9s var(--ease-out);
   will-change: transform, opacity;
 }
-#life.is-float .creatures__specimen.is-found,
+#life.is-float .creatures__specimen.is-on,
 #life.is-float .creatures__specimen:focus-within {
   opacity: 1;
+}
+#life.is-float .creatures__specimen:focus-within {
+  transition-duration: 0.3s;
+}
+/* a pool of darkness behind the open label, so its text never sits on a
+   glowing cloud or a lit body */
+#life.is-float .creatures__specimen::before {
+  content: '';
+  position: absolute;
+  inset: -1.4rem -2.2rem -1.6rem -1.8rem;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.74) 55%, rgb(0 0 0 / 0) 100%);
+  pointer-events: none;
 }
 
 .creatures__name {
@@ -231,6 +252,10 @@
   letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--glow) 80%, var(--c-ink));
 }
+.creatures__range {
+  color: var(--c-ink-3);
+  white-space: nowrap;
+}
 .creatures__fact {
   display: block;
   margin-top: 0.35rem;
@@ -257,9 +282,6 @@
 }
 #life.is-float .creatures__specimen.is-on .creatures__about {
   transition-delay: 0.12s;
-}
-#life.is-float .creatures__specimen.is-found:not(.is-on):not(:focus-within) .creatures__common {
-  opacity: 0.55;
 }
 
 .creatures__name:focus-visible {
@@ -324,6 +346,16 @@
   box-shadow: 0 0 10px 1px rgb(234 246 244 / 0.35);
 }
 
+/* six of six: the log's pips pulse in the order the lights were logged,
+   in step with the constellation on the canvas */
+@keyframes creatures-pip {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.9); box-shadow: 0 0 18px 4px color-mix(in srgb, var(--glow) 90%, transparent); }
+  100% { transform: scale(1); }
+}
+#life.is-float .creatures__log.is-complete .creatures__pip {
+  animation: creatures-pip 1.2s var(--ease-out) calc(1s + var(--i, 0) * 0.5s) 1 backwards;
+}
 .creatures__count {
   font-family: var(--font-display);
   font-stretch: 100%;
@@ -413,8 +445,5 @@
   #life.is-float .creatures__specimen,
   #life.is-float .creatures__about {
     max-width: min(21rem, calc(100vw - 2 * var(--rail)));
-  }
-  #life.is-float .creatures__specimen.is-found:not(.is-on):not(:focus-within) {
-    opacity: 0;
   }
 }

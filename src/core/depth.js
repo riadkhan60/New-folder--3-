@@ -30,6 +30,8 @@
  * (and holds it below), instead of at the bottom of the section.
  */
 
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
 export const MAX_DEPTH = 10935
 
 export const ZONES = [
@@ -142,6 +144,12 @@ export function createDepth({ gsap }) {
     return p && p.classList.contains('pin-spacer') ? p : el
   }
 
+  // Geometry is cached (absolute document offsets) and re-measured only when
+  // layout can have changed: ScrollTrigger refreshes, size changes of <main>,
+  // fonts. Per frame, depth is pure arithmetic on scrollY — no layout reads.
+  let geo = []
+  let dirty = true
+
   function refresh() {
     sections = [...document.querySelectorAll('[data-depth-start]')].map((el) => {
       const start = parseFloat(el.dataset.depthStart) || 0
@@ -153,6 +161,21 @@ export function createDepth({ gsap }) {
       if (!el.dataset.zone) el.dataset.zone = zoneAt(mid).id
       return { el, start, end, until: el.querySelector('[data-depth-until]') }
     })
+    measure()
+  }
+
+  function measure() {
+    const sy = window.scrollY
+    geo = sections.map((s) => {
+      const r = measureEl(s.el).getBoundingClientRect()
+      let span = r.height
+      if (s.until) {
+        const u = s.until.getBoundingClientRect()
+        span = u.top + u.height / 2 - r.top
+      }
+      return { s, top: r.top + sy, h: r.height, span: Math.max(1, span) }
+    })
+    dirty = true
   }
 
   function computeDepth() {
@@ -162,47 +185,37 @@ export function createDepth({ gsap }) {
     const y = window.scrollY
     state.scrollProgress = maxScroll > 0 ? clamp(y / maxScroll) : 0
     if (maxScroll > 0 && y >= maxScroll - 2) {
-      const last = sections[sections.length - 1]
-      return { depth: MAX_DEPTH, id: last?.el.id ?? null }
+      const lastG = geo[geo.length - 1]
+      return { depth: MAX_DEPTH, id: lastG?.s.el.id ?? null }
     }
     let depth = 0
     let id = null
-    for (let i = 0; i < sections.length; i++) {
-      const s = sections[i]
-      const r = measureEl(s.el).getBoundingClientRect()
-      if (r.bottom <= probe) {
-        depth = s.end
-        id = s.el.id
+    for (let i = 0; i < geo.length; i++) {
+      const g = geo[i]
+      const top = g.top - y
+      if (top + g.h <= probe) {
+        depth = g.s.end
+        id = g.s.el.id
         continue
       }
-      if (r.top <= probe) {
-        const t = clamp((probe - r.top) / spanOf(s, r))
-        depth = s.start + (s.end - s.start) * t
-        id = s.el.id
+      if (top <= probe) {
+        const t = clamp((probe - top) / g.span)
+        depth = g.s.start + (g.s.end - g.s.start) * t
+        id = g.s.el.id
       }
       break
     }
     return { depth, id }
   }
 
-  /** Scroll distance over which a section interpolates start → end. */
-  function spanOf(s, r) {
-    if (s.until) {
-      const u = s.until.getBoundingClientRect()
-      return Math.max(1, u.top + u.height / 2 - r.top)
-    }
-    return Math.max(1, r.height)
-  }
-
   function scrollYForDepth(d) {
     const vh = window.innerHeight
     const maxScroll = Math.max(0, document.documentElement.scrollHeight - vh)
     if (d <= 0) return 0
-    for (const s of sections) {
-      if (s.end > s.start && d >= s.start && d <= s.end) {
-        const r = measureEl(s.el).getBoundingClientRect()
-        const top = r.top + window.scrollY
-        const y = top + ((d - s.start) / (s.end - s.start)) * spanOf(s, r) - vh * 0.5
+    for (const g of geo) {
+      const { start, end } = g.s
+      if (end > start && d >= start && d <= end) {
+        const y = g.top + ((d - start) / (end - start)) * g.span - vh * 0.5
         return clamp(y, 0, maxScroll)
       }
     }
@@ -210,7 +223,23 @@ export function createDepth({ gsap }) {
   }
 
   let last = -1
+  let lastY = -1
+  let lastVh = -1
   function update(force = false) {
+    const y = window.scrollY
+    const vh = window.innerHeight
+    if (!force && !dirty && y === lastY && vh === lastVh) {
+      if (state.velocity !== 0) {
+        state.velocity = 0
+        for (const fn of listeners) {
+          try { fn(state) } catch (e) { console.error('[depth] listener failed', e) }
+        }
+      }
+      return
+    }
+    lastY = y
+    lastVh = vh
+    dirty = false
     const { depth, id } = computeDepth()
     if (!force && Math.abs(depth - last) < 0.05 && id === state.section) return
     state.velocity = last < 0 ? 0 : depth - last
@@ -244,10 +273,24 @@ export function createDepth({ gsap }) {
   refresh()
   update(true)
   gsap.ticker.add(() => update())
-  window.addEventListener('resize', () => {
-    refresh()
+
+  // Re-measure when layout can have changed (not on every resize event:
+  // ScrollTrigger already refreshes on real resizes and ignores mobile
+  // toolbar show/hide).
+  ScrollTrigger.addEventListener('refresh', () => {
+    measure()
     update(true)
   })
+  let roRaf = 0
+  const ro = new ResizeObserver(() => {
+    cancelAnimationFrame(roRaf)
+    roRaf = requestAnimationFrame(() => {
+      measure()
+      update(true)
+    })
+  })
+  const mainEl = document.querySelector('main')
+  if (mainEl) ro.observe(mainEl)
 
   return {
     MAX: MAX_DEPTH,

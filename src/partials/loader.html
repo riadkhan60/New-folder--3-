@@ -6,6 +6,7 @@
     (function () {
       try {
         if (/[?&](skipintro|reduced)(=|&|$)/.test(location.search) ||
+            location.hash.length > 1 ||
             window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
           document.documentElement.classList.add('skip-intro')
         }

@@ -1,10 +1,12 @@
 /* ==========================================================================
    EXPEDITION (#expedition) — 6,000 → 8,000 m. The nine-day Hadal itinerary
-   as a logbook. A tether runs down the left of the section; a lit signal
-   travels down it, always at the centre of the screen (the same probe the
-   depth instrument uses), and each day lights up when the signal reaches it.
+   as a logbook. Day numerals sit in the margin; a tether runs just right of
+   them; a lit signal travels down it, always at the centre of the screen
+   (the same probe the depth instrument uses), and each day lights up and
+   draws its logbook sketch when the signal reaches it.
    On Day 6 the tether swings out to full depth and back: the dive profile
    turned on its side (time runs down the page, depth runs to the right).
+   It opens with the switch to red lamps at 6,000 m.
    Transparent: the water is depth.js. Red light only: this is 6,000 m+.
    ========================================================================== */
 
@@ -13,39 +15,65 @@
   --exp-accent: color-mix(in oklab, var(--c-redlight) calc(var(--hadal) * 100%), var(--c-photophore));
   --exp-warm: color-mix(in oklab, var(--exp-accent) 72%, #ffe0d6);
   --exp-glow: color-mix(in srgb, var(--exp-accent) 55%, transparent);
+  --exp-numw: 9rem;            /* margin column for the day numerals       */
   --exp-rail: 4.5rem;          /* gutter that carries the tether          */
-  --exp-numw: 8.5rem;          /* column for the day numerals             */
+  --exp-bodyw: 30rem;          /* the entry text                           */
+  --exp-pad: clamp(1.75rem, 5.2vh, 3.5rem); /* space above/below each day */
   --exp-dim: rgb(234 246 244 / 0.24);
   position: relative;
-  padding-block: var(--s-10) var(--s-7);
+  padding-block: var(--s-9) var(--s-7);
 }
 
 .exp {
   position: relative;
 }
 
+/* ------------------------------------------- the red-light switch: wash */
+/* Fixed, under the page content, over the water. Only ever lit for a
+   moment by expedition.js as the dive crosses 6,000 m. */
+.exp__wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at var(--wx, 70%) var(--wy, 70%),
+      rgb(255 59 47 / 0.34) 0,
+      rgb(255 59 47 / 0.14) 26%,
+      rgb(255 59 47 / 0.04) 52%,
+      transparent 78%);
+  transform-origin: var(--wx, 70%) var(--wy, 70%);
+}
+
 /* ---------------------------------------------------------------- header */
+/* The header shares the logbook's columns: the title starts on the text
+   column, which keeps the bottom-left corner (the depth instrument) clear
+   while the readout crosses 6,000 m and turns red. */
 .exp__head {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: var(--exp-numw) var(--exp-rail) minmax(0, var(--exp-bodyw)) minmax(0, 1fr);
   column-gap: var(--gap);
   row-gap: var(--s-6);
+  align-items: start;
 }
 
 .exp__title {
-  grid-column: 1 / span 9;
+  grid-column: 3 / -1;
   font-family: var(--font-display);
   font-size: var(--fs-display);
   font-stretch: calc(var(--wdth) * 1%);
-  font-weight: var(--wght);
+  /* heavy, but never so heavy that the counters close; tracking opens as
+     the width closes so letters never touch at hadal compression */
+  font-weight: min(var(--wght), 780);
   line-height: 0.88;
-  letter-spacing: -0.03em;
+  letter-spacing: calc((70 - var(--wdth)) * 0.0014em);
   color: var(--c-ink);
   text-wrap: balance;
 }
 
 .exp__lead {
-  grid-column: 1 / span 5;
+  grid-column: 3;
   max-width: 30ch;
   color: var(--c-ink-2);
   text-wrap: pretty;
@@ -53,14 +81,13 @@
 
 /* ------------------------------------------------- red-light aside */
 .exp__lamps {
+  grid-column: 4;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  column-gap: var(--s-4);
-  width: min(100%, 25rem);
-  margin-top: var(--s-8);
-  margin-left: auto;
-  margin-right: 8%;
+  align-items: center;
+  column-gap: var(--s-5);
+  max-width: 27rem;
+  margin-top: 0.2rem;
 }
 
 .exp__lamps-text {
@@ -73,42 +100,54 @@
   text-wrap: pretty;
 }
 
-/* A red observation lamp, seen head-on */
+/* Vesper's lamp head, seen head-on: 22 LEDs in a ring (built in JS) */
 .exp__lamp {
+  --led: #f4fbff;
+  --led-glow: rgb(214 246 255 / 0.55);
   position: relative;
   display: block;
-  width: 1.6rem;
-  height: 1.6rem;
-  margin-top: 0.2rem;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--exp-accent) 45%, transparent);
+  width: 5rem;
+  height: 5rem;
 }
-.exp__lamp::after {
-  content: '';
+.exp__lamps.is-red .exp__lamp {
+  --led: #ff6a5c;
+  --led-glow: rgb(255 59 47 / 0.6);
+}
+.exp__lamp-glow {
   position: absolute;
-  inset: -2.4rem;
+  inset: -3.5rem;
   border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--exp-accent) 22%, transparent), transparent);
+  background: radial-gradient(closest-side, var(--led-glow), color-mix(in srgb, var(--led-glow) 30%, transparent) 40%, transparent);
+  opacity: 0.55;
   pointer-events: none;
+  transition: background 0.6s var(--ease-out);
 }
-.exp__lamp-core {
-  position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 42% 40%, #fff3ef 0 14%, var(--exp-accent) 46%, color-mix(in srgb, var(--exp-accent) 0%, transparent) 72%);
-  box-shadow: 0 0 12px 3px var(--exp-glow);
-  animation: exp-lamp 4.8s var(--ease-drift) infinite alternate;
+.exp__lamp-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-@keyframes exp-lamp {
-  from { opacity: 0.78; }
-  to { opacity: 1; }
+.exp__lamp-svg .exp__lamp-housing { fill: none; stroke: var(--c-line-strong); stroke-width: 1; }
+.exp__lamp-svg .exp__lamp-bezel { fill: rgb(0 0 0 / 0.5); stroke: var(--c-line); stroke-width: 1; }
+.exp__lamp-svg .exp__led {
+  fill: var(--led);
+  filter: drop-shadow(0 0 2px var(--led-glow));
+  transition: fill 0.25s var(--ease-out);
+}
+.exp__lamp-svg .exp__lamp-lens {
+  fill: color-mix(in srgb, var(--led) 10%, transparent);
+  stroke: color-mix(in srgb, var(--led) 40%, transparent);
+  stroke-width: 1;
+  transition: fill 0.4s var(--ease-out), stroke 0.4s var(--ease-out);
 }
 
 /* ------------------------------------------------------------------ log */
 .exp__log {
   position: relative;
-  margin-top: var(--s-8);
-  padding-bottom: var(--s-8);
+  /* room for the lamp moment before the first day reaches the instrument */
+  margin-top: clamp(5rem, 21vh, 12rem);
+  padding-bottom: var(--s-7);
 }
 
 .exp__cable {
@@ -120,8 +159,8 @@
   overflow: visible;
   pointer-events: none;
   /* fade the tether out at its far end */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14rem), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 14rem), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 12rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 12rem), transparent);
 }
 
 .exp__cable .exp__c-base {
@@ -177,7 +216,7 @@
 .exp__signal::before {
   content: '';
   position: absolute;
-  inset: -70px;
+  inset: -64px;
   border-radius: 50%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--exp-accent) 42%, transparent), color-mix(in srgb, var(--exp-accent) 12%, transparent) 45%, transparent);
   pointer-events: none;
@@ -210,17 +249,17 @@
 .exp__day {
   position: relative;
   display: grid;
-  grid-template-columns: var(--exp-rail) var(--exp-numw) minmax(0, 34rem) minmax(0, 1fr);
+  grid-template-columns: var(--exp-numw) var(--exp-rail) minmax(0, var(--exp-bodyw)) minmax(0, 1fr);
   column-gap: var(--gap);
   align-items: start;
-  padding-block: clamp(2.75rem, 9vh, 6.5rem);
+  padding-block: var(--exp-pad);
 }
 
 /* bead on the tether */
 .exp__node {
   position: absolute;
-  left: calc(var(--exp-rail) / 2);
-  top: calc(clamp(2.75rem, 9vh, 6.5rem) + 2.35rem);
+  left: calc(var(--exp-numw) + var(--gap) + var(--exp-rail) / 2);
+  top: calc(var(--exp-pad) + 2.35rem);
   width: 9px;
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
@@ -230,19 +269,22 @@
   transition: background 0.6s var(--ease-out), border-color 0.6s var(--ease-out), box-shadow 0.8s var(--ease-out);
 }
 
+/* the numeral sits in the margin, flush against the tether */
 .exp__num {
   position: relative;
-  grid-column: 2;
+  grid-column: 1;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 0.15rem;
   margin-top: 0.35rem;
+  text-align: right;
 }
-/* a soft bloom of red light behind the numeral (a gradient, not a shadow) */
+/* a soft bloom of lamp light behind the numeral (a gradient, not a shadow) */
 .exp__num::before {
   content: '';
   position: absolute;
-  left: -2.5rem;
+  right: -2.5rem;
   top: -1.5rem;
   width: 9rem;
   height: 9rem;
@@ -266,10 +308,10 @@
 .exp__num-n {
   font-family: var(--font-display);
   font-stretch: calc(var(--wdth) * 1%);
-  font-weight: var(--wght);
+  font-weight: min(var(--wght), 800);
   font-size: clamp(3.4rem, 6.4vw, 6.25rem);
   line-height: 0.82;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   font-variant-numeric: lining-nums;
   color: var(--exp-dim);
   transition: color 0.9s var(--ease-out), text-shadow 1.1s var(--ease-out);
@@ -278,7 +320,7 @@
 
 .exp__body {
   grid-column: 3;
-  max-width: 34rem;
+  max-width: var(--exp-bodyw);
 }
 .exp__name {
   font-family: var(--font-display);
@@ -286,7 +328,7 @@
   font-weight: calc(var(--wght) - 180);
   font-size: var(--fs-h3);
   line-height: 1.04;
-  letter-spacing: -0.012em;
+  letter-spacing: 0.005em;
   color: var(--c-ink-2);
   transition: color 0.9s var(--ease-out);
 }
@@ -304,7 +346,7 @@
   margin-top: var(--s-4);
   font-family: var(--font-text);
   font-size: var(--fs-body);
-  line-height: 1.62;
+  line-height: 1.6;
   font-weight: 380;
   color: var(--c-ink-3);
   max-width: 52ch;
@@ -334,12 +376,15 @@
 }
 
 /* --------------------------------------------------------------- sketches */
+/* Logbook drawings in the right-hand column, one per day. They may reach
+   into the space between days, so they never set the rhythm of the log. */
 .exp__sketch {
   grid-column: 4;
+  align-self: center;
   justify-self: center;
-  width: min(100%, 21rem);
-  margin-top: 0.5rem;
-  opacity: 0.5;
+  width: min(100%, 27rem);
+  margin-block: -2.75rem;
+  opacity: 0.55;
   transition: opacity 1.2s var(--ease-out);
 }
 .exp__sketch svg { width: 100%; height: auto; overflow: visible; }
@@ -350,102 +395,116 @@
 .exp__sketch .exp__sk-route,
 .exp__sketch .exp__sk-mark,
 .exp__sketch .exp__sk-port,
+.exp__sketch .exp__sk-contour,
 .exp__sketch .exp__sk-beams path {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.exp__sketch .exp__sk-line { stroke: var(--c-ink-3); stroke-width: 1; }
-.exp__sketch .exp__sk-contour { fill: none; stroke: var(--c-line-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.exp__sketch .exp__sk-line { stroke: color-mix(in srgb, var(--c-ink) 62%, transparent); stroke-width: 1; }
+.exp__sketch .exp__sk-contour { stroke: var(--c-line-strong); stroke-width: 1; }
 .exp__sketch .exp__sk-faint { stroke: var(--c-line-strong); stroke-width: 1; stroke-dasharray: 2 5; }
 .exp__sketch .exp__sk-route { stroke: var(--exp-accent); stroke-width: 1.5; stroke-dasharray: 5 6; }
 .exp__sketch .exp__sk-mark { stroke: var(--exp-accent); stroke-width: 1.5; }
+.exp__sketch .exp__sk-mark--thin { stroke-width: 0.75; }
 .exp__sketch .exp__sk-port { stroke: var(--exp-accent); stroke-width: 1.25; fill: color-mix(in srgb, var(--exp-accent) 14%, transparent); }
 .exp__sketch .exp__sk-beams path { stroke: color-mix(in srgb, var(--exp-accent) 55%, transparent); stroke-width: 0.75; }
+.exp__sketch .exp__sk-hatch { fill: url(#exp-hatch); stroke: none; }
+.exp__sketch pattern path { stroke: var(--c-line-strong); stroke-width: 1; }
 .exp__sketch .exp__sk-label {
   fill: var(--c-ink-3);
   font-family: var(--font-display);
   font-stretch: 100%;
   font-weight: 420;
   font-size: 12px;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .exp__sketch .exp__sk-label--it {
   font-family: var(--font-text);
   font-style: italic;
   font-size: 13px;
+  fill: var(--c-ink-2);
 }
-.exp__sketch--chart { margin-top: -1rem; }
-.exp__sketch--map { margin-top: -0.5rem; }
+.exp__sketch .exp__sk-label--ink { fill: var(--c-ink-2); }
+.exp__sketch .exp__sk-label--stamp {
+  fill: color-mix(in oklab, var(--exp-accent) 80%, #fff);
+  font-size: 9.5px;
+  font-weight: 560;
+  letter-spacing: 0.01em;
+}
 
 /* ---------------------------------------------------------------- Day 6 */
 .exp__day--descent .exp__num-n {
   font-size: clamp(5rem, 11vw, 11rem);
 }
 .exp__day--descent .exp__node {
-  top: calc(clamp(2.75rem, 9vh, 6.5rem) + 3.6rem);
+  top: calc(var(--exp-pad) + 3.6rem);
 }
 .exp__day--descent .exp__name {
   font-size: clamp(2.2rem, 4.2vw, 4.25rem);
   font-stretch: calc(var(--wdth) * 1%);
-  font-weight: var(--wght);
+  font-weight: min(var(--wght), 780);
   line-height: 0.95;
-  letter-spacing: -0.025em;
+  letter-spacing: calc((70 - var(--wdth)) * 0.0014em);
 }
 .exp__day--descent .exp__body { padding-top: clamp(1.2rem, 2.6vw, 2.6rem); }
 
 .exp__plunge {
-  --pl-track: calc(var(--exp-rail) / 2);
+  --pl-track: calc(var(--exp-numw) + var(--gap) + var(--exp-rail) / 2);
   --pl-deep: 88%;
   --pl-mid: 45%;
   grid-column: 1 / -1;
   position: relative;
-  height: clamp(54rem, 150vh, 96rem);
+  height: clamp(46rem, 125vh, 80rem);
   margin-top: var(--s-8);
 }
 
+/* The live depth figure. It rises into view as the dive starts, stays with
+   the screen while the signal goes down, and comes to rest on the floor,
+   beside the deepest part of the line. Plain ink, no lamp glow: the lit
+   10,935 m belongs to the finale. */
 .exp__deep {
   position: absolute;
-  left: calc(var(--pl-track) + clamp(1.5rem, 21vw, 21rem));
-  top: 33.333%;
-  height: 33.333%;
-  display: flex;
-  align-items: center;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(4.6rem, 15vw, 16rem);
-  font-stretch: calc(var(--deep-wdth, 50) * 1%);
-  font-weight: var(--deep-wght, 860);
-  line-height: 0.8;
-  letter-spacing: -0.045em;
-  font-variant-numeric: lining-nums;
-  white-space: nowrap;
-  color: rgb(234 246 244 / calc(0.08 + var(--deep-t, 1) * 0.12));
-  transition: color 0.9s var(--ease-out), text-shadow 1.2s var(--ease-out);
-}
-.exp__deep-u {
-  font-size: 0.42em;
-  font-stretch: 100%;
-  letter-spacing: 0;
-}
-.exp__deep::before {
-  content: '';
-  position: absolute;
-  left: -10%;
-  right: -10%;
+  left: calc(var(--pl-track) + clamp(1.25rem, 4vw, 4rem));
   top: 0;
-  bottom: 0;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--c-redlight) 30%, transparent), transparent);
-  opacity: 0;
-  transition: opacity 1.4s var(--ease-out);
+  height: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   pointer-events: none;
 }
-.exp__plunge.is-floor .exp__deep::before { opacity: 1; }
-.exp__deep-in { position: relative; display: block; }
-.exp__plunge.is-floor .exp__deep {
-  color: var(--exp-warm);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--c-redlight) 60%, transparent);
+.exp__deep-in {
+  position: sticky;
+  bottom: 15vh;
+  bottom: 15svh;
+  translate: 0 50%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3.4rem, 10vw, 10.5rem);
+  font-stretch: calc(var(--deep-wdth, 50) * 1%);
+  font-weight: var(--deep-wght, 780);
+  line-height: 0.82;
+  letter-spacing: calc((70 - var(--deep-wdth, 50)) * 0.0014em);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  white-space: nowrap;
+  /* lit from above by the lamps, fading into the dark below */
+  background-image: linear-gradient(to bottom, rgb(234 246 244 / 0.66), rgb(234 246 244 / 0.12) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
+  transition: opacity 0.8s var(--ease-out);
+}
+.exp__deep.is-red .exp__deep-in {
+  background-image: linear-gradient(to bottom, color-mix(in oklab, var(--c-ink) 62%, var(--c-redlight)), rgb(255 59 47 / 0.1) 92%);
+}
+.exp__plunge.is-near .exp__deep-in { opacity: 1; }
+.exp__deep-u {
+  font-size: 0.4em;
+  font-stretch: 100%;
+  letter-spacing: 0;
 }
 
 .exp__phase {
@@ -467,7 +526,7 @@
 }
 .exp__phase--floor {
   right: calc(100% - var(--pl-deep) + 1.5rem);
-  top: calc(66.667% - 7.5rem);
+  top: calc(66.667% - 6.5rem);
   text-align: right;
 }
 .exp__phase--up {
@@ -475,7 +534,7 @@
   top: calc(83.333% + 0.9em);
 }
 
-/* live depth + elapsed time, riding next to the signal on Day 6 */
+/* elapsed time (and, on the way up, depth), riding next to the signal */
 .exp__readout {
   position: absolute;
   left: 0;
@@ -499,7 +558,9 @@
   pointer-events: none;
   will-change: transform;
 }
-.exp__readout-t { color: var(--c-ink-3); }
+.exp__readout-t { color: var(--c-ink-2); }
+.exp__readout.is-time .exp__readout-d { display: none; }
+.exp__readout.is-time { margin-top: -0.6rem; }
 .exp__readout.is-on { opacity: 1; }
 .exp__readout.is-left {
   padding-left: 0;
@@ -523,63 +584,64 @@
 #expedition.is-static .exp__num-word { color: var(--c-ink-2); }
 #expedition.is-static .exp__phase { color: var(--c-ink); }
 #expedition.is-static .exp__sketch { opacity: 1; }
-#expedition.is-static .exp__deep {
-  color: var(--exp-warm);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--c-redlight) 50%, transparent);
-}
-#expedition.is-static .exp__deep::before { opacity: 1; }
+#expedition.is-static .exp__deep-in { opacity: 1; position: relative; bottom: auto; }
 
 /* ------------------------------------------------------------- tablet */
 @media (max-width: 1100px) {
-  #expedition.expedition { --exp-numw: 6.5rem; }
+  #expedition.expedition { --exp-numw: 6.5rem; --exp-rail: 3.5rem; }
+  .exp__head,
   .exp__day {
-    grid-template-columns: var(--exp-rail) var(--exp-numw) minmax(0, 1fr);
+    grid-template-columns: var(--exp-numw) var(--exp-rail) minmax(0, 1fr);
+  }
+  .exp__lamps {
+    grid-column: 3;
+    margin-top: var(--s-4);
   }
   .exp__sketch {
     grid-column: 3;
     justify-self: start;
-    width: min(100%, 19rem);
-    margin-top: var(--s-6);
+    width: min(100%, 20rem);
+    margin-block: var(--s-5) 0;
   }
-  .exp__sketch--chart { margin-top: var(--s-5); }
 }
 
 /* -------------------------------------------------------------- mobile */
 @media (max-width: 767px) {
   #expedition.expedition {
+    --exp-numw: 3rem;
     --exp-rail: 1.25rem;
-    --exp-numw: 3.4rem;
+    --exp-pad: 1.9rem;
     padding-block: var(--s-9) var(--s-8);
   }
-  .exp__title { grid-column: 1 / -1; }
-  .exp__lead { grid-column: 1 / -1; }
-  .exp__lamps {
-    margin-left: 0;
-    margin-right: 0;
-    width: 100%;
+  .exp__head { column-gap: 0.9rem; }
+  .exp__title,
+  .exp__lead,
+  .exp__lamps { grid-column: 1 / -1; }
+  .exp__lamps { column-gap: var(--s-4); }
+  .exp__lamp { width: 4rem; height: 4rem; }
+  .exp__day { column-gap: 0.9rem; }
+  .exp__node {
+    left: calc(var(--exp-numw) + 0.9rem + var(--exp-rail) / 2);
+    top: calc(var(--exp-pad) + 1.95rem);
   }
-  .exp__day {
-    column-gap: 0.9rem;
-    padding-block: 2.5rem;
-  }
-  .exp__node { top: calc(2.5rem + 1.95rem); }
-  .exp__num-n { font-size: 3.2rem; }
-  .exp__sketch { width: min(100%, 15.5rem); }
+  .exp__num-n { font-size: 3rem; }
+  .exp__sketch { width: min(100%, 15.5rem); margin-top: var(--s-4); }
+  /* phones: the deck view is atmosphere only; keep the log moving */
+  .exp__sketch--deck { display: none; }
 
-  .exp__day--descent .exp__num-n { font-size: 4.6rem; }
-  .exp__day--descent .exp__node { top: calc(2.5rem + 2.7rem); }
+  .exp__day--descent .exp__num-n { font-size: 4.2rem; }
+  .exp__day--descent .exp__node { top: calc(var(--exp-pad) + 2.6rem); }
   .exp__day--descent .exp__body { padding-top: 0.6rem; }
   .exp__day--descent .exp__name { font-size: 2.3rem; }
 
   .exp__plunge {
+    --pl-track: calc(var(--exp-numw) + 0.9rem + var(--exp-rail) / 2);
     --pl-deep: 92%;
-    height: clamp(40rem, 125vh, 56rem);
-    margin-top: 4.5rem;
+    height: clamp(38rem, 115vh, 52rem);
+    margin-top: 4rem;
   }
-  .exp__deep {
-    left: calc(var(--pl-track) + 1.1rem);
-    font-size: clamp(3.6rem, 22vw, 6rem);
-  }
+  .exp__deep { left: calc(var(--pl-track) + 0.9rem); }
+  .exp__deep-in { font-size: clamp(3rem, 15vw, 4.6rem); bottom: 18svh; }
   .exp__phase { font-size: 1.02rem; }
   .exp__phase--down { left: calc(var(--pl-mid) + 0.9rem); }
   .exp__phase--floor {

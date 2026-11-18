@@ -358,6 +358,10 @@
 }
 
 /* hadal: the trench, surveyed by a sonar sweep -------------------------- */
+/* the caption clears the label under the deepest point */
+[data-layer='hadal'] .zones__caption {
+  top: calc(100% - var(--band-bottom) + 3.4rem);
+}
 .zones__focus {
   position: absolute;
   z-index: 1;

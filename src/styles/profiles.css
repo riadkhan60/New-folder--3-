@@ -33,9 +33,11 @@
   font-family: var(--font-display);
   font-size: clamp(2.6rem, 6vw, 6.5rem);
   font-stretch: calc(var(--wdth) * 1%);
-  font-weight: var(--wght);
+  /* heavy, but not so heavy the counters close; tracking opens as the
+     width closes so letters never touch at hadal compression */
+  font-weight: min(var(--wght), 780);
   line-height: 0.9;
-  letter-spacing: -0.03em;
+  letter-spacing: calc((70 - var(--wdth)) * 0.0014em);
   color: var(--c-ink);
   text-wrap: balance;
 }
@@ -56,6 +58,43 @@
   position: relative;
   height: min(118vw, 36rem);
   margin: 0;
+}
+.pf__hint {
+  margin-top: var(--s-5);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  color: var(--c-ink-2);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.8s var(--ease-out), transform 0.8s var(--ease-out);
+  pointer-events: none;
+}
+.pf__hint.is-on { opacity: 1; transform: none; }
+.pf__hint-dot {
+  position: relative;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pf-sel);
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--pf-sel) 60%, transparent);
+}
+.pf__hint-dot::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px solid var(--pf-sel);
+  animation: pf-hint 2.4s var(--ease-out) infinite;
+}
+@keyframes pf-hint {
+  from { transform: scale(0.5); opacity: 0.9; }
+  to { transform: scale(2.4); opacity: 0; }
 }
 .pf__svg {
   position: absolute;
@@ -121,11 +160,11 @@
   transform: translateY(0);
 }
 .pf__svg .pf__area {
-  stroke: none;
   opacity: 0;
   transition: opacity 0.9s var(--ease-out);
   pointer-events: none;
 }
+.pf__svg .pf__area path { stroke: none; }
 .pf__svg .pf__curve[data-id='twilight'] { --c: var(--pf-twilight); }
 .pf__svg .pf__curve[data-id='abyss'] { --c: var(--pf-abyss); }
 .pf__svg .pf__curve[data-id='hadal'] { --c: var(--pf-hadal); }
@@ -149,13 +188,51 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* selection: the chosen line glows, the others step back */
-.pf__svg.has-sel .pf__curve { opacity: 0.32; }
-.pf__svg.has-sel .pf__curve.is-sel { opacity: 1; }
+/* selection: the chosen line glows, the others step back. Only the lines
+   dim; their labels stay readable (ink-2). */
+.pf__svg .pf__line { transition: stroke-width 0.5s var(--ease-out), opacity 0.6s var(--ease-out); }
+.pf__svg.has-sel .pf__curve .pf__line { opacity: 0.4; }
+.pf__svg.has-sel .pf__curve .pf__tag-name { fill: var(--c-ink-2); }
+.pf__svg.has-sel .pf__curve.is-sel .pf__line { opacity: 1; }
+.pf__svg.has-sel .pf__curve.is-sel .pf__tag-name { fill: var(--c-ink); }
 .pf__svg .pf__curve.is-sel .pf__line { stroke-width: 2.25; }
 .pf__svg .pf__curve.is-sel .pf__halo { opacity: 0.2; }
 .pf__svg .pf__curve.is-sel.is-drawn .pf__area { opacity: 1; }
 .pf__svg .pf__curve:focus-visible .pf__focus { opacity: 0.85; }
+/* hover is a preview only: the line lights, nothing is chosen */
+.pf__svg.has-sel .pf__curve.is-peek .pf__line { opacity: 0.95; stroke-width: 2; }
+.pf__svg .pf__curve.is-peek:not(.is-sel) .pf__halo { opacity: 0.12; }
+.pf__svg .pf__curve.is-peek .pf__tag-name { fill: var(--c-ink); }
+/* a label that the moving readout passes over steps back */
+.pf__svg .pf__tag text { transition: opacity 0.3s var(--ease-out); }
+.pf__svg .pf__tag.is-under text { opacity: 0.12; }
+
+/* what you meet along the chosen line */
+.pf__svg .pf__pins { display: none; pointer-events: none; }
+.pf__svg .pf__curve.is-sel.is-drawn .pf__pins { display: inline; }
+.pf__svg .pf__pin { opacity: 0.5; transition: opacity 0.6s var(--ease-out); }
+.pf__svg .pf__pin.is-passed { opacity: 1; }
+.pf__svg .pf__pin.is-under { opacity: 0.1; }
+.pf__svg .pf__pin-dot {
+  fill: var(--bg, #000);
+  stroke: var(--c-ink-2);
+  stroke-width: 1.25;
+  transition: fill 0.6s var(--ease-out), stroke 0.6s var(--ease-out);
+}
+.pf__svg .pf__pin.is-passed .pf__pin-dot {
+  fill: color-mix(in oklab, var(--pf-sel) 70%, #fff);
+  stroke: var(--pf-sel);
+}
+.pf__svg .pf__pin-label {
+  fill: var(--c-ink);
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: 13px;
+  paint-order: stroke;
+  stroke: var(--bg, #000);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
 
 /* the little submersible riding the selected line */
 .pf__svg .pf__sub {
@@ -164,6 +241,16 @@
   transition: opacity 0.6s var(--ease-out);
 }
 .pf__svg .pf__sub.is-on { opacity: 1; }
+/* the edge of the water the sub has passed through: a faint time cursor */
+.pf__svg .pf__scan {
+  stroke: color-mix(in srgb, var(--pf-sel) 45%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 1 4;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-out);
+  pointer-events: none;
+}
+.pf__svg .pf__scan.is-on { opacity: 1; }
 .pf__svg .pf__sub-body { fill: var(--c-ink); }
 .pf__svg .pf__sub-port { fill: #05070c; }
 .pf__svg .pf__sub-glow { fill: url(#pf-sub-glow); }
@@ -246,8 +333,10 @@
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--c-ink-3);
 }
-.pf__opt:hover { color: var(--c-ink); }
-.pf__opt:hover .pf__opt-swatch { opacity: 0.8; }
+.pf__opt:hover,
+.pf__opt.is-peek { color: var(--c-ink); }
+.pf__opt:hover .pf__opt-swatch,
+.pf__opt.is-peek .pf__opt-swatch { opacity: 0.8; }
 .pf__opt[aria-pressed='true'] {
   color: var(--c-ink);
   background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, transparent), transparent 75%);
@@ -268,13 +357,28 @@
 .pf__inner { display: grid; gap: 0; width: 100%; }
 
 .pf__name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   font-family: var(--font-display);
   font-stretch: calc((var(--wdth) + 30) * 1%);
   font-weight: calc(var(--wght) - 200);
   font-size: var(--fs-h3);
   line-height: 1;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.005em;
   color: var(--c-ink);
+}
+.pf__name-swatch {
+  flex: none;
+  width: 1.4rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pf-sel);
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--pf-sel) 60%, transparent);
+  transition: background 0.6s var(--ease-out), box-shadow 0.6s var(--ease-out);
+}
+#dives.profiles[data-sel='hadal'] .pf__name-swatch {
+  background: linear-gradient(90deg, var(--pf-twilight), var(--pf-hadal) 60%);
 }
 .pf__where {
   margin-top: 0.4rem;
@@ -283,26 +387,6 @@
   font-size: var(--fs-small);
   line-height: 1.4;
   color: var(--c-ink-2);
-}
-.pf__depth {
-  position: relative;
-  margin-top: var(--s-4);
-  font-family: var(--font-display);
-  font-size: clamp(3.6rem, 6.2vw, 6rem);
-  font-stretch: calc(var(--wdth) * 1%);
-  font-weight: var(--wght);
-  line-height: 0.82;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums lining-nums;
-  color: color-mix(in oklab, var(--pf-sel) 62%, #ffe8e2);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--pf-sel) 45%, transparent);
-  white-space: nowrap;
-  transition: color 0.6s var(--ease-out);
-}
-.pf__depth-u {
-  font-size: 0.4em;
-  font-stretch: 100%;
-  letter-spacing: 0;
 }
 
 .pf__stats {
@@ -336,33 +420,37 @@
 }
 
 .pf__price {
-  margin-top: var(--s-5);
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: 0.6rem;
+  margin-top: var(--s-4);
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
 }
+/* the price is the figure here: compressed by the depth like every
+   headline at this depth, but plain ink, no lamp glow (10,935 m stays the
+   finale's number) */
 .pf__price-n {
   font-family: var(--font-display);
-  font-stretch: 100%;
-  font-weight: 520;
-  font-size: clamp(1.6rem, 2vw, 2rem);
-  line-height: 1;
-  letter-spacing: -0.015em;
+  font-size: clamp(3rem, 4.6vw, 4.6rem);
+  font-stretch: calc((var(--wdth) + 6) * 1%);
+  font-weight: min(var(--wght), 740);
+  line-height: 0.86;
+  letter-spacing: calc((70 - var(--wdth)) * 0.0012em);
   font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
   color: var(--c-ink);
 }
 .pf__price-per {
   font-family: var(--font-text);
   font-style: italic;
   font-size: var(--fs-small);
-  color: var(--c-ink-3);
+  line-height: 1.3;
+  color: var(--c-ink-2);
 }
 .pf__reserve { --btn-c: var(--pf-accent); }
 
 /* ---------------------------------------------------- desktop: one stage */
 @media (min-width: 1200px) and (min-height: 700px) {
-  #dives.profiles { height: 250vh; }
+  #dives.profiles { height: 265vh; }
   #dives.profiles.is-static { height: auto; }
 
   .pf {
@@ -400,12 +488,11 @@
   }
   .pf__opt-depth { min-width: 4.6rem; }
   .pf__panel { gap: var(--s-4); }
-  .pf__depth { margin-top: var(--s-3); font-size: clamp(2.6rem, 8vh, 5.5rem); }
+  .pf__price { margin-top: var(--s-3); gap: 0.3rem; }
+  .pf__price-n { font-size: clamp(2.4rem, 6.4vh, 3.8rem); }
   .pf__stats { margin-top: var(--s-4); }
-  .pf__stat { padding-block: 0.32rem; }
-  .pf__see { margin-top: var(--s-4); font-size: 0.875rem; line-height: 1.5; }
-  .pf__price { margin-top: var(--s-4); }
-  .pf__price-n { font-size: 1.6rem; }
+  .pf__stat { padding-block: 0.3rem; }
+  .pf__see { margin-top: var(--s-3); font-size: 0.875rem; line-height: 1.5; }
 }
 
 /* ------------------------------------------------------- tablet / laptop */
@@ -420,6 +507,7 @@
   .pf { row-gap: var(--s-6); padding-block: var(--s-8); }
   .pf__chart { height: min(122vw, 32rem); margin-inline: -0.25rem; }
   .pf__opt { min-height: 3.75rem; }
-  .pf__depth { font-size: clamp(3.4rem, 18vw, 5rem); }
+  .pf__price-n { font-size: clamp(3rem, 15vw, 4.2rem); }
+  .pf__hint { margin-top: var(--s-4); }
   .pf__reserve { width: 100%; justify-content: center; }
 }

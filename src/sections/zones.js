@@ -120,7 +120,7 @@ function sunlightScene() {
       const n = Math.round(clamp((w * h) / 1900, 80, 260))
       motes = Array.from({ length: n }, () => ({
         x: r() * w,
-        u: Math.pow(r(), 1.9) * 1.15 - 0.08, // crowded near the light
+        u: Math.pow(r(), 1.9) * 1.12 + 0.01, // crowded near the light
         s: 0.6 + r() * 1.5,
         v: 2 + r() * 6,
         ph: r() * TAU,
@@ -139,21 +139,23 @@ function sunlightScene() {
       }))
     },
     draw(c, t, dt, w, h, f, out, k) {
-      // the underside of the surface: a bright, moving skin of light
-      const sky = c.createLinearGradient(0, 0, 0, f.y + f.h * 0.35)
-      sky.addColorStop(0, 'rgba(217,251,255,0.30)')
-      sky.addColorStop(0.45, 'rgba(217,251,255,0.08)')
+      // the underside of the surface, at 0 m: a bright, moving skin of light
+      const sy = f.y
+      const sky = c.createLinearGradient(0, sy - h * 0.22, 0, sy + f.h * 0.4)
+      sky.addColorStop(0, 'rgba(217,251,255,0)')
+      sky.addColorStop(0.55, 'rgba(217,251,255,0.2)')
+      sky.addColorStop(0.62, 'rgba(217,251,255,0.12)')
       sky.addColorStop(1, 'rgba(217,251,255,0)')
       c.fillStyle = sky
-      c.fillRect(0, 0, w, f.y + f.h * 0.35)
+      c.fillRect(0, sy - h * 0.22, w, h * 0.22 + f.h * 0.4)
 
       c.globalCompositeOperation = 'lighter'
       c.lineWidth = 1
       for (let j = 0; j < 3; j++) {
-        c.strokeStyle = `rgba(217,251,255,${(0.22 - j * 0.05).toFixed(3)})`
+        c.strokeStyle = `rgba(217,251,255,${[0.42, 0.14, 0.08][j]})`
         c.beginPath()
-        for (let x = -4; x <= w + 4; x += 8) {
-          const y = f.y * (0.55 + j * 0.18) + Math.sin(x * 0.021 + t * (0.7 + j * 0.2) + j) * 3 + Math.sin(x * 0.053 - t * 1.2 + j * 2) * 1.6
+        for (let x = -4; x <= w + 4; x += 6) {
+          const y = sy + j * 4 + Math.sin(x * 0.021 + t * (0.7 + j * 0.25) + j) * (2.6 - j * 0.6) + Math.sin(x * 0.053 - t * 1.2 + j * 2) * 1.3
           if (x === -4) c.moveTo(x, y)
           else c.lineTo(x, y)
         }
@@ -161,24 +163,23 @@ function sunlightScene() {
       }
 
       // shafts of sunlight, dimming tenfold every 100 m
-      const len = f.y + f.h * 1.08
-      const slant = h * 0.14
+      const len = f.h * 1.15
+      const slant = h * 0.12
       const par = (0.5 - k) * w * 0.1
       for (const ray of rays) {
         const sway = Math.sin(t * ray.sp + ray.ph) * 22
         const x0 = ray.x * w * 1.2 - w * 0.12 + sway + par
         const q = (0.55 + 0.45 * Math.sin(t * ray.sp * 2.6 + ray.ph * 2)) * ray.a
-        const g = c.createLinearGradient(0, 0, 0, len)
+        const g = c.createLinearGradient(0, sy, 0, sy + len)
         g.addColorStop(0, `rgba(217,251,255,${(0.2 * q).toFixed(3)})`)
-        g.addColorStop(clamp(f.y / len), `rgba(217,251,255,${(0.17 * q).toFixed(3)})`)
-        g.addColorStop(clamp((f.y + f.h * 0.5) / len), `rgba(217,251,255,${(0.045 * q).toFixed(3)})`)
+        g.addColorStop(0.43, `rgba(217,251,255,${(0.05 * q).toFixed(3)})`)
         g.addColorStop(1, 'rgba(217,251,255,0)')
         c.fillStyle = g
         c.beginPath()
-        c.moveTo(x0 - ray.top / 2, 0)
-        c.lineTo(x0 + ray.top / 2, 0)
-        c.lineTo(x0 + slant + ray.bot / 2, len)
-        c.lineTo(x0 + slant - ray.bot / 2, len)
+        c.moveTo(x0 - ray.top / 2, sy)
+        c.lineTo(x0 + ray.top / 2, sy)
+        c.lineTo(x0 + slant + ray.bot / 2, sy + len)
+        c.lineTo(x0 + slant - ray.bot / 2, sy + len)
         c.closePath()
         c.fill()
       }
@@ -212,7 +213,7 @@ function sunlightScene() {
         const near = 0.75 + 0.35 * Math.sin(a) // the near side of the ball
         const flash = Math.max(0, Math.cos(a * 1 + p.ph + t * 0.3)) ** 10
         const L = lightAt(y, f)
-        const al = (0.22 + 0.7 * flash) * clamp(0.35 + L) * near
+        const al = (0.32 + 0.68 * flash) * clamp(0.45 + L) * near
         const l = p.len * near
         c.strokeStyle = `rgba(232,250,255,${clamp(al).toFixed(3)})`
         c.lineWidth = 1.3 + 0.9 * near
@@ -236,59 +237,99 @@ const cloudAt = (k) => {
   return 0.74 - 0.7 * (smooth(3.5, 6.8, s) - smooth(14.2, 17.6, s))
 }
 function twilightScene() {
+  // The migration drawn the way it was discovered: as an echogram. Across
+  // the window runs the clock (14:00 → 10:00), down it the depth; the swarm
+  // is the pen, leaving its trace behind it as you scroll.
+  const X0 = 0.12
+  const X1 = 0.9
   let fish = []
+  let trace = []
   let lastCloud = null
   let vel = 0
+  const HOURS = [
+    [18, '18:00'],
+    [24, '00:00'],
+    [30, '06:00'],
+  ]
   return {
     setup(w, h, f) {
       const r = rng(11)
-      const n = Math.round(clamp((w * f.h) / 900, 110, 320))
+      const n = Math.round(clamp((w * f.h) / 1100, 110, 280))
       fish = Array.from({ length: n }, () => {
         const kind = r()
         return {
-          fx: r(),
-          oy: (r() + r() + r() - 1.5) * 0.17,
-          lag: r() * 0.045,
+          fx: (r() + r() - 1) * 0.5,
+          oy: (r() + r() + r() - 1.5) * 0.15,
+          lag: r() * 0.05,
           ph: r() * TAU,
           s: 0.5 + r() * 0.8,
           kind: kind < 0.42 ? 'lantern' : kind < 0.93 ? 'krill' : 'squid',
           blue: r() < 0.35,
         }
       })
+      const cols = Math.max(40, Math.round((w * (X1 - X0)) / 2.5))
+      trace = []
+      for (let i = 0; i < cols; i++) {
+        const kk = i / (cols - 1)
+        for (let j = 0; j < 4; j++) {
+          trace.push({ kk, ox: r() * 2.5, oy: (r() + r() + r() - 1.5) * 0.12, a: 0.25 + r() * 0.75 })
+        }
+      }
       lastCloud = null
     },
     draw(c, t, dt, w, h, f, out, k) {
       const S = sprites()
       const s = nightHours(k)
       const day = 1 - (smooth(3, 6.5, s) - smooth(14.5, 18, s))
+      const xs = (kk) => w * (X0 + (X1 - X0) * kk)
       // the last daylight from above, gone at night
       const g = c.createLinearGradient(0, 0, 0, f.y + f.h * 0.6)
-      g.addColorStop(0, `rgba(58,168,255,${(0.04 + 0.12 * day).toFixed(3)})`)
+      g.addColorStop(0, `rgba(58,168,255,${(0.03 + 0.14 * day).toFixed(3)})`)
       g.addColorStop(1, 'rgba(58,168,255,0)')
       c.fillStyle = g
       c.fillRect(0, 0, w, f.y + f.h * 0.6)
+
+      // the clock along the bottom of the band
+      c.font = '500 10px Anybody, system-ui, sans-serif'
+      c.textAlign = 'center'
+      for (const [hr, label] of HOURS) {
+        const kk = (hr - 14) / 20
+        const x = xs(kk)
+        const past = kk <= k
+        c.fillStyle = `rgba(234,246,244,${past ? 0.55 : 0.28})`
+        c.fillRect(x, f.y + f.h - 5, 1, 5)
+        c.fillText(label, x, f.y + f.h + 14)
+      }
+
+      // the echogram: where the swarm has been
+      c.globalCompositeOperation = 'lighter'
+      for (const d of trace) {
+        if (d.kk > k) break
+        const age = (k - d.kk) * 6
+        const a = 0.55 * d.a * (0.4 + 0.6 * Math.exp(-age))
+        c.fillStyle = d.a > 0.8 ? `rgba(160,255,240,${a.toFixed(3)})` : `rgba(58,168,255,${a.toFixed(3)})`
+        c.fillRect(xs(d.kk) + d.ox, f.y + f.h * (cloudAt(d.kk) + d.oy), 1.6, 1.6)
+      }
 
       const cloud = cloudAt(k)
       out.cloud = cloud
       out.hour = (14 + s) % 24
       if (lastCloud !== null) vel += ((cloud - lastCloud) / Math.max(dt, 1 / 120) - vel) * Math.min(1, dt * 6)
       lastCloud = cloud
-      const x0 = w * 0.2
-      const xw = w * 0.74
-      c.globalCompositeOperation = 'lighter'
       c.lineWidth = 1
       for (const p of fish) {
-        const cy = cloudAt(k - p.lag * Math.sign(vel || 1))
-        const y = f.y + f.h * (cy + p.oy * (0.8 + 0.4 * (1 - day)))
-        const x = x0 + p.fx * xw + Math.sin(t * 0.3 + p.ph) * 6
+        const kk = k - p.lag
+        const cy = cloudAt(kk)
+        const y = f.y + f.h * (cy + p.oy * (0.8 + 0.5 * (1 - day)))
+        const x = xs(clamp(kk)) + p.fx * w * 0.16 + Math.sin(t * 0.3 + p.ph) * 5
         const streak = 1.2 + Math.min(16, Math.abs(vel) * 9 * p.s)
         const dir = vel > 0 ? -1 : 1 // trail behind the direction of travel
         if (p.kind === 'krill') {
-          c.fillStyle = `rgba(234,246,244,${(0.28 * p.s).toFixed(3)})`
+          c.fillStyle = `rgba(234,246,244,${(0.3 * p.s).toFixed(3)})`
           c.fillRect(x, y, 1.2, 1.2 + streak * 0.4)
           continue
         }
-        c.strokeStyle = `rgba(234,246,244,${(0.34 * p.s).toFixed(3)})`
+        c.strokeStyle = `rgba(234,246,244,${(0.36 * p.s).toFixed(3)})`
         c.beginPath()
         c.moveTo(x, y)
         c.lineTo(x - 2, y + dir * streak * (p.kind === 'squid' ? 1.4 : 1))
@@ -296,7 +337,7 @@ function twilightScene() {
         // lanternfish carry rows of photophores
         const tw = 0.6 + 0.4 * Math.sin(t * 2.2 + p.ph * 3)
         const sz = p.kind === 'squid' ? 7 + 4 * p.s : 4 + 3.5 * p.s
-        c.globalAlpha = 0.8 * tw
+        c.globalAlpha = 0.85 * tw
         c.drawImage(p.blue ? S.blue : S.glow, x - sz, y - sz, sz * 2, sz * 2)
         c.globalAlpha = 1
       }
@@ -341,7 +382,7 @@ function drawAngler(c, cx, cy, S, lit, pulse, t) {
 
   // the body is darker than the water: a shape seen only where light lands
   anglerBody(c)
-  c.fillStyle = 'rgba(1,5,12,0.94)'
+  c.fillStyle = 'rgba(1,5,12,0.62)'
   c.fill()
   // the gape
   c.beginPath()
@@ -357,9 +398,9 @@ function drawAngler(c, cx, cy, S, lit, pulse, t) {
   anglerBody(c)
   c.clip()
   c.globalCompositeOperation = 'lighter'
-  const skin = c.createRadialGradient(ex, ey, 0, ex, ey, 170)
-  skin.addColorStop(0, `rgba(255,176,84,${(0.34 * on).toFixed(3)})`)
-  skin.addColorStop(0.3, `rgba(255,150,70,${(0.12 * on).toFixed(3)})`)
+  const skin = c.createRadialGradient(ex, ey, 0, ex, ey, 125)
+  skin.addColorStop(0, `rgba(255,176,84,${(0.3 * on).toFixed(3)})`)
+  skin.addColorStop(0.35, `rgba(255,150,70,${(0.07 * on).toFixed(3)})`)
   skin.addColorStop(1, 'rgba(255,150,70,0)')
   c.fillStyle = skin
   c.fillRect(-140, -90, 270, 170)
@@ -367,10 +408,10 @@ function drawAngler(c, cx, cy, S, lit, pulse, t) {
 
   // …and catches its edges: jaw, head, belly, then nothing
   c.globalCompositeOperation = 'lighter'
-  const rim = c.createRadialGradient(ex, ey, 0, ex, ey, 215)
+  const rim = c.createRadialGradient(ex, ey, 0, ex, ey, 200)
   rim.addColorStop(0, `rgba(255,226,170,${(0.95 * on).toFixed(3)})`)
-  rim.addColorStop(0.35, `rgba(255,176,84,${(0.42 * on).toFixed(3)})`)
-  rim.addColorStop(0.75, `rgba(255,176,84,${(0.06 * on).toFixed(3)})`)
+  rim.addColorStop(0.3, `rgba(255,176,84,${(0.45 * on).toFixed(3)})`)
+  rim.addColorStop(0.6, `rgba(255,176,84,${(0.08 * on).toFixed(3)})`)
   rim.addColorStop(1, 'rgba(255,176,84,0)')
   c.strokeStyle = rim
   c.lineWidth = 1.25 * lw
@@ -378,7 +419,7 @@ function drawAngler(c, cx, cy, S, lit, pulse, t) {
   anglerBody(c)
   c.stroke()
   // a faint cold rim on the far side, so the shape exists at all
-  c.strokeStyle = `rgba(150,200,255,${(0.05 + 0.04 * lit).toFixed(3)})`
+  c.strokeStyle = `rgba(150,200,255,${(0.025 + 0.025 * lit).toFixed(3)})`
   c.lineWidth = lw
   c.stroke()
 
@@ -522,8 +563,11 @@ function midnightScene() {
       // the anglerfish: the lure comes up as it reaches the centre
       const lit = out.still ? 1 : 0.18 + 0.82 * smooth(0.18, 0.46, k)
       const pulse = 0.8 + 0.2 * Math.sin(t * 1.3) * (0.7 + 0.3 * Math.sin(t * 0.37 + 1))
-      const S0 = Math.min(w / 300, f.h / 210, 2.6)
-      const cx = w * 0.6 + (0.5 - k) * w * 0.12 + Math.sin(t * 0.21) * 4
+      // the whole fish (lure to tail ≈ 250 units) stays inside the window
+      // (on narrow windows the lure keeps clear of the scale's labels)
+      const narrow = w < 600
+      const S0 = Math.min(w / (narrow ? 385 : 340), f.h / 205, 2.4)
+      const cx = Math.max(w * 0.53, 134 * S0 + (narrow ? 96 : 0)) + (0.5 - k) * w * 0.08 + Math.sin(t * 0.21) * 4
       const cy = f.y + f.h * 0.5 + Math.sin(t * 0.33) * 5
       const [lx, ly] = drawAngler(c, cx, cy, S0, lit, pulse, t)
 
@@ -590,31 +634,56 @@ function drawTripod(c, x, y, s, a) {
 }
 
 function drawCucumber(c, x, y, s, glow) {
-  // a sea pig (Scotoplanes): a plump body on stubby tube feet, papillae up front
+  // a sea cucumber on its tube feet, papillae raised, glowing faintly
   c.save()
   c.translate(x, y)
   c.scale(s, s)
   const lw = 1 / s
   c.lineCap = 'round'
-  c.strokeStyle = `rgba(160,255,240,${(0.5 + 0.3 * glow).toFixed(3)})`
-  c.lineWidth = 0.9 * lw
+  c.lineJoin = 'round'
+  // tube feet
+  c.strokeStyle = `rgba(160,255,240,${(0.35 + 0.25 * glow).toFixed(3)})`
+  c.lineWidth = 0.8 * lw
   c.beginPath()
-  for (let i = 0; i < 5; i++) {
-    c.moveTo(-15 + i * 7.5, -2)
-    c.lineTo(-16 + i * 7.5, 3)
+  for (let i = 0; i < 6; i++) {
+    const fx = -17 + i * 6.6
+    c.moveTo(fx, -2.5)
+    c.lineTo(fx - 1, 1.5)
   }
-  c.moveTo(-12, -12)
-  c.quadraticCurveTo(-17, -20, -15, -26)
-  c.moveTo(-6, -14)
-  c.quadraticCurveTo(-8, -22, -5, -27)
+  // papillae, up front, and the feeding tentacles at the mouth
+  c.moveTo(-11, -13)
+  c.quadraticCurveTo(-15, -21, -13, -27)
+  c.moveTo(-5, -15.5)
+  c.quadraticCurveTo(-6, -24, -2, -29)
+  c.moveTo(-22, -5)
+  c.lineTo(-27, -3)
+  c.moveTo(-21, -3)
+  c.lineTo(-26, 0)
   c.stroke()
+  // the body: a soft, slightly lumpy sausage
   c.beginPath()
-  c.ellipse(0, -7, 22, 8.5, -0.06, 0, TAU)
-  c.fillStyle = `rgba(108,248,232,${(0.1 + 0.12 * glow).toFixed(3)})`
+  c.moveTo(24, -4)
+  c.bezierCurveTo(25, -12, 16, -15.5, 6, -15)
+  c.bezierCurveTo(-4, -16.5, -16, -15, -21, -10)
+  c.bezierCurveTo(-25, -6, -23, -1.5, -17, -1.5)
+  c.bezierCurveTo(-6, -0.5, 10, -0.5, 18, -1)
+  c.bezierCurveTo(22, -1.3, 24, -2, 24, -4)
+  c.closePath()
+  const body = c.createLinearGradient(0, -16, 0, 0)
+  body.addColorStop(0, `rgba(160,255,240,${(0.16 + 0.14 * glow).toFixed(3)})`)
+  body.addColorStop(1, `rgba(108,248,232,${(0.05 + 0.06 * glow).toFixed(3)})`)
+  c.fillStyle = body
   c.fill()
-  c.strokeStyle = `rgba(190,255,246,${(0.6 + 0.3 * glow).toFixed(3)})`
-  c.lineWidth = lw
+  c.strokeStyle = `rgba(200,255,248,${(0.5 + 0.35 * glow).toFixed(3)})`
+  c.lineWidth = 0.9 * lw
   c.stroke()
+  // a row of brighter spots along its back
+  c.fillStyle = `rgba(220,255,250,${(0.5 * glow).toFixed(3)})`
+  for (let i = 0; i < 5; i++) {
+    c.beginPath()
+    c.arc(-12 + i * 7, -12.5 + Math.abs(i - 2) * 0.6, 0.9, 0, TAU)
+    c.fill()
+  }
   c.restore()
 }
 
@@ -622,6 +691,8 @@ function abyssScene() {
   let snow = []
   let geo = null
   let trail = []
+  let dashes = []
+  let lights = []
   const ROWS = 22
   const elev = (X, z) =>
     Math.sin(X * 0.031 + z * 1.3) * 2.6 + Math.sin(X * 0.0072 - z * 0.7) * 7 + Math.sin(X * 0.083 + z * 2.9) * 0.9
@@ -642,6 +713,21 @@ function abyssScene() {
         a: 0.25 + r() * 0.5,
         land: 0,
       }))
+      lights = Array.from({ length: 9 }, () => ({
+        x: r() * w,
+        y: f.y + r() * f.h * 0.38,
+        s: 2 + r() * 3.5,
+        a: 0.15 + r() * 0.35,
+        ph: r() * TAU,
+        sp: 0.2 + r() * 0.6,
+        blue: r() < 0.6,
+      }))
+      // ripple crests are broken, never ruled lines
+      dashes = Array.from({ length: ROWS }, () => {
+        const d = []
+        for (let i = 0; i < 8; i++) d.push(18 + r() * 90, 6 + r() * 40)
+        return d
+      })
       // the sea cucumber's feeding trail, behind it on the floor
       trail = Array.from({ length: 70 }, (_, i) => ({
         X: 40 + i * 5 + Math.sin(i * 0.31) * 6,
@@ -663,6 +749,15 @@ function abyssScene() {
       const gy = yAt(gx, cucZ)
       const rad = Math.max(w, h) * 0.5
 
+      c.globalCompositeOperation = 'lighter'
+      for (const q of lights) {
+        c.globalAlpha = q.a * (0.5 + 0.5 * Math.sin(t * q.sp + q.ph))
+        const x = q.x - pan * 0.15
+        c.drawImage(q.blue ? S.blue : S.glow, x - q.s, q.y - q.s, q.s * 2, q.s * 2)
+      }
+      c.globalAlpha = 1
+      c.globalCompositeOperation = 'source-over'
+
       // sediment ripples, near → far; lit only near the glow
       c.lineWidth = 1
       const lightG = c.createRadialGradient(gx, gy, 0, gx, gy, rad)
@@ -671,17 +766,20 @@ function abyssScene() {
       lightG.addColorStop(1, 'rgba(108,248,232,0)')
       for (let i = 0; i < ROWS; i++) {
         const z = 1 + i * 0.5
+        c.setLineDash(dashes[i].map((v) => v / z ** 0.6))
+        c.lineDashOffset = -pan / z
         c.beginPath()
         for (let x = -12; x <= w + 12; x += 9) {
           const y = yAt(x, z)
           if (x === -12) c.moveTo(x, y)
           else c.lineTo(x, y)
         }
-        c.strokeStyle = `rgba(234,246,244,${(0.028 + 0.11 / z ** 1.1).toFixed(3)})`
+        c.strokeStyle = `rgba(234,246,244,${(0.03 + 0.12 / z ** 1.1).toFixed(3)})`
         c.stroke()
         c.strokeStyle = lightG
         c.stroke()
       }
+      c.setLineDash([])
 
       // the feeding trail: a meander of faint pellets
       c.fillStyle = 'rgba(234,246,244,0.16)'
@@ -717,17 +815,17 @@ function abyssScene() {
       {
         const z = 2.3
         const x = sx(-110, z)
-        drawTripod(c, x, yAt(x, z), 1.5 / z * Math.min(1.6, w / 420), 1)
+        drawTripod(c, x, yAt(x, z), (1.7 / z) * Math.min(1.6, w / 420), 1)
       }
 
       // the sea cucumber and its glow
       c.globalCompositeOperation = 'lighter'
-      const gs = (70 + 18 * glow) / cucZ * Math.min(1.5, w / 460)
-      c.globalAlpha = 0.6 * glow
-      c.drawImage(S.glow, gx - gs, gy - 10 - gs * 0.6, gs * 2, gs * 1.2)
+      const gs = ((80 + 18 * glow) / cucZ) * Math.min(1.5, w / 460)
+      c.globalAlpha = 0.32 * glow
+      c.drawImage(S.glow, gx - gs, gy - 8 - gs * 0.55, gs * 2, gs * 1.1)
       c.globalAlpha = 1
       c.globalCompositeOperation = 'source-over'
-      drawCucumber(c, gx, gy, (1.15 / cucZ) * Math.min(1.7, w / 380), glow)
+      drawCucumber(c, gx, gy, (1.25 / cucZ) * Math.min(1.7, w / 380), glow)
 
       // marine snow, settling onto the plain
       for (const p of snow) {
@@ -936,6 +1034,7 @@ export function init(ctx) {
       canvas,
       c2d: canvas?.getContext('2d') ?? null,
       focus: el.querySelector('.zones__focus'),
+      scale: el.querySelector('.zones__scale'),
       cloud: el.querySelector('.zones__cloud'),
       clock: el.querySelector('.zones__clock'),
       clockText: '',
@@ -955,6 +1054,8 @@ export function init(ctx) {
       width: 0,
       frameOff: 0,
       frameW: 1,
+      focusOff: 0,
+      focusW: 1,
       segLen: 1,
       rw: -1,
     }
@@ -979,6 +1080,11 @@ export function init(ctx) {
         const pr = p.el.getBoundingClientRect()
         p.frameOff = fr.left - pr.left
         p.frameW = Math.max(1, fr.width)
+        if (p.focus) {
+          const qr = p.focus.getBoundingClientRect()
+          p.focusOff = qr.left - pr.left
+          p.focusW = Math.max(1, qr.width)
+        }
       }
     }
     // pressure squeezes each range from the moment its panel reaches the
@@ -1031,9 +1137,17 @@ export function init(ctx) {
 
   /* ------------------------------------------------------------ scenes */
   const scan = { v: reduced ? 1 : 0 }
+  let lastScan = scan.v
   function paintScan() {
     if (!hadal?.focus) return
     const v = scan.v
+    // the sweep finds the Challenger Deep: Vesper's sonar answers
+    if (!reduced && lastScan < TRENCH_DEEP.x && v >= TRENCH_DEEP.x) {
+      const r = hadal.focus.getBoundingClientRect()
+      ctx.emit('sonar', { x: r.left + r.width * TRENCH_DEEP.x, y: r.top + r.height * TRENCH_DEEP.y, strength: 0.5 })
+      hadal.pingT = hadal.t
+    }
+    lastScan = v
     hadal.focus.style.setProperty('--scan', v.toFixed(4))
     hadal.focus.style.setProperty('--scan-on', v > 0.001 && v < 0.999 ? 1 : 0)
     for (const pin of pins) pin.el.style.setProperty('--on', v >= pin.x ? 1 : 0)
@@ -1052,8 +1166,9 @@ export function init(ctx) {
     p.canvas.width = Math.round(w * p.dpr)
     p.canvas.height = Math.round(h * p.dpr)
     // the band the scale covers: the layer's top to its bottom
-    if (p.focus) {
-      p.f = { x: p.focus.offsetLeft, y: p.focus.offsetTop, w: p.focus.offsetWidth || w, h: p.focus.offsetHeight || h }
+    const band = p.focus || p.scale
+    if (band && band.offsetHeight) {
+      p.f = { x: p.focus ? band.offsetLeft : 0, y: band.offsetTop, w: p.focus ? band.offsetWidth : w, h: band.offsetHeight }
     } else {
       p.f = { x: 0, y: h * 0.12, w, h: h * 0.68 }
     }
@@ -1254,6 +1369,15 @@ export function init(ctx) {
         },
       })
 
+      // the hadal panel's left edge, on screen, at the end of the pin…
+      const sweepTo = () => hadal.left - dist + 2
+      // …and where it is when the beam starts: the trench's left edge 140 px
+      // inside the visible band (which ends where the last panel ends)
+      const sweepFrom = () => {
+        const visibleRight = sweepTo() + hadal.width
+        const from = visibleRight - 140 - hadal.focusOff
+        return Math.max(from, sweepTo() + 160)
+      }
       if (hadal) {
         gsap.fromTo(
           scan,
@@ -1265,9 +1389,13 @@ export function init(ctx) {
             scrollTrigger: {
               trigger: hadal.el,
               containerAnimation: tween,
-              start: 'left 78%',
-              end: 'left 18%',
+              // Like a ship's sonar mapping the floor as it moves: the beam
+              // holds still, just inside the visible band, and the trench
+              // slides under it, finishing as the pin ends.
+              start: () => `left ${Math.round(sweepFrom())}px`,
+              end: () => `left ${Math.round(sweepTo())}px`,
               scrub: 0.6,
+              invalidateOnRefresh: true,
             },
           },
         )

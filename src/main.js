@@ -23,7 +23,9 @@ CustomEase.create('surge', 'M0,0 C0.7,0 0.1,1 1,1') // pressure release
 const params = new URLSearchParams(location.search)
 const mq = (q) => window.matchMedia(q).matches
 const reducedMotion = mq('(prefers-reduced-motion: reduce)') || params.has('reduced')
-const skipIntro = params.has('skipintro') || reducedMotion
+// A deep link (e.g. #reserve) goes straight to its section: no intro.
+const deepLink = location.hash.length > 1 ? location.hash : null
+const skipIntro = params.has('skipintro') || reducedMotion || !!deepLink
 
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 if (!location.hash) window.scrollTo(0, 0)
@@ -143,6 +145,8 @@ async function boot() {
     lenis?.start()
     ScrollTrigger.refresh()
     ctx.depth.refresh()
+    goToDeepLink()
+    keepDepthAcrossRefreshes()
     resolveReady()
   }
 
@@ -164,11 +168,86 @@ async function boot() {
   handOver()
 }
 
-boot()
+/* ------------------------------------------------------------ deep links */
+// The browser jumps to a #hash before pins add their spacers, so it lands in
+// the wrong place. Re-aim once the page is laid out (and again after fonts).
+function deepLinkTarget() {
+  if (!deepLink) return null
+  let el = null
+  try {
+    el = document.querySelector(deepLink)
+  } catch {
+    return null
+  }
+  if (!el) return null
+  const p = el.parentElement
+  return p && p.classList.contains('pin-spacer') ? p : el
+}
+function goToDeepLink() {
+  const el = deepLinkTarget()
+  if (!el) return
+  const jump = () => {
+    const y = el.getBoundingClientRect().top + window.scrollY
+    if (lenis) lenis.scrollTo(y, { immediate: true, force: true })
+    else window.scrollTo(0, y)
+  }
+  jump()
+  requestAnimationFrame(jump)
+  document.fonts?.ready.then(() => requestAnimationFrame(jump))
+}
 
-// Refresh triggers on resize settles (ScrollTrigger handles most of this).
-let rT
-window.addEventListener('resize', () => {
-  clearTimeout(rT)
-  rT = setTimeout(() => ScrollTrigger.refresh(), 250)
+/* ------------------------------------------- keep depth across layout changes */
+// When a resize changes pinned/stacked layouts, pixel scroll positions move.
+// Keep the visitor at the same depth instead of the same pixel offset.
+let depthWatchOn = false
+function keepDepthAcrossRefreshes() {
+  if (depthWatchOn) return
+  depthWatchOn = true
+  let saved = 0
+  let armed = false // a real resize is in progress: hold the pre-resize depth
+  let lastW = window.innerWidth
+  let disarmT = 0
+  const jump = (y) => {
+    if (lenis) lenis.scrollTo(y, { immediate: true, force: true })
+    else window.scrollTo(0, y)
+  }
+  // The resize event fires before depth.js re-measures, so its state still
+  // holds the depth the visitor was actually looking at.
+  window.addEventListener('resize', () => {
+    const widthChanged = window.innerWidth !== lastW
+    lastW = window.innerWidth
+    if (ScrollTrigger.isTouch && !widthChanged) return // mobile toolbar show/hide
+    if (!armed) saved = ctx.depth.get().depth
+    armed = true
+    clearTimeout(disarmT)
+    disarmT = setTimeout(() => (armed = false), 2500)
+  })
+  ScrollTrigger.addEventListener('refreshInit', () => {
+    if (!armed) saved = ctx.depth.get().depth
+  })
+  ScrollTrigger.addEventListener('refresh', () => {
+    const target = saved
+    // let sections finish their own refresh work, then re-aim
+    requestAnimationFrame(() => {
+      armed = false
+      if (!(target > 1) || target >= ctx.depth.MAX - 1) return
+      ctx.depth.refresh()
+      const y = ctx.depth.scrollYForDepth(target)
+      if (Math.abs(y - window.scrollY) >= 4) jump(y)
+    })
+  })
+}
+
+/* ------------------------------------------------------------ skip link */
+document.querySelector('.skip-link')?.addEventListener('click', (e) => {
+  const main = document.getElementById('main')
+  if (!main) return
+  e.preventDefault()
+  e.stopPropagation()
+  const y = main.getBoundingClientRect().top + window.scrollY
+  if (lenis) lenis.scrollTo(y, { immediate: true, force: true })
+  else window.scrollTo(0, y)
+  main.focus({ preventScroll: true })
 })
+
+boot()

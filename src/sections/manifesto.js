@@ -174,12 +174,12 @@ export function init(ctx) {
     canvas.height = Math.round(ch * cdpr)
   }
 
-  function sparkWord(el, count) {
+  function sparkWord(el, count, withBloom = true) {
     if (!c2d || !onScreen || document.hidden || particles.length > 260) return
     const sr = stage.getBoundingClientRect()
     const r = el.getBoundingClientRect()
     // one soft bloom behind the word: the disturbed water lighting up
-    particles.push({
+    if (withBloom) particles.push({
       x: r.left - sr.left + r.width / 2,
       y: r.top - sr.top + r.height * 0.55,
       vx: 0,
@@ -292,7 +292,7 @@ export function init(ctx) {
         f > 0.02
           ? `0 0 0.04em rgb(214 255 250 / ${(0.7 * f).toFixed(3)}), 0 0 0.18em rgb(${GLOW.join(' ')} / ${(0.6 * f).toFixed(3)}), 0 0 0.6em rgb(${GLOW2.join(' ')} / ${(0.35 * f).toFixed(3)})`
           : 'none'
-      if (pay.v > prevPay && was < 0.3 && q >= 0.3) sparkWord(pw[i], 5)
+      if (pay.v > prevPay && was < 0.45 && q >= 0.45) sparkWord(pw[i], 4, false)
     }
     prevPay = pay.v
   }
@@ -326,7 +326,7 @@ export function init(ctx) {
     },
   )
 
-  // The reading: from just before the stage settles to half way through it.
+  // The reading: from just before the stage settles to just short of half way.
   gsap.to(lit, {
     head: N + TAIL + 0.4,
     ease: 'none',
@@ -334,7 +334,7 @@ export function init(ctx) {
     scrollTrigger: {
       trigger: root,
       start: 'top 32%',
-      end: () => `+=${Math.round(window.innerHeight * 0.32 + (H - SH) * 0.5)}`,
+      end: () => `+=${Math.round(window.innerHeight * 0.32 + (H - SH) * 0.46)}`,
       scrub: 0.65,
       invalidateOnRefresh: true,
     },
@@ -351,8 +351,8 @@ export function init(ctx) {
       ease: 'power1.in',
       scrollTrigger: {
         trigger: root,
-        start: at(0.55),
-        end: at(0.66),
+        start: at(0.51),
+        end: at(0.6),
         scrub: 0.6,
         invalidateOnRefresh: true,
       },
@@ -365,8 +365,8 @@ export function init(ctx) {
       onUpdate: paintPayoff,
       scrollTrigger: {
         trigger: root,
-        start: at(0.58),
-        end: at(0.76),
+        start: at(0.585),
+        end: at(0.78),
         scrub: 0.7,
         invalidateOnRefresh: true,
       },
@@ -381,8 +381,8 @@ export function init(ctx) {
       .timeline({
         scrollTrigger: {
           trigger: root,
-          start: at(0.3),
-          end: at(0.64),
+          start: at(0.28),
+          end: at(0.58),
           scrub: 0.6,
           invalidateOnRefresh: true,
         },
