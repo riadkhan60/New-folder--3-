@@ -1,0 +1,324 @@
+/* ==========================================================================
+   NOCTILUCA — base tokens, reset, typography, layout primitives
+   Owned by the scaffold. Sections must NOT redefine these tokens; they may
+   read them and set the per-section vars documented in DESIGN.md.
+   ========================================================================== */
+
+:root {
+  /* ---- Depth palette (background is interpolated by src/core/depth.js) */
+  --c-surface: #0e6f86;   /* sunlit water just under the surface        */
+  --c-twilight: #072a4a;  /* 200–1,000 m                                  */
+  --c-midnight: #04142c;  /* 1,000–4,000 m                                */
+  --c-abyss: #01040b;     /* 4,000–6,000 m                                */
+  --c-hadal: #000000;     /* true black. No light has ever reached here.  */
+
+  /* ---- Ink */
+  --c-ink: #eaf6f4;                     /* plankton white                 */
+  --c-ink-2: rgb(234 246 244 / 0.74);   /* secondary text                 */
+  --c-ink-3: rgb(234 246 244 / 0.5);    /* tertiary / captions            */
+  --c-line: rgb(234 246 244 / 0.16);    /* hairlines                      */
+  --c-line-strong: rgb(234 246 244 / 0.32);
+
+  /* ---- Light sources. Each one is a real light in the deep sea.        */
+  --c-snell: #d9fbff;       /* sunlight seen through the surface           */
+  --c-photophore: #6cf8e8;  /* bioluminescent blue-green (~480 nm)         */
+  --c-photophore-2: #3aa8ff;/* deeper blue bioluminescence                 */
+  --c-lure: #ffb054;        /* anglerfish lure, bacterial glow             */
+  --c-redlight: #ff3b2f;    /* submersible red observation lamps (6,000 m+) */
+
+  /* ---- Live values written every frame by depth.js (defaults = surface) */
+  --bg: var(--c-surface);
+  --depth-n: 0;   /* 0 at surface → 1 at 10,935 m (linear)                  */
+  --sun: 1;       /* visible sunlight 1 → 0 (gone by ~1,000 m)              */
+  --hadal: 0;     /* 0 → 1 between 5,800 m and 6,400 m (red-light mode)     */
+
+  /* ---- Per-section pressure compression (set on each section by depth.js) */
+  --wdth: 150;    /* Anybody width axis, 150 at surface → 50 at the bottom  */
+  --wght: 260;    /* Anybody weight, light at surface → heavy at the bottom */
+
+  /* ---- Type */
+  --font-display: 'Anybody', 'Arial Narrow', system-ui, sans-serif;
+  --font-text: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+
+  --fs-mega: clamp(3.4rem, 11.5vw, 13rem);
+  --fs-display: clamp(2.75rem, 7.2vw, 8rem);
+  --fs-h2: clamp(2.1rem, 4.6vw, 4.75rem);
+  --fs-h3: clamp(1.4rem, 2.2vw, 2.1rem);
+  --fs-lead: clamp(1.2rem, 1.65vw, 1.6rem);
+  --fs-body: clamp(1.02rem, 1.1vw, 1.15rem);
+  --fs-small: 0.875rem;
+  --fs-micro: 0.75rem;
+
+  /* ---- Space (8pt-ish, fluid at the large end) */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: clamp(3rem, 6vw, 5rem);
+  --s-9: clamp(4.5rem, 10vw, 8rem);
+  --s-10: clamp(6rem, 16vw, 14rem);
+
+  /* ---- Layout */
+  --rail: clamp(20px, 5vw, 88px);          /* outer horizontal padding      */
+  --instrument: 0px;                        /* right gutter kept for the depth ruler */
+  --gap: clamp(16px, 2vw, 32px);
+  --maxw: 1520px;
+
+  /* ---- Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-drift: cubic-bezier(0.45, 0, 0.2, 1);
+
+  /* ---- Layers */
+  --z-ocean: 0;
+  --z-content: 1;
+  --z-hud: 40;
+  --z-nav: 50;
+  --z-menu: 60;
+  --z-cursor: 90;
+  --z-loader: 100;
+
+  color-scheme: dark;
+}
+
+@media (min-width: 1024px) {
+  :root { --instrument: 72px; }
+}
+
+/* ---------------------------------------------------------------- reset */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, picture, video, canvas, svg { display: block; max-width: 100%; }
+input, button, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; padding: 0; }
+p, h1, h2, h3, h4, h5, h6 { overflow-wrap: break-word; }
+
+/* ----------------------------------------------------------------- page */
+html {
+  background: #000;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(234 246 244 / 0.25) transparent;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--c-ink);
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.62;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+main { position: relative; z-index: var(--z-content); }
+
+#ocean {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-ocean);
+  pointer-events: none;
+}
+
+::selection { background: var(--c-photophore); color: #001a1a; }
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--c-photophore);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  left: var(--rail);
+  top: var(--s-4);
+  z-index: calc(var(--z-loader) + 1);
+  padding: var(--s-2) var(--s-4);
+  background: var(--c-ink);
+  color: #001a1a;
+  font-family: var(--font-display);
+  font-size: var(--fs-small);
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible { transform: none; }
+
+/* -------------------------------------------------------- typography */
+/* Display type lives in Anybody and is compressed by depth: every section
+   gets its own --wdth / --wght from depth.js, so headlines physically
+   narrow and thicken the deeper they sit. */
+.t-mega,
+.t-display,
+.t-h2,
+.t-h3,
+.t-ui {
+  font-family: var(--font-display);
+  font-stretch: calc(var(--wdth) * 1%);
+  font-weight: var(--wght);
+  font-kerning: normal;
+}
+
+.t-mega {
+  font-size: var(--fs-mega);
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+}
+.t-display {
+  font-size: var(--fs-display);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+.t-h2 {
+  font-size: var(--fs-h2);
+  line-height: 0.96;
+  letter-spacing: -0.025em;
+}
+.t-h3 {
+  font-size: var(--fs-h3);
+  line-height: 1.08;
+  letter-spacing: -0.012em;
+}
+/* UI text (nav, buttons, data labels) — fixed proportions, not depth-driven */
+.t-ui {
+  font-stretch: 100%;
+  font-weight: 450;
+  font-size: var(--fs-small);
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.t-lead {
+  font-family: var(--font-text);
+  font-size: var(--fs-lead);
+  line-height: 1.45;
+  font-weight: 340;
+  color: var(--c-ink);
+}
+.t-body {
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.65;
+  font-weight: 380;
+  color: var(--c-ink-2);
+  max-width: 62ch;
+}
+.t-caption {
+  font-family: var(--font-text);
+  font-style: italic;
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--c-ink-3);
+}
+/* Instrument numerals: tabular so live readouts don't jitter */
+.t-num {
+  font-family: var(--font-display);
+  font-stretch: 100%;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+/* ------------------------------------------------------------ layout */
+.wrap {
+  width: 100%;
+  max-width: calc(var(--maxw) + var(--rail) * 2 + var(--instrument));
+  margin-inline: auto;
+  padding-left: var(--rail);
+  padding-right: calc(var(--rail) + var(--instrument));
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gap);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Shared button: a lit capsule. Sections may use it as-is. */
+.btn {
+  --btn-c: var(--c-photophore);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: 0.95em 1.6em;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--btn-c) 55%, transparent);
+  color: var(--c-ink);
+  font-family: var(--font-display);
+  font-stretch: 110%;
+  font-weight: 500;
+  font-size: var(--fs-small);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  background: color-mix(in srgb, var(--btn-c) 8%, transparent);
+  box-shadow:
+    0 0 0 0 color-mix(in srgb, var(--btn-c) 0%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--btn-c) 10%, transparent);
+  transition:
+    background 0.5s var(--ease-out),
+    box-shadow 0.5s var(--ease-out),
+    border-color 0.5s var(--ease-out),
+    color 0.5s var(--ease-out);
+  isolation: isolate;
+  white-space: nowrap;
+}
+.btn:hover,
+.btn:focus-visible {
+  background: color-mix(in srgb, var(--btn-c) 18%, transparent);
+  border-color: var(--btn-c);
+  box-shadow:
+    0 0 32px -4px color-mix(in srgb, var(--btn-c) 70%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--btn-c) 22%, transparent);
+}
+.btn--solid {
+  background: var(--btn-c);
+  color: #00201f;
+  border-color: var(--btn-c);
+}
+.btn--solid:hover,
+.btn--solid:focus-visible {
+  background: color-mix(in srgb, var(--btn-c) 85%, white);
+  color: #00201f;
+}
+
+/* Hairline rule */
+.rule {
+  height: 1px;
+  border: 0;
+  background: var(--c-line);
+}
+
+/* --------------------------------------------- loading-state guards */
+html.is-loading body { overflow: hidden; }
+
+/* ------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,57 +1,52 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" class="is-loading">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="style.css" />
-    <script src="script.js" defer></script>
-    <title>Document</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Noctiluca — Descend 10,935 metres</title>
+    <meta
+      name="description"
+      content="Noctiluca runs crewed submersible dives to the bottom of the Challenger Deep, 10,935 metres below the Pacific. Scroll to descend."
+    />
+    <meta name="theme-color" content="#0e6f86" />
+    <meta property="og:title" content="Noctiluca — Descend 10,935 metres" />
+    <meta
+      property="og:description"
+      content="Crewed submersible dives through the five layers of the ocean, to the deepest point on Earth."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Anybody:ital,wdth,wght@0,50..150,100..900;1,50..150,100..900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap"
+    />
   </head>
   <body>
-    <canvas id="canva"></canvas>
-    <div class="contents">
-      <h1>
-        <span class="hand"> 👋 </span>
-        <span class="text"> Hi, Here All My Projects </span>
-      </h1>
-      <ul class="projects">
-        <li class="project">
-          <img src="/Src/Imgs/TodoApp.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Todo App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/Drawing-App.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Drawing App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/MaptyApp.jpeg" alt="" srcset="" />
-          <h2 class="project-header">Mapty App</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-        <li class="project">
-          <img src="/Src/Imgs/2rism.jpeg" alt="" srcset="" />
-          <h2 class="project-header">2rism</h2>
-          <p class="project-details">
-            Lorem ipsum dolor sit amet consectetur adipisicing elit. Atque
-            exercitationem ducimus, ipsam animi dicta enim sunt. Nam, aspernatur
-            ex? Dicta.
-          </p>
-        </li>
-      </ul>
-    </div>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <!-- Global fixed layers (z-order low → high is defined in base.css) -->
+    <canvas id="ocean" aria-hidden="true"></canvas>
+
+    <!-- @include loader -->
+    <!-- @include nav -->
+    <!-- @include hud -->
+
+    <main id="main">
+      <!-- @include hero -->
+      <!-- @include manifesto -->
+      <!-- @include zones -->
+      <!-- @include vessel -->
+      <!-- @include creatures -->
+      <!-- @include expedition -->
+      <!-- @include profiles -->
+      <!-- @include voices -->
+      <!-- @include finale -->
+    </main>
+
+    <!-- @include footer -->
+
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
