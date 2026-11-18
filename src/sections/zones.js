@@ -805,6 +805,8 @@ export function init(ctx) {
     {
       wide: '(min-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 1/1)',
       reduce: '(prefers-reduced-motion: reduce)',
+      // always true: matchMedia only calls back when some condition matches
+      any: '(min-width: 0px)',
     },
     (m) => {
       const { wide, reduce } = m.conditions
@@ -849,6 +851,27 @@ export function init(ctx) {
           render()
         },
       })
+      // The band of layers rises out of the water above and sinks into the
+      // water below: its soft top/bottom edges close up while it is pinned.
+      // (Spans the whole pin: enter + travel + exit.)
+      let tfLast = -1
+      ScrollTrigger.create({
+        trigger: root,
+        start: 'top bottom',
+        end: () => `+=${dist + window.innerHeight * 2}`,
+        onUpdate: () => {
+          const r = root.getBoundingClientRect()
+          const vh = window.innerHeight
+          const off = r.top > 0 ? r.top : Math.max(0, vh - r.bottom)
+          const tf = Math.round(clamp(off / vh) ** 0.7 * 300) / 10
+          if (tf !== tfLast) {
+            tfLast = tf
+            root.style.setProperty('--tf', `${tf}%`)
+            root.classList.toggle('is-settled', tf === 0)
+          }
+        },
+      })
+
       if (hadal) {
         gsap.fromTo(
           scan,
@@ -870,7 +893,8 @@ export function init(ctx) {
       render()
 
       return () => {
-        root.classList.remove('is-horizontal')
+        root.classList.remove('is-horizontal', 'is-settled')
+        root.style.removeProperty('--tf')
         gsap.set(track, { clearProps: 'transform' })
         if (strip) strip.style.transform = ''
         for (const p of panels) {
@@ -888,22 +912,4 @@ export function init(ctx) {
     render()
   })
 
-  // the tint's soft top/bottom edges close up while the section fills the
-  // screen, so no band of other water shows above or below the layers
-  let tfLast = -1
-  ScrollTrigger.create({
-    trigger: root,
-    start: 'top bottom',
-    end: 'bottom top',
-    onUpdate: () => {
-      const r = root.getBoundingClientRect()
-      const vh = window.innerHeight
-      const off = r.top > 0 ? r.top : Math.max(0, vh - r.bottom)
-      const tf = Math.round(clamp(off / vh) * 70) / 10
-      if (tf !== tfLast) {
-        tfLast = tf
-        root.style.setProperty('--tf', `${tf}%`)
-      }
-    },
-  })
 }

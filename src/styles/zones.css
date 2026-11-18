@@ -25,10 +25,9 @@
   z-index: 0;
   pointer-events: none;
   background: var(--zones-tint, none);
-  /* soft top and bottom edges while the section scrolls in and out;
-     --tf falls to 0 while it is pinned (set by zones.js) */
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 6%), #000 calc(100% - var(--tf, 6%)), transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 6%), #000 calc(100% - var(--tf, 6%)), transparent);
+  /* stacked: soft top and bottom edges into the neighbouring water */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 160px, #000 calc(100% - 220px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 160px, #000 calc(100% - 220px), transparent);
 }
 
 /* ----------------------------------------------------------------- intro */
@@ -151,6 +150,7 @@
   grid-area: text;
   position: relative;
   z-index: 2;
+  margin-top: var(--s-4);
   max-width: 36ch;
   font-family: var(--font-text);
   font-size: var(--fs-body);
@@ -208,6 +208,9 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  /* stacked: the scene melts into the water above and below it */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
 }
 .zones__focus {
   position: absolute;
@@ -499,10 +502,23 @@
   width: max-content;
   height: 100%;
   will-change: transform;
+  /* the whole band of layers rises out of the water above it and sinks
+     into the water below: --tf (set by zones.js) is 0 while pinned */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 24%), #000 calc(100% - var(--tf, 24%)), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--tf, 24%), #000 calc(100% - var(--tf, 24%)), transparent);
+}
+#zones.is-horizontal.is-settled .zones__track {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+#zones.is-horizontal .zones__tint {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 #zones.is-horizontal .zones__intro {
-  flex: 0 0 50vw;
+  /* narrow enough that the first panel's copy clears the HUD ruler */
+  flex: 0 0 45vw;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -516,6 +532,9 @@
 }
 
 #zones.is-horizontal .zones__panel {
+  --copy-x: 5vw;
+  --copy-indent: 15vw;
+  --copy-w: min(22rem, 28vw);
   display: block;
   flex: 0 0 88vw;
   height: 100%;
@@ -534,10 +553,10 @@
 #zones.is-horizontal .zones__copy {
   position: absolute;
   z-index: 2;
-  left: 5vw;
+  left: var(--copy-x);
   top: clamp(92px, 14vh, 140px);
   display: grid;
-  grid-template-columns: 15vw minmax(0, 22rem);
+  grid-template-columns: var(--copy-indent) var(--copy-w);
   grid-template-areas:
     'range range'
     '. name'
@@ -574,12 +593,12 @@
   top: calc(clamp(92px, 14vh, 140px) + clamp(4rem, min(10.2vw, 17vh), 12rem) * 0.8 + clamp(28px, 6vh, 64px));
   right: 7%;
   bottom: clamp(130px, 19vh, 170px);
-  left: 54%;
+  /* starts just past the copy column, whatever the screen width */
+  left: calc(var(--copy-x) + var(--copy-indent) + var(--copy-w) + 4vw);
 }
 #zones.is-horizontal [data-layer='hadal'] .zones__focus {
   /* the last panel ends flush with the screen: stay clear of the HUD ruler */
   right: 14%;
-  left: 52%;
 }
 #zones.is-horizontal .zones__meter {
   right: 18%;
@@ -596,8 +615,8 @@
   z-index: 3;
   pointer-events: none;
   /* clear of the HUD (bottom left) and its ruler (right edge) */
-  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent 22%, #000 34%, #000 85%, transparent 92%);
-  mask-image: linear-gradient(to right, transparent 0, transparent 22%, #000 34%, #000 85%, transparent 92%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, transparent 25%, #000 37%, #000 85%, transparent 92%);
+  mask-image: linear-gradient(to right, transparent 0, transparent 25%, #000 37%, #000 85%, transparent 92%);
 }
 .zones__strip {
   position: absolute;
@@ -740,6 +759,18 @@
   }
   #zones:not(.is-horizontal) .zones__num {
     font-size: clamp(4rem, 10vw, 9rem);
+  }
+}
+
+/* the trench plot gets narrow: stack the pin labels */
+@media (max-width: 1279px) {
+  .zones__pin-label {
+    top: -0.55em;
+    translate: none;
+  }
+  .zones__pin-label b {
+    display: block;
+    margin-top: 0.1rem;
   }
 }
 
