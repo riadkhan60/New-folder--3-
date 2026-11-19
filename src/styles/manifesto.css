@@ -99,6 +99,44 @@
   opacity: 0;
   will-change: transform, opacity;
 }
+
+/* The display line is the last thing on the page the sun still reaches.
+   It is lit from above (bright on the tops of the letters, the colour of
+   the water at their feet), and the light moving through the waves far
+   overhead plays over it: two layers of soft caustic veins, drifting
+   against each other. --ox/--oy (set by manifesto.js) line the pattern up
+   across the words, so it reads as one light falling on the whole line. */
+#descent {
+  --m-caustic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.0119' numOctaves='2' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 -2.7 0 0 0 1'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='gamma' amplitude='0.85' exponent='2.1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='420' height='420' filter='url(%23c)'/%3E%3C/svg%3E");
+  --m-lit: linear-gradient(to bottom, rgb(248 255 255) 4%, rgb(214 238 240) 46%, rgb(152 200 212) 100%);
+}
+.manifesto__pw,
+#descent.is-static .manifesto__last {
+  --ox: 0px;
+  --oy: 0px;
+  background-image: var(--m-caustic), var(--m-caustic), var(--m-lit);
+  background-size: 420px 420px, 300px 300px, 100% 100%;
+  background-position: var(--ox) var(--oy), calc(var(--ox) + 130px) calc(var(--oy) + 70px), 0 0;
+  background-repeat: repeat, repeat, no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.manifesto__pw::selection,
+.manifesto__last::selection {
+  -webkit-text-fill-color: #001a1a;
+}
+#descent.is-caustic .manifesto__pw {
+  animation: manifesto-caustic 38s linear infinite;
+}
+@keyframes manifesto-caustic {
+  to {
+    background-position:
+      calc(var(--ox) + 420px) var(--oy),
+      calc(var(--ox) + 130px - 300px) calc(var(--oy) + 70px + 300px),
+      0 0;
+  }
+}
 #descent:not(.is-split) .manifesto__payoff,
 #descent.is-static .manifesto__payoff {
   display: none;

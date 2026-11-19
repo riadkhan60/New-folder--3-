@@ -32,6 +32,11 @@
   line-height: 0.9;
   letter-spacing: -0.03em;
   text-wrap: balance;
+  /* the last of the daylight on it, from above */
+  background-image: linear-gradient(to bottom, #ffffff 0%, var(--c-ink) 34%, #c9e2ea 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .zones__lead {
@@ -144,11 +149,24 @@
   font-feature-settings: 'lnum' 1;
   white-space: nowrap;
   color: var(--c-ink);
+  /* lit from above: bright where the light lands on the figures, falling
+     off toward their feet, and further off with every layer down */
+  background-image: linear-gradient(
+    to bottom,
+    var(--lit-top, #fbffff) 6%,
+    var(--lit-mid, var(--c-ink)) 46%,
+    var(--lit-foot, #b4ccd6) 104%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: var(--lit-glow, none);
 }
 .zones__dash {
   /* a constant thin rule between the two depths, whatever the pressure */
   font-weight: 260;
   color: var(--c-ink-3);
+  -webkit-text-fill-color: var(--c-ink-3);
   margin-inline: 0.05em;
 }
 .zones__unit {
@@ -158,6 +176,41 @@
   font-weight: 420;
   letter-spacing: 0;
   color: var(--c-ink-2);
+  -webkit-text-fill-color: var(--c-ink-2);
+}
+/* gradient-filled type stays legible when selected */
+.zones__title::selection,
+.zones__num::selection {
+  -webkit-text-fill-color: #001a1a;
+}
+/* each layer's own light on its figures: sunlit, then blue, then only the
+   cold remains of it */
+[data-layer='sunlight'] {
+  --lit-top: #ffffff;
+  --lit-mid: #e6fcff;
+  --lit-foot: #a6d8df;
+  --lit-glow: drop-shadow(0 0 0.32em rgb(217 251 255 / 0.2));
+}
+[data-layer='twilight'] {
+  --lit-top: #f6fefd;
+  --lit-mid: #e0f0f3;
+  --lit-foot: #9cc0da;
+  --lit-glow: drop-shadow(0 0 0.4em rgb(58 168 255 / 0.12));
+}
+[data-layer='midnight'] {
+  --lit-top: #eff9f7;
+  --lit-mid: #d3e2ea;
+  --lit-foot: #8ea6c3;
+}
+[data-layer='abyss'] {
+  --lit-top: #ebf6f4;
+  --lit-mid: #cbdae5;
+  --lit-foot: #8299b6;
+}
+[data-layer='hadal'] {
+  --lit-top: #e8f4f3;
+  --lit-mid: #c3d2e0;
+  --lit-foot: #7a90ae;
 }
 
 .zones__name {
@@ -246,15 +299,108 @@
 
 /* the window: a pool of this layer's own water, melting into the water
    around it. No hard core and no straight edge: the feather starts at the
-   centre and eases out to nothing at the frame, so it reads as the water
-   darkening (or lightening) there, never as a box or a disc. */
+   centre and eases out to nothing, so it reads as the water darkening (or
+   lightening) there, never as a box or a disc. Each pool is shaped to its
+   scene (a band along the abyssal horizon, a hollow of dark around the
+   angler, the trench), and its edge is liquid: two bodies of the water,
+   each cut by a displaced, blurred ellipse, drift and breathe out of phase,
+   so the line where this water meets the page's water is never still.
+   Geometry is unitless: centre (--cx, --cy) and reach (--sx, --sy) as
+   fractions of the window. */
 .zones__window {
   position: absolute;
   inset: -6% 0;
+  --cx: 0.5;
+  --cy: 0.5;
+  --sx: 0.5;
+  --sy: 0.36;
+  --feather: radial-gradient(
+    ellipse calc(var(--sx) * 100%) calc(var(--sy) * 100%) at calc(var(--cx) * 100%) calc(var(--cy) * 100%),
+    #000 12%, rgb(0 0 0 / 0.9) 30%, rgb(0 0 0 / 0.7) 48%, rgb(0 0 0 / 0.45) 64%, rgb(0 0 0 / 0.22) 79%, rgb(0 0 0 / 0.07) 91%, transparent
+  );
+  /* the liquid cut, scaled and centred on the pool (blob radius ≈ 0.92 of
+     the feather's reach, wobbling ±15% around it) */
+  --pool-size: calc(var(--sx) * 230%) calc(var(--sy) * 230%);
+  --pool-pos: calc((var(--cx) - var(--sx) * 1.15) / (1 - var(--sx) * 2.3) * 100%)
+    calc((var(--cy) - var(--sy) * 1.15) / (1 - var(--sy) * 2.3) * 100%);
+  --pool-a: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cfilter id='f' x='-40%25' y='-40%25' width='180%25' height='180%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.03' numOctaves='2' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='28' xChannelSelector='R' yChannelSelector='G'/%3E%3CfeGaussianBlur stdDeviation='3.4'/%3E%3C/filter%3E%3Cellipse cx='50' cy='50' rx='40' ry='40' filter='url(%23f)'/%3E%3C/svg%3E");
+  --pool-b: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cfilter id='f' x='-40%25' y='-40%25' width='180%25' height='180%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.024' numOctaves='2' seed='11'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='30' xChannelSelector='G' yChannelSelector='B'/%3E%3CfeGaussianBlur stdDeviation='4'/%3E%3C/filter%3E%3Cellipse cx='50' cy='50' rx='40' ry='40' filter='url(%23f)'/%3E%3C/svg%3E");
+}
+.zones__window::before,
+.zones__window::after {
+  content: '';
+  position: absolute;
+  inset: 0;
   background: linear-gradient(to bottom, var(--water-top, transparent), var(--water-bottom, transparent));
-  --feather: radial-gradient(closest-side, #000 12%, rgb(0 0 0 / 0.9) 30%, rgb(0 0 0 / 0.7) 48%, rgb(0 0 0 / 0.45) 64%, rgb(0 0 0 / 0.22) 79%, rgb(0 0 0 / 0.07) 91%, transparent);
-  -webkit-mask-image: var(--feather);
-  mask-image: var(--feather);
+  -webkit-mask-image: var(--feather), var(--pool-a);
+  mask-image: var(--feather), var(--pool-a);
+  -webkit-mask-size: 100% 100%, var(--pool-size);
+  mask-size: 100% 100%, var(--pool-size);
+  -webkit-mask-position: 0 0, var(--pool-pos);
+  mask-position: 0 0, var(--pool-pos);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  will-change: transform, opacity;
+  animation: zones-pool-a 29s var(--ease-drift) infinite alternate both paused;
+}
+.zones__window::after {
+  -webkit-mask-image: var(--feather), var(--pool-b);
+  mask-image: var(--feather), var(--pool-b);
+  animation-name: zones-pool-b;
+  animation-duration: 37s;
+  animation-delay: -11s;
+}
+.zones__panel.is-live .zones__window::before,
+.zones__panel.is-live .zones__window::after {
+  animation-play-state: running;
+}
+@keyframes zones-pool-a {
+  0% { transform: translate3d(-1.4%, 0.8%, 0) rotate(-2deg) scale(1.03, 0.99); opacity: 0.95; }
+  100% { transform: translate3d(1.6%, -1%, 0) rotate(1.8deg) scale(0.97, 1.03); opacity: 0.64; }
+}
+@keyframes zones-pool-b {
+  0% { transform: translate3d(1.2%, -0.6%, 0) rotate(2.4deg) scale(0.98, 1.02); opacity: 0.62; }
+  100% { transform: translate3d(-1.1%, 1.2%, 0) rotate(-1.4deg) scale(1.04, 0.97); opacity: 0.94; }
+}
+/* sunlight: taller, reaching up to the surface it hangs from */
+[data-layer='sunlight'] .zones__window {
+  --cy: 0.45;
+  --sx: 0.54;
+  --sy: 0.46;
+}
+/* midnight: a hollow of dark around the angler and its light */
+[data-layer='midnight'] .zones__window {
+  --cx: 0.55;
+  --cy: 0.56;
+  --sx: 0.5;
+  --sy: 0.4;
+}
+/* abyss: the plain runs away into the dark along its horizon */
+[data-layer='abyss'] .zones__window {
+  --cy: 0.6;
+  --sx: 0.6;
+  --sy: 0.3;
+  /* a band, not a blot: dark on the plain and just above its horizon,
+     thinning slowly upward into the water above */
+  --feather: radial-gradient(
+    ellipse calc(var(--sx) * 100%) calc(var(--sy) * 100%) at calc(var(--cx) * 100%) calc(var(--cy) * 100%),
+    rgb(0 0 0 / 0.92) 10%, rgb(0 0 0 / 0.78) 32%, rgb(0 0 0 / 0.52) 52%, rgb(0 0 0 / 0.26) 70%, rgb(0 0 0 / 0.09) 86%, transparent
+  );
+}
+/* (in the pinned pass it may run on past the frame: the band is clipped) */
+#zones.is-horizontal [data-layer='abyss'] .zones__window {
+  inset: -6% -14%;
+}
+/* hadal: the darkest water gathers in the trench (the canvas fills the
+   trench itself; this is only the shadow it casts in the water around) */
+[data-layer='hadal'] .zones__window {
+  --cx: 0.48;
+  --cy: 0.58;
+  --sx: 0.48;
+  --sy: 0.34;
+  opacity: 0.5;
 }
 /* the scene: soft at its edges, and its corners fall away into the water */
 .zones__canvas {
@@ -579,6 +725,40 @@
 #zones.is-horizontal .zones__panel::before {
   display: none;
 }
+/* Between two windows, the light of the layer above bleeds into the one
+   below it: a wide, faint wash of that layer's light across the boundary,
+   so the pass reads as one column of water losing its light, not five
+   separate boxes. */
+#zones.is-horizontal .zones__panel::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 4%;
+  bottom: 8%;
+  left: 62%;
+  width: 70%;
+  background: radial-gradient(ellipse 50% 48% at 50% 46%, rgb(var(--bleed, 0 0 0) / var(--bleed-a, 0)), transparent 74%);
+  pointer-events: none;
+}
+#zones.is-horizontal [data-layer='sunlight'] {
+  --bleed: 217 251 255;
+  --bleed-a: 0.09;
+}
+#zones.is-horizontal [data-layer='twilight'] {
+  --bleed: 58 168 255;
+  --bleed-a: 0.065;
+}
+#zones.is-horizontal [data-layer='midnight'] {
+  --bleed: 255 176 84;
+  --bleed-a: 0.03;
+}
+#zones.is-horizontal [data-layer='abyss'] {
+  --bleed: 108 248 232;
+  --bleed-a: 0.03;
+}
+#zones.is-horizontal .zones__panel[data-layer='hadal']::after {
+  display: none;
+}
 
 #zones.is-horizontal .zones__copy {
   position: absolute;
@@ -871,6 +1051,15 @@
 
 /* ========================================================= reduced motion */
 #zones.is-static .zones__pin--deep::after,
-#zones.is-static .zones__where-dot {
+#zones.is-static .zones__where-dot,
+#zones.is-static .zones__window::before,
+#zones.is-static .zones__window::after {
   animation: none;
+}
+#zones.is-static .zones__window::before,
+#zones.is-static .zones__window::after {
+  will-change: auto;
+}
+#zones.is-static .zones__window::after {
+  opacity: 0.8;
 }

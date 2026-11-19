@@ -12,6 +12,7 @@
  *     tracking opening from -0.012em to +0.03em so pressure reads as the digits
  *     being pressed apart rather than fused), a puff of silt lifts into the red
  *     light and hangs there, and a sonar ring runs out across the sediment.
+ *     Once the figure has settled, the lamps catch it: a sheen runs across it.
  *
  * The floor is generated: a perspective sediment plane (relief, grain, a sea
  * cucumber's track, burrows) lit by a pool of red lamp light, the trench walls
@@ -507,6 +508,21 @@ function createScene(ctx, root) {
     pool.addColorStop(1, 'rgba(255,59,47,0)')
     g.fillStyle = pool
     g.fillRect(0, horizon - Hs * 0.3, W, H)
+    // the lamps' light hanging in the water just above the sediment: a low,
+    // wide layer of scatter that hugs the floor and thins with height
+    const fogY = poolY - Hs * 0.06
+    const fogRx = W * (mobile ? 0.46 : 0.34)
+    const fogRy = Hs * 0.11
+    g.save()
+    g.translate(cx, fogY)
+    g.scale(1, fogRy / fogRx)
+    const fog = g.createRadialGradient(0, 0, 0, 0, 0, fogRx)
+    fog.addColorStop(0, 'rgba(255,92,70,0.13)')
+    fog.addColorStop(0.45, 'rgba(255,66,50,0.06)')
+    fog.addColorStop(1, 'rgba(255,59,47,0)')
+    g.fillStyle = fog
+    g.fillRect(-fogRx, -fogRx, fogRx * 2, fogRx * 2)
+    g.restore()
     g.globalCompositeOperation = 'source-over'
 
     // the sonar layers: the sediment, and the walls' contours
@@ -1122,6 +1138,19 @@ function arrival(ctx, root, scene) {
   const mid = (chars.length - 1) / 2
   const dist = chars.map((_, i) => Math.abs(i - mid) / (mid || 1))
 
+  // the speculars span the whole figure: each character shows its own slice
+  const measureSheen = () => {
+    const d = digits.getBoundingClientRect()
+    if (!d.width) return
+    const xs = chars.map((ch) => ch.getBoundingClientRect().left - d.left)
+    fig.style.setProperty('--fin-fw', `${d.width.toFixed(1)}px`)
+    chars.forEach((ch, i) => ch.style.setProperty('--fin-cx', `${xs[i].toFixed(1)}px`))
+  }
+  // measured on every refresh (hand-over, fonts, resize), never during init
+  ScrollTrigger.addEventListener('refresh', measureSheen)
+  const S = { v: -40 }
+  const applySheen = () => fig.style.setProperty('--fin-sheen', `${S.v.toFixed(2)}%`)
+
   const P = { c: 0, floor: 0, rise: 0 }
   const apply = () => {
     const c = clamp(P.c)
@@ -1156,6 +1185,8 @@ function arrival(ctx, root, scene) {
     landed = false
     api.landed = false
     tl.pause()
+    S.v = -40
+    applySheen()
     gsap.set(unit, { opacity: 0 })
     gsap.set(reveals, { opacity: 0 })
     scene.setArrived(false)
@@ -1180,6 +1211,9 @@ function arrival(ctx, root, scene) {
     .to(P, { floor: 1, duration: 2.2, ease: 'power2.out', onUpdate: apply }, 0.35)
     .to(unit, { opacity: 1, duration: 1, ease: 'power1.out' }, 0.8)
     .to(reveals, { opacity: 1, duration: 1.2, ease: 'power1.out', stagger: 0.15 }, 1)
+    // the figure has settled: the lamps catch it, and a sheen runs across it
+    .call(measureSheen, null, 1.4)
+    .fromTo(S, { v: -30 }, { v: 132, duration: 1.9, ease: 'power1.inOut', onUpdate: applySheen }, 1.42)
 
   const land = (instant = false) => {
     if (landed) return

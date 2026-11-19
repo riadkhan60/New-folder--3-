@@ -5,8 +5,10 @@
  * lamp finds the heading first and reads it, alone in the dark; then each
  * guest's words in turn, each somewhere else in the dark. A volumetric red
  * beam (canvas) pans across the words; each word is dark water until the beam
- * reaches it, glows hot while it is under the light, then stays lit. The silt
- * hanging in the water only shows inside the cone.
+ * reaches it, glows hot while it is under the light, then stays lit. Once a
+ * guest is read, the lamp drifts back over their words and holds them,
+ * swaying a little as a hovering submersible does. The silt hanging in the
+ * water only shows inside the cone; a flake turned square to the lamp glints.
  *
  * Scroll chooses who is speaking (the lamp dims and swings to the next guest
  * while the quotes crossfade: opacity only, so all three stay readable to
@@ -17,7 +19,7 @@
  * leaves, so the beam never ends on a hard edge.
  *
  * Mobile: stacked; the heading and each quote are swept once by the light as
- * they arrive. Reduced motion: stacked, fully lit, no canvas.
+ * they arrive, and each quote comes up in a pool of the lamp's light. Reduced motion: stacked, fully lit, no canvas.
  *
  * The beam canvas and its sprites are only built near the screen (the intro
  * never pays for them) and their memory is handed back far from it.
@@ -58,20 +60,26 @@ export function init(ctx) {
 /* ======================================================= mobile: stacked */
 function stacked(ctx, { title, texts, cites }) {
   const { gsap } = ctx
-  // the heading is read first, a little quicker than the guests' words
+  // the heading is read first, a little quicker than the guests' words; each
+  // guest's words come up in a pool of the lamp's light as they are read
+  const figs = texts.map((t) => t.closest('.voices__figure'))
   ;[title, ...texts].forEach((t, i) => {
     if (!t) return
     gsap.set(t, { '--b': '-30%' })
     const cite = i ? cites[i - 1] : null
+    const fig = i ? figs[i - 1] : null
     if (cite) gsap.set(cite, { opacity: 0.35 })
+    if (fig) gsap.set(fig, { '--vo-pool': 0 })
     const tl = gsap
       .timeline({
         paused: true,
         scrollTrigger: { trigger: t, start: i ? 'top 78%' : 'top 84%', toggleActions: 'play none none none' },
       })
       .to(t, { '--b': '135%', duration: i ? 2.6 : 1.7, ease: 'power1.inOut' })
+    if (fig) tl.to(fig, { '--vo-pool': 1, duration: 2.2, ease: 'power2.out' }, 0.2)
     if (cite) tl.to(cite, { opacity: 1, duration: 1.2, ease: 'power2.out' }, '-=1.1')
   })
+  return () => gsap.set(figs, { clearProps: '--vo-pool' })
 }
 
 /* ===================================================== desktop: the stage */
@@ -82,6 +90,9 @@ function staged(ctx, { root, stage, title, items, texts, cites, ticks, canvas })
   // what the lamp reads, in order: the heading, then the three guests
   const lines = [title, ...texts]
   const q = lines.map(() => ({ p: -0.32 })) // the beam's position through each line
+  // where the lamp comes to rest once a line is read: it drifts back over the
+  // words and holds them, softly, instead of leaving them in the dark
+  const rest = lines.map(() => ({ p: 1.32 }))
   const reading = lines.map(() => false)
   const read = lines.map(() => false)
   // k = the line the lamp is on; base = dims while it swings between guests;
@@ -91,7 +102,10 @@ function staged(ctx, { root, stage, title, items, texts, cites, ticks, canvas })
     base: 1,
     get on() {
       const k = clamp(Math.round(this.k), 0, lines.length - 1)
-      return this.base * (read[k] && !reading[k] ? 0.42 : 1)
+      return this.base * (read[k] && !reading[k] ? 0.6 : 1)
+    },
+    resting(k) {
+      return read[k] && !reading[k]
     },
   }
 
@@ -113,6 +127,8 @@ function staged(ctx, { root, stage, title, items, texts, cites, ticks, canvas })
       onComplete: () => {
         reading[i] = false
         read[i] = true
+        // the lamp eases back across the words and settles on them
+        gsap.fromTo(rest[i], { p: 1.32 }, { p: i ? 0.56 : 0.5, duration: 3.4, ease: 'power2.inOut' })
       },
     })
     if (i) {
@@ -208,14 +224,14 @@ function staged(ctx, { root, stage, title, items, texts, cites, ticks, canvas })
   ScrollTrigger.addEventListener('refresh', onRefresh)
   // the beam aims at the heading wherever its rise has taken it
   const shift = (i) => (i ? 0 : tt.y)
-  const stopCanvas = beam(ctx, { stage, canvas, texts: lines, q, lamp, shift })
+  const stopCanvas = beam(ctx, { stage, canvas, texts: lines, q, rest, lamp, shift })
 
   return () => {
     stopCanvas?.()
     titleST.kill()
     ScrollTrigger.removeEventListener('refresh', onRefresh)
     title.style.translate = ''
-    gsap.killTweensOf([...q, ...items, ...cites])
+    gsap.killTweensOf([...q, ...rest, ...items, ...cites])
     root.classList.remove('is-staged')
     lines.forEach((t) => t.style.removeProperty('--b'))
     gsap.set([title, ...items], { clearProps: 'opacity,pointerEvents' })
@@ -251,7 +267,7 @@ const profile = (v) => {
   return edge * core + rim * edge + halo
 }
 
-function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
+function beam(ctx, { stage, canvas, texts, q, rest, lamp, shift = () => 0 }) {
   const c2 = canvas.getContext('2d')
   if (!c2) return null
   const dpr = Math.min(ctx.dpr, 1.5)
@@ -259,9 +275,13 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
   let W = 0
   let H = 0
   let boxes = []
+  // two cones with different shafts, cross-faded so the light seems to move
+  // through the water rather than sit in it
+  let cones = null
   let cone = null
   let glow = null
   let dot = null
+  let glint = null
   let bokeh = null
   let parts = []
   let raf = 0
@@ -271,8 +291,8 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
   const cur = { x: 0, y: 0, on: 0, ready: false }
 
   /* ---------------------------------------------------- sprites */
-  function makeCone() {
-    // vertical cone, apex at top centre: defined edge, streaks, axial falloff
+  function makeCone(seed) {
+    // vertical cone, apex at top centre: defined edge, shafts, axial falloff
     const w = 320
     const h = 640
     const cv = document.createElement('canvas')
@@ -280,17 +300,22 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
     cv.height = h
     const g = cv.getContext('2d')
     const img = g.createImageData(w, h)
-    const tanPx = TAN // the edge reaches ~55% of the sprite width at the far end
     for (let y = 0; y < h; y++) {
       const u = y / h
-      const half = 2.5 + y * tanPx
+      const half = 2.5 + y * TAN
       const ax = Math.pow(1 - u, 1.15) * (0.3 + 0.7 * Math.min(1, y / 46))
       for (let x = 0; x < w; x++) {
         const v = (x - w / 2) / half
         if (Math.abs(v) > 1.9) continue
-        // streaks radiate from the apex: noise across the angle, not the length
-        const streak = 0.8 + 0.22 * n1(v * 7.5 + 4.2) + 0.1 * n1(v * 21 + 1.3) - 0.08 * n1(u * 3 + v * 2)
-        const a = profile(v) * streak * ax
+        // shafts radiate from the apex: noise across the angle, broken up a
+        // little along the length so they read as light in moving water
+        const shaft =
+          0.74 +
+          0.3 * n1(v * 7.5 + seed) +
+          0.14 * n1(v * 21 + seed * 1.7) -
+          0.1 * n1(u * 3.2 + v * 2 + seed) +
+          0.08 * n1(u * 9 + v * 5 + seed * 0.3)
+        const a = profile(v) * shaft * ax
         const i = (y * w + x) * 4
         img.data[i] = RED[0]
         img.data[i + 1] = RED[1] + 18
@@ -299,8 +324,7 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
       }
     }
     g.putImageData(img, 0, 0)
-    cone = cv
-    cone.tan = tanPx
+    return cv
   }
   function radial(size, stops) {
     const cv = document.createElement('canvas')
@@ -314,7 +338,7 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
   }
 
   function seed() {
-    const n = Math.round(clamp((W * H) / 3600, 140, 420))
+    const n = Math.round(clamp((W * H) / 3200, 160, 460))
     parts = Array.from({ length: n }, () => {
       const z = Math.random()
       return {
@@ -325,15 +349,17 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
         vy: 3 + z * 9 + Math.random() * 4, // silt sinks, slowly
         ph: Math.random() * Math.PI * 2,
         sw: 0.15 + Math.random() * 0.5,
+        // a flat flake turns as it sinks and catches the lamp now and then
+        tw: 0.4 + Math.random() * 1.1,
       }
     })
     // a few large out-of-focus particles close to the viewport
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 11; i++) {
       parts.push({
         x: Math.random() * W,
         y: Math.random() * H,
         z: 1.6,
-        r: 18 + Math.random() * 30,
+        r: 18 + Math.random() * 34,
         vy: 6 + Math.random() * 6,
         ph: Math.random() * Math.PI * 2,
         sw: 0.3,
@@ -360,8 +386,9 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
     canvas.width = Math.round(W * dpr)
     canvas.height = Math.round(H * dpr)
     allocated = true
-    if (!cone) {
-      makeCone()
+    if (!cones) {
+      cones = [makeCone(4.2), makeCone(37.9)]
+      cone = cones[0]
       glow = radial(256, [
         [0, 'rgba(255,90,70,0.5)'],
         [0.35, 'rgba(255,59,47,0.16)'],
@@ -372,10 +399,18 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
         [0.22, 'rgba(255,128,106,0.8)'],
         [1, 'rgba(255,59,47,0)'],
       ])
+      // a flake turned square to the lamp: a white-hot point with a red bloom
+      glint = radial(48, [
+        [0, 'rgba(255,250,246,1)'],
+        [0.08, 'rgba(255,214,200,0.95)'],
+        [0.24, 'rgba(255,96,72,0.35)'],
+        [1, 'rgba(255,59,47,0)'],
+      ])
       bokeh = radial(128, [
         [0, 'rgba(255,90,70,0.22)'],
         [0.6, 'rgba(255,59,47,0.10)'],
-        [0.85, 'rgba(255,59,47,0.04)'],
+        [0.8, 'rgba(255,110,90,0.13)'],
+        [0.9, 'rgba(255,59,47,0.04)'],
         [1, 'rgba(255,59,47,0)'],
       ])
     }
@@ -383,17 +418,22 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
     if (!visible) draw(0)
   }
 
-  function target() {
+  function target(t1) {
     const k = clamp(Math.round(lamp.k), 0, boxes.length - 1)
     const b = boxes[k]
     if (!b) return { x: W / 2, y: H / 2 }
-    const p = q[k].p - 0.005
-    return { x: b.cx + ((p - 0.5) * b.L) / Math.sin(ANG), y: b.cy + shift(k) }
+    // reading: the beam is on the words; read: it rests on them and drifts a
+    // little, the way a lamp on a hovering submersible does
+    const still = lamp.resting(k)
+    const p = (still ? rest[k].p + 0.05 * Math.sin(t1 * 0.31 + k) : q[k].p) - 0.005
+    const dy = still ? Math.sin(t1 * 0.23 + k * 2.1) * b.h * 0.07 : 0
+    return { x: b.cx + ((p - 0.5) * b.L) / Math.sin(ANG), y: b.cy + shift(k) + dy }
   }
 
   /* ------------------------------------------------------- frame */
   function draw(dt) {
-    const t = target()
+    const t1 = performance.now() / 1000
+    const t = target(t1)
     if (!cur.ready) {
       cur.x = t.x
       cur.y = t.y
@@ -429,13 +469,19 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
     const len = dist * 1.7
     const on = cur.on * gain
 
-    // volumetric cone (the sprite's half-width grows by cone.tan per px)
+    // volumetric cone (the sprite's half-width grows by TAN per px): the
+    // forward scatter around it first, then two sets of shafts trading places
     const s = len / cone.height
+    const mix = 0.5 + 0.5 * Math.sin(t1 * 0.37)
     c2.save()
     c2.translate(sx, sy)
     c2.rotate(Math.atan2(ay, ax) - Math.PI / 2)
-    c2.globalAlpha = 0.4 * on
-    c2.drawImage(cone, (-cone.width * s) / 2, 0, cone.width * s, len)
+    c2.globalAlpha = 0.07 * on
+    c2.drawImage(cones[1], (-cone.width * s * 2.4) / 2, 0, cone.width * s * 2.4, len)
+    c2.globalAlpha = 0.4 * on * (0.35 + 0.65 * mix)
+    c2.drawImage(cones[0], (-cone.width * s) / 2, 0, cone.width * s, len)
+    c2.globalAlpha = 0.4 * on * (0.35 + 0.65 * (1 - mix))
+    c2.drawImage(cones[1], (-cone.width * s) / 2, 0, cone.width * s, len)
     c2.restore()
 
     // where it meets the words
@@ -443,12 +489,13 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
     c2.globalAlpha = 0.42 * on
     c2.drawImage(glow, cur.x - gr, cur.y - gr * 0.8, gr * 2, gr * 1.6)
 
-    // silt: lit inside the cone (bright, a touch larger), a faint glimmer outside
-    const t1 = performance.now() / 1000
+    // silt: lit inside the cone (bright, a touch larger), a faint glimmer
+    // outside; it turns slowly as it sinks, and a flake square to the lamp
+    // flashes for a moment
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i]
       p.y += p.vy * dt
-      p.x += Math.sin(t1 * p.sw + p.ph) * 4 * dt
+      p.x += (Math.sin(t1 * p.sw + p.ph) * 4 + Math.sin(p.y * 0.006 + t1 * 0.13) * 3) * dt
       if (p.y > H + 40) {
         p.y = -40
         p.x = Math.random() * W
@@ -458,7 +505,7 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
       const u = px * ax + py * ay
       if (u <= 0) continue
       const v = px * ay - py * ax
-      const half = 2.5 * s + u * cone.tan
+      const half = 2.5 * s + u * TAN
       const f = profile(v / half) * Math.pow(clamp(1 - u / len), 0.8)
       const a = (p.big ? 0 : 0.03 * gain) + f * on
       if (a < 0.02) continue
@@ -469,6 +516,13 @@ function beam(ctx, { stage, canvas, texts, q, lamp, shift = () => 0 }) {
         const r = p.r * (2 + f * 1.8)
         c2.globalAlpha = clamp(a * (0.6 + p.z * 0.6))
         c2.drawImage(dot, p.x - r, p.y - r, r * 2, r * 2)
+        // the glint: only well inside the beam, and only briefly
+        const flash = Math.pow(Math.max(0, Math.sin(t1 * p.tw + p.ph * 3)), 24)
+        if (flash > 0.04 && f > 0.35) {
+          const gr2 = (3 + p.z * 5) * (0.7 + flash * 0.6)
+          c2.globalAlpha = clamp(flash * f * on * 1.1)
+          c2.drawImage(glint, p.x - gr2, p.y - gr2, gr2 * 2, gr2 * 2)
+        }
       }
     }
     c2.globalAlpha = 1

@@ -3,11 +3,13 @@
  *
  * At the floor the wordmark sits under full pressure (Anybody wdth 50, heavy),
  * like every display line this deep. "Return to the surface" is the bookend of
- * the dive: the page's content dissolves behind a veil of water (only colour,
+ * the dive (its tittle is the sub's lamp, and the letters beside it catch its
+ * light): the page's content dissolves behind a veil of water (only colour,
  * light and the counting HUD stay sharp), the wordmark decompresses (wdth
  * 50 → 150, heavy → light) as the sub leaves the floor, a stream of bubbles
- * rises past the depth ruler (lit red in the hadal zone, by bioluminescence
- * higher up, then by sunlight) while the page climbs back through every
+ * rises past the depth ruler (glassy, lit red in the hadal zone, by
+ * bioluminescence higher up, then by sunlight, which comes back first as
+ * shafts from above over the last 1,500 m) while the page climbs back through every
  * layer, and the surface arrives with a wash of sunlight and one line. Focus
  * then moves to the nav wordmark so the keyboard is where the eyes are. If the
  * visitor takes over the scroll mid-ascent, everything tidies itself away.
@@ -54,6 +56,26 @@ export function init(ctx) {
   }
 
   const bubbles = createBubbles(ctx, canvas)
+
+  // where the lamp (the i's tittle) is: the letters beside it and the water
+  // around it take their light from there
+  const tittle = root.querySelector('.foot__tittle')
+  const brand = root.querySelector('.foot__brand')
+  const placeLamp = () => {
+    if (!word || !tittle || !brand) return
+    const w = word.getBoundingClientRect()
+    const t = tittle.getBoundingClientRect()
+    const b = brand.getBoundingClientRect()
+    if (!w.width) return
+    const x = t.left + t.width / 2
+    const y = t.top + t.height / 2
+    word.style.setProperty('--foot-lx', `${(x - w.left).toFixed(1)}px`)
+    word.style.setProperty('--foot-ly', `${(y - w.top).toFixed(1)}px`)
+    brand.style.setProperty('--foot-px', `${(x - b.left).toFixed(1)}px`)
+    brand.style.setProperty('--foot-py', `${(y - b.top).toFixed(1)}px`)
+  }
+  // measured on every refresh (hand-over, fonts, resize), never during init
+  ctx.ScrollTrigger.addEventListener('refresh', placeLamp)
 
   let rising = false
   let safety = 0
@@ -115,6 +137,7 @@ export function init(ctx) {
     gsap.killTweensOf(P)
     P.k = 0
     applyWord()
+    placeLamp()
   }
   const surfaced = () => {
     if (!rising) return
@@ -181,15 +204,83 @@ export function init(ctx) {
 
 /* --------------------------------------------------------------- bubbles */
 // light by depth: the red lamps in the hadal zone, bioluminescence above it,
-// sunlight in the last few hundred metres
+// sunlight in the last few hundred metres. As weights, so each light can have
+// its own pre-drawn bubble
 const RED = [255, 96, 80]
 const BIO = [108, 248, 232]
 const SUN = [217, 251, 255]
-function lightAt(d) {
+function lightWeights(d) {
   const a = smooth(5600, 6400, d) // 1 = red
   const b = smooth(300, 1200, d) // 0 = sunlight
-  const c = BIO.map((v, i) => v + (RED[i] - v) * a)
-  return c.map((v, i) => Math.round(SUN[i] + (v - SUN[i]) * b))
+  return [b * a, b * (1 - a), 1 - b] // red, bio, sun
+}
+
+// a bubble is a lens: nearly clear in the middle, a bright rim where the light
+// skims its surface, a window of the light above caught at the top, and a
+// faint second reflection low on the far side
+function bubbleSprite([r, g, b]) {
+  const S = 64
+  const cv = document.createElement('canvas')
+  cv.width = cv.height = S
+  const c = cv.getContext('2d')
+  const R = S / 2 - 1
+  const body = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, R)
+  body.addColorStop(0, `rgba(${r},${g},${b},0.03)`)
+  body.addColorStop(0.62, `rgba(${r},${g},${b},0.07)`)
+  body.addColorStop(0.84, `rgba(${r},${g},${b},0.3)`)
+  body.addColorStop(0.95, `rgba(${Math.min(255, r + 50)},${Math.min(255, g + 50)},${Math.min(255, b + 50)},0.95)`)
+  body.addColorStop(1, `rgba(${r},${g},${b},0)`)
+  c.fillStyle = body
+  c.beginPath()
+  c.arc(S / 2, S / 2, R, 0, Math.PI * 2)
+  c.fill()
+  // the window of light above, caught on the upper surface
+  c.save()
+  c.translate(S / 2 - R * 0.3, S / 2 - R * 0.42)
+  c.rotate(-0.55)
+  const hl = c.createRadialGradient(0, 0, 0, 0, 0, R * 0.36)
+  hl.addColorStop(0, 'rgba(255,255,255,0.95)')
+  hl.addColorStop(0.45, 'rgba(255,255,255,0.5)')
+  hl.addColorStop(1, 'rgba(255,255,255,0)')
+  c.scale(1, 0.62)
+  c.fillStyle = hl
+  c.beginPath()
+  c.arc(0, 0, R * 0.36, 0, Math.PI * 2)
+  c.fill()
+  c.restore()
+  // the faint return off the far side
+  c.strokeStyle = `rgba(${Math.min(255, r + 30)},${Math.min(255, g + 30)},${Math.min(255, b + 30)},0.4)`
+  c.lineWidth = S * 0.035
+  c.lineCap = 'round'
+  c.beginPath()
+  c.arc(S / 2, S / 2, R * 0.72, 0.35, 1.25)
+  c.stroke()
+  return cv
+}
+
+// one soft shaft of sunlight, brightest where it enters at the top
+function shaftSprite() {
+  const w = 64
+  const h = 512
+  const cv = document.createElement('canvas')
+  cv.width = w
+  cv.height = h
+  const c = cv.getContext('2d')
+  const img = c.createImageData(w, h)
+  for (let y = 0; y < h; y++) {
+    const v = Math.pow(1 - y / h, 1.6) * Math.min(1, y / 18 + 0.35)
+    for (let x = 0; x < w; x++) {
+      const u = (x - w / 2) / (w / 2)
+      const a = Math.exp(-u * u * 3.2) * v
+      const i = (y * w + x) * 4
+      img.data[i] = SUN[0]
+      img.data[i + 1] = SUN[1]
+      img.data[i + 2] = SUN[2]
+      img.data[i + 3] = Math.round(a * 255)
+    }
+  }
+  c.putImageData(img, 0, 0)
+  return cv
 }
 
 function createBubbles(ctx, canvas) {
@@ -202,6 +293,15 @@ function createBubbles(ctx, canvas) {
   let last = 0
   let acc = 0
   const list = []
+  let sprites = null
+  let shaft = null
+  // the shafts of returning sunlight, fanned from a point above the screen
+  const SHAFTS = Array.from({ length: 7 }, (_, i) => ({
+    x: (i + 0.5) / 7 + (Math.random() - 0.5) * 0.08,
+    w: 0.05 + Math.random() * 0.07,
+    ph: Math.random() * 6.28,
+    sp: 0.4 + Math.random() * 0.5,
+  }))
 
   const size = () => {
     W = window.innerWidth
@@ -215,7 +315,7 @@ function createBubbles(ctx, canvas) {
     // most of the stream rises past the depth ruler, the rest anywhere
     const edge = Math.random() < 0.6
     const x = edge ? W * (0.78 + 0.22 * Math.random()) : W * Math.random()
-    const r = 1.5 + Math.pow(Math.random(), 2.2) * (ctx.isMobile() ? 6 : 9)
+    const r = 1.5 + Math.pow(Math.random(), 2.2) * (ctx.isMobile() ? 6 : 10)
     list.push({
       x,
       y: H + r + Math.random() * 40,
@@ -237,28 +337,50 @@ function createBubbles(ctx, canvas) {
         acc -= 1
       }
     }
-    const [r0, g0, b0] = lightAt(ctx.depth?.get().depth ?? 0)
+    const depth = ctx.depth?.get().depth ?? 0
+    const wts = lightWeights(depth)
     g.clearRect(0, 0, W, H)
     const t = now / 1000
+
+    // the sun comes back first as light from above: shafts that strengthen
+    // over the last 1,500 m and sway with the surface
+    const sun = (1 - smooth(150, 1500, depth)) * (on ? 1 : 0.85)
+    if (sun > 0.01) {
+      g.globalCompositeOperation = 'lighter'
+      const ox = W * 0.5
+      const oy = -H * 0.5
+      for (const sh of SHAFTS) {
+        const x = W * sh.x + Math.sin(t * sh.sp + sh.ph) * W * 0.015
+        const ang = Math.atan2(x - ox, -oy) * 0.9
+        const len = H * 1.35
+        const wd = W * sh.w * (1 + 0.25 * Math.sin(t * sh.sp * 1.3 + sh.ph))
+        g.save()
+        g.translate(x, 0)
+        g.rotate(-ang)
+        g.globalAlpha = sun * (0.1 + 0.08 * Math.sin(t * sh.sp * 0.8 + sh.ph * 2))
+        g.drawImage(shaft, -wd / 2, -H * 0.05, wd, len)
+        g.restore()
+      }
+      g.globalCompositeOperation = 'source-over'
+    }
+
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i]
       p.y -= p.vy * dt * (0.55 + speed * 0.6)
-      const x = p.x + Math.sin(t * 3 + p.ph) * p.sw * 0.3
       if (p.y < -p.r * 2) {
         list.splice(i, 1)
         continue
       }
-      g.globalAlpha = 0.75
-      g.strokeStyle = `rgb(${r0} ${g0} ${b0})`
-      g.lineWidth = p.r > 4 ? 1.2 : 0.9
-      g.beginPath()
-      g.ellipse(x, p.y, p.r, p.r * 0.92, 0, 0, 6.2832)
-      g.stroke()
-      g.globalAlpha = 0.85
-      g.fillStyle = '#fff'
-      g.beginPath()
-      g.arc(x - p.r * 0.35, p.y - p.r * 0.38, Math.max(0.6, p.r * 0.18), 0, 6.2832)
-      g.fill()
+      const x = p.x + Math.sin(t * 3 + p.ph) * p.sw * 0.3
+      // larger bubbles wobble as they rise
+      const wob = p.r > 4 ? Math.sin(t * 9 + p.ph) * 0.07 : 0
+      const rw = p.r * (1 + wob)
+      const rh = p.r * (0.94 - wob)
+      for (let k = 0; k < 3; k++) {
+        if (wts[k] < 0.02) continue
+        g.globalAlpha = wts[k] * 0.95
+        g.drawImage(sprites[k], x - rw, p.y - rh, rw * 2, rh * 2)
+      }
     }
     g.globalAlpha = 1
     if ((on || list.length) && !document.hidden) raf = requestAnimationFrame(frame)
@@ -267,6 +389,10 @@ function createBubbles(ctx, canvas) {
   return {
     start() {
       if (ctx.reducedMotion) return
+      if (!sprites) {
+        sprites = [bubbleSprite(RED), bubbleSprite(BIO), bubbleSprite(SUN)]
+        shaft = shaftSprite()
+      }
       size()
       on = true
       canvas.classList.add('is-on')

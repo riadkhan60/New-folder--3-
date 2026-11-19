@@ -170,10 +170,6 @@
   position: relative;
   max-width: 21rem;
 }
-#life:not(.is-float) .creatures__specimen {
-  padding-top: var(--s-4);
-  border-top: 1px solid color-mix(in srgb, var(--glow) 50%, transparent);
-}
 
 /* ---------------------------------------- specimens: floating labels */
 #life.is-float .creatures__specimens {
@@ -254,8 +250,39 @@
   color: var(--c-ink-2);
 }
 .creatures__about {
-  margin-top: 0.55rem;
+  margin-top: 0.7rem;
   max-width: 17.5rem;
+}
+/* Each entry is set like a museum plate: name and binomial above a
+   hairline in the animal's own light, the log and the fact below. The
+   rule is brightest where the leader runs in (left, or right when the
+   plate sits left of its animal) and fades across the plate. */
+.creatures__about::before {
+  content: '';
+  display: block;
+  height: 1px;
+  margin-bottom: 0.62rem;
+  background: linear-gradient(
+    var(--rule-dir, 90deg),
+    color-mix(in srgb, var(--glow) 92%, transparent),
+    color-mix(in srgb, var(--glow) 30%, transparent) 44%,
+    transparent 96%
+  );
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--glow) 70%, transparent));
+  transform-origin: 0 50%;
+}
+/* the comb jelly makes colour, not light: its rule is the split spectrum */
+.creatures__specimen[data-animal='comb'] .creatures__about::before {
+  background: linear-gradient(var(--rule-dir, 90deg), #ff7a90, #ffc75a 16%, #9dff86 30%, #7af6ea 44%, #5ab4ff 60%, #c08cff 76%, #ff7a90);
+  -webkit-mask-image: linear-gradient(var(--rule-dir, 90deg), #000, rgb(0 0 0 / 0.4) 46%, transparent 96%);
+  mask-image: linear-gradient(var(--rule-dir, 90deg), #000, rgb(0 0 0 / 0.4) 46%, transparent 96%);
+  filter: drop-shadow(0 0 3px rgb(234 246 244 / 0.3));
+}
+#life.is-float .creatures__specimen[data-side='l'] {
+  --rule-dir: 270deg;
+}
+#life.is-float .creatures__specimen[data-side='l'] .creatures__about::before {
+  transform-origin: 100% 50%;
 }
 .creatures__depth {
   display: block;
@@ -266,11 +293,13 @@
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--glow) 80%, var(--c-ink));
+  text-shadow: 0 0 12px color-mix(in srgb, var(--glow) 42%, transparent);
 }
 .creatures__range {
   display: block;
   color: var(--c-ink-3);
   white-space: nowrap;
+  text-shadow: none;
 }
 .creatures__fact {
   display: block;
@@ -298,6 +327,47 @@
 }
 #life.is-float .creatures__specimen.is-on .creatures__about {
   transition-delay: 0.12s;
+}
+
+/* The plate comes up like a camera finding focus: each line sharpens out
+   of a soft blur in turn, and the hairline draws out from the leader. */
+#life.is-float .creatures__common,
+#life.is-float .creatures__sci,
+#life.is-float .creatures__depth,
+#life.is-float .creatures__fact {
+  filter: blur(4px);
+  transform: translate3d(0, 3px, 0);
+  transition:
+    opacity 0.6s var(--ease-out),
+    filter 0.5s var(--ease-out),
+    transform 0.5s var(--ease-out);
+}
+#life.is-float .creatures__about::before {
+  transform: scaleX(0);
+  transition: transform 0.4s var(--ease-out);
+}
+#life.is-float .creatures__specimen:is(.is-on, :focus-within) :is(.creatures__common, .creatures__sci, .creatures__depth, .creatures__fact) {
+  filter: none;
+  transform: none;
+  transition-duration: 1s, 1.1s, 1.1s;
+}
+#life.is-float .creatures__specimen:is(.is-on, :focus-within) .creatures__about::before {
+  transform: none;
+  transition-duration: 1.3s;
+  transition-delay: 0.14s;
+}
+#life.is-float .creatures__specimen:is(.is-on, :focus-within) .creatures__sci {
+  transition-delay: 0.07s;
+}
+#life.is-float .creatures__specimen:is(.is-on, :focus-within) .creatures__depth {
+  transition-delay: 0.22s;
+}
+#life.is-float .creatures__specimen:is(.is-on, :focus-within) .creatures__fact {
+  transition-delay: 0.3s;
+}
+/* the name carries a breath of its animal's light */
+#life.is-float .creatures__common {
+  text-shadow: 0 0 22px color-mix(in srgb, var(--glow) 30%, transparent);
 }
 
 .creatures__name:focus-visible {

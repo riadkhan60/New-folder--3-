@@ -70,6 +70,42 @@ html.fin-is-diving .footer {
   font-stretch: var(--foot-wdth, 50%);
   font-weight: var(--foot-wght, 800);
   letter-spacing: var(--foot-track, 0.012em);
+  /* the tittle is a lamp, and the letters beside it catch its light; lower
+     down they fall away into the dark (footer.js puts --foot-lx/--foot-ly on
+     the lamp) */
+  background-image:
+    radial-gradient(
+      circle at var(--foot-lx, 56%) var(--foot-ly, 12%),
+      rgb(255 168 148) 0,
+      rgb(255 150 128 / 0.8) 0.2em,
+      rgb(255 140 118 / 0.4) 0.52em,
+      rgb(255 130 110 / 0) 1.15em
+    ),
+    linear-gradient(180deg, #f6fcfb 0%, var(--c-ink) 38%, #a3b4b2 100%);
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* the lamp's light in the water around it */
+.foot__brand {
+  position: relative;
+}
+
+.foot__brand::before {
+  content: '';
+  position: absolute;
+  left: var(--foot-px, 30%);
+  top: var(--foot-py, 0.6rem);
+  width: 26rem;
+  height: 18rem;
+  translate: -50% -50%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgb(255 59 47 / 0.17), rgb(255 59 47 / 0.06) 42%, transparent);
+  animation: foot-lamp 5.5s ease-in-out infinite;
 }
 
 .foot__i {
@@ -560,5 +596,14 @@ html.fin-is-diving .footer {
     margin-top: var(--s-5);
     padding-top: var(--s-4);
     font-size: 0.86rem;
+  }
+}
+
+/* text lit by a gradient would vanish in forced colours */
+@media (forced-colors: active) {
+  .foot__word-type {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
   }
 }

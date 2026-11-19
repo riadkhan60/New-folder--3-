@@ -126,7 +126,7 @@ export function init(ctx) {
       const from = Math.max(0, Math.floor(prevHead) + 1)
       const to = Math.min(N - 1, Math.floor(h))
       let n = 0
-      for (let i = from; i <= to && n < 5; i++, n++) sparkWord(words[i], to - from > 3 ? 2 : 6)
+      for (let i = from; i <= to && n < 5; i++, n++) sparkWord(words[i], to - from > 3 ? 2 : 6, true, to - from > 3 ? 1 : 2)
     }
     prevHead = h
   }
@@ -165,6 +165,21 @@ export function init(ctx) {
     g.fillRect(0, 0, 64, 64)
   }
 
+  // a mote: the cold pin-point of one plankton cell still glowing, long after
+  // the flash, with only a breath of halo
+  const mote = document.createElement('canvas')
+  mote.width = mote.height = 32
+  {
+    const g = mote.getContext('2d')
+    const grd = g.createRadialGradient(16, 16, 0, 16, 16, 16)
+    grd.addColorStop(0, 'rgba(236,255,252,1)')
+    grd.addColorStop(0.16, 'rgba(150,255,238,0.85)')
+    grd.addColorStop(0.42, 'rgba(108,248,232,0.16)')
+    grd.addColorStop(1, 'rgba(58,168,255,0)')
+    g.fillStyle = grd
+    g.fillRect(0, 0, 32, 32)
+  }
+
   // The backing store is allocated on the first spark and released whenever
   // the section leaves the screen (a full-viewport canvas is ~11 MB at 2x).
   let sized = false
@@ -182,14 +197,15 @@ export function init(ctx) {
     if (running) {
       gsap.ticker.remove(tickSparks)
       running = false
+      lastSY = null
     }
     particles.length = 0
     canvas.width = canvas.height = 0
     sized = false
   }
 
-  function sparkWord(el, count, withBloom = true) {
-    if (!c2d || !onScreen || document.hidden || particles.length > 260) return
+  function sparkWord(el, count, withBloom = true, motes = 2) {
+    if (!c2d || !onScreen || document.hidden || particles.length > 320) return
     if (!sized) sizeCanvas()
     const sr = stage.getBoundingClientRect()
     const r = el.getBoundingClientRect()
@@ -217,14 +233,37 @@ export function init(ctx) {
         tw: Math.random() * 6.28,
       })
     }
+    // and a few cells that stay lit: the wake the reading leaves behind,
+    // drifting and slowly sinking for several seconds before going out
+    for (let k = 0; k < motes; k++) {
+      particles.push({
+        x: r.left - sr.left + Math.random() * r.width,
+        y: r.top - sr.top + r.height * (0.35 + Math.random() * 0.6),
+        vx: (Math.random() - 0.5) * 9,
+        vy: 2 + Math.random() * 6,
+        age: 0,
+        life: 4.2 + Math.random() * 4,
+        size: 2.2 + Math.random() * 2.6,
+        tw: Math.random() * 6.28,
+        wob: 0.4 + Math.random() * 0.8,
+        mote: true,
+      })
+    }
     if (!running) {
       running = true
       gsap.ticker.add(tickSparks)
     }
   }
 
+  // The wake stays in the water while we sink: as the page scrolls, the
+  // motes stream up past the (pinned) passage, then settle when we stop.
+  const pageY = () => (ctx.lenis ? ctx.lenis.scroll : window.scrollY)
+  let lastSY = null
   function tickSparks(time, deltaMs) {
     const dt = Math.min(0.05, deltaMs / 1000)
+    const sy = pageY()
+    const sink = lastSY === null ? 0 : clamp(sy - lastSY, -80, 80) * 0.34
+    lastSY = sy
     c2d.setTransform(1, 0, 0, 1, 0, 0)
     c2d.clearRect(0, 0, canvas.width, canvas.height)
     c2d.setTransform(cdpr, 0, 0, cdpr, 0, 0)
@@ -237,8 +276,9 @@ export function init(ctx) {
         particles.splice(i, 1)
         continue
       }
-      p.vx *= 1 - 1.4 * dt
-      p.vy *= 1 - 0.9 * dt
+      const damp = p.mote ? 0.3 : 1 // the wake keeps drifting
+      p.vx *= 1 - 1.4 * dt * damp
+      p.vy *= 1 - 0.9 * dt * damp
       p.x += p.vx * dt
       p.y += p.vy * dt
       const env = t < 0.1 ? t / 0.1 : (1 - (t - 0.1) / 0.9) ** 1.6
@@ -246,6 +286,17 @@ export function init(ctx) {
         c2d.globalAlpha = clamp(env * 0.3)
         const s = p.size * (0.85 + 0.35 * t)
         c2d.drawImage(bloom, p.x - s * 1.5, p.y - s, s * 3, s * 2)
+        continue
+      }
+      if (p.mote) {
+        // a quick rise, a long, uneven glow, then out
+        const m = t < 0.06 ? t / 0.06 : (1 - (t - 0.06) / 0.94) ** 1.25
+        const tw = 0.62 + 0.38 * Math.sin(p.tw + time * (1.6 + p.wob))
+        p.x += Math.sin(time * p.wob + p.tw) * 4 * dt
+        p.y -= sink * (0.75 + 0.5 * p.wob)
+        c2d.globalAlpha = clamp(m * tw * 0.9)
+        const s = p.size * (1.6 + 0.4 * tw)
+        c2d.drawImage(mote, p.x - s, p.y - s, s * 2, s * 2)
         continue
       }
       const tw = 0.7 + 0.3 * Math.sin(p.tw + time * 9)
@@ -259,6 +310,7 @@ export function init(ctx) {
       c2d.clearRect(0, 0, canvas.width, canvas.height)
       gsap.ticker.remove(tickSparks)
       running = false
+      lastSY = null
     }
   }
 
@@ -302,14 +354,40 @@ export function init(ctx) {
       s.fontWeight = Math.round(260 + (target.wght - 260) * e)
       // the same flash of living light as the passage, peaking mid-entry
       const f = q > 0 && q < 1 ? Math.sin(Math.PI * q) ** 1.5 : 0
-      s.color = f > 0.01 ? `rgb(${Math.round(INK[0] + (GLOW[0] - INK[0]) * f * 0.85)} ${Math.round(INK[1] + (GLOW[1] - INK[1]) * f * 0.85)} ${Math.round(INK[2] + (GLOW[2] - INK[2]) * f * 0.85)})` : ''
+      // (the flash paints over the sunlit fill; at rest the fill shows)
+      const flash = f > 0.01 ? `rgb(${Math.round(INK[0] + (GLOW[0] - INK[0]) * f * 0.85)} ${Math.round(INK[1] + (GLOW[1] - INK[1]) * f * 0.85)} ${Math.round(INK[2] + (GLOW[2] - INK[2]) * f * 0.85)})` : ''
+      s.color = flash
+      if (flash) s.setProperty('-webkit-text-fill-color', flash)
+      else s.removeProperty('-webkit-text-fill-color')
       s.textShadow =
         f > 0.02
           ? `0 0 0.04em rgb(214 255 250 / ${(0.7 * f).toFixed(3)}), 0 0 0.18em rgb(${GLOW.join(' ')} / ${(0.6 * f).toFixed(3)}), 0 0 0.6em rgb(${GLOW2.join(' ')} / ${(0.35 * f).toFixed(3)})`
           : 'none'
-      if (pay.v > prevPay && was < 0.45 && q >= 0.45) sparkWord(pw[i], 4, false)
+      if (pay.v > prevPay && was < 0.45 && q >= 0.45) sparkWord(pw[i], 4, false, 3)
     }
+    // the line has settled at its final pressure: line the light up on it
+    if (pay.v >= 1 && prevPay < 1) requestAnimationFrame(placeCaustics)
     prevPay = pay.v
+    syncCaustic()
+  }
+
+  // One caustic pattern across the whole line: each word's background is
+  // shifted back by the word's own offset, so the veins run on unbroken
+  // from word to word. (Offsets ignore the entry transforms, which are gone
+  // by the time the line rests.)
+  function placeCaustics() {
+    for (const el of pw) {
+      el.style.setProperty('--ox', `${-el.offsetLeft}px`)
+      el.style.setProperty('--oy', `${-el.offsetTop}px`)
+    }
+  }
+  // the light only moves while the line can be seen
+  let causticOn = false
+  function syncCaustic() {
+    const on = onScreen && pay.v > 0.02 && !document.hidden
+    if (on === causticOn) return
+    causticOn = on
+    root.classList.toggle('is-caustic', on)
   }
 
   /* ------------------------------------------------------------ triggers */
@@ -318,6 +396,7 @@ export function init(ctx) {
   function measure() {
     H = root.offsetHeight
     SH = stage.offsetHeight
+    if (pw.length) requestAnimationFrame(placeCaustics)
     // re-size an allocated canvas to the new stage; otherwise stay lazy
     if (sized) sizeCanvas()
   }
@@ -416,11 +495,13 @@ export function init(ctx) {
     onToggle: (self) => {
       onScreen = self.isActive
       if (!onScreen) releaseCanvas()
+      syncCaustic()
     },
   })
 
   ScrollTrigger.addEventListener('refreshInit', measure)
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) particles.length = 0
+    syncCaustic()
   })
 }

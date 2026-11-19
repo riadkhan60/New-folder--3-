@@ -141,6 +141,8 @@
   letter-spacing: -0.012em;
   text-wrap: pretty;
   hanging-punctuation: first;
+  /* the words the lamp has read hold a little of its light around them */
+  filter: drop-shadow(0 0 0.42em rgb(255 59 47 / 0.24));
 }
 
 .voices__title::selection,
@@ -295,6 +297,21 @@
   }
   .voices__cite {
     padding-left: 2.2rem;
+  }
+  /* no beam on a phone: each guest's words sit in a pool of the lamp's light */
+  .voices__figure {
+    isolation: isolate;
+  }
+  .voices__figure::before {
+    content: '';
+    position: absolute;
+    inset: -14% 0 -6%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(70% 46% at 46% 34%, rgb(255 59 47 / 0.13), transparent 72%),
+      radial-gradient(40% 26% at 40% 30%, rgb(255 90 70 / 0.06), transparent 70%);
+    opacity: var(--vo-pool, 1);
   }
   .voices__log-row {
     padding-right: 0.9rem;

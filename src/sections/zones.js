@@ -99,7 +99,100 @@ function sprites() {
     ],
     128,
   )
+  SPR.snell = sprite([
+    [0, 'rgba(246,255,255,0.95)'],
+    [0.22, 'rgba(217,251,255,0.5)'],
+    [0.55, 'rgba(217,251,255,0.12)'],
+    [1, 'rgba(217,251,255,0)'],
+  ])
   return SPR
+}
+
+/* --------------------------------------------------------- depth of field
+   Out-of-focus motes between us and each scene: large, soft discs with the
+   faint bright rim of a real lens's bokeh, tinted by the light of their
+   layer, drifting slowly and sliding past faster than the scene behind
+   them as the window crosses the screen. They give every window a near
+   plane, a far plane and the water in between.                            */
+const BOKEH_TINT = {
+  sunlight: [217, 251, 255],
+  twilight: [118, 186, 255],
+  midnight: [176, 204, 236],
+  abyss: [108, 248, 232],
+  hadal: [150, 214, 226],
+}
+const BOKEH_GAIN = { sunlight: 1.25, twilight: 0.9, midnight: 0.62, abyss: 0.7, hadal: 0.55 }
+const LURE_TINT = [255, 186, 112]
+const bokehSprites = {}
+function bokehSprite(rgb) {
+  const key = rgb.join(',')
+  if (bokehSprites[key]) return bokehSprites[key]
+  const c = sprite(
+    [
+      [0, `rgba(${key},0.34)`],
+      [0.55, `rgba(${key},0.4)`],
+      [0.8, `rgba(${key},0.62)`],
+      [0.88, `rgba(${key},0.46)`],
+      [0.96, `rgba(${key},0.1)`],
+      [1, `rgba(${key},0)`],
+    ],
+    96,
+  )
+  bokehSprites[key] = c
+  return c
+}
+function makeBokeh(w, h, seed) {
+  const r = rng(seed)
+  const n = Math.round(clamp((w * h) / 34000, 6, 15))
+  return Array.from({ length: n }, () => {
+    const z = r() // 0 far … 1 near
+    return {
+      x: r() * w,
+      y: h * (0.04 + r() * 0.92),
+      z,
+      r: 5 + z ** 1.6 * 30 + r() * 4,
+      vx: (r() - 0.5) * (3 + 7 * z),
+      vy: -0.8 + r() * 4 * (0.4 + z), // most sink, a few rise
+      a: 0.05 + 0.11 * z + r() * 0.04,
+      ph: r() * TAU,
+      sp: 0.2 + r() * 0.5,
+    }
+  })
+}
+function drawBokeh(c, list, id, t, dt, w, h, k, lure) {
+  if (!list.length) return
+  const base = BOKEH_TINT[id] || BOKEH_TINT.abyss
+  const gain = BOKEH_GAIN[id] ?? 0.7
+  const spr = bokehSprite(base)
+  const warm = lure ? bokehSprite(LURE_TINT) : null
+  const lureR2 = lure ? (Math.min(w, h) * 0.36) ** 2 : 1
+  c.globalCompositeOperation = 'lighter'
+  for (const b of list) {
+    b.x += b.vx * dt
+    b.y += b.vy * dt
+    // the near ones slide past faster than the scene (parallax with the pass)
+    const span = w + b.r * 2
+    let x = b.x + (0.5 - k) * w * (0.08 + 0.5 * b.z)
+    x = ((((x + b.r) % span) + span) % span) - b.r
+    if (b.y > h + b.r) b.y = -b.r
+    else if (b.y < -b.r) b.y = h + b.r
+    const tw = 0.78 + 0.22 * Math.sin(t * b.sp + b.ph)
+    let a = b.a * gain * tw
+    let img = spr
+    if (warm) {
+      // motes near the anglerfish's lure catch its light
+      const near = Math.exp(-((x - lure[0]) ** 2 + (b.y - lure[1]) ** 2) / lureR2) * (lure[2] ?? 1)
+      if (near > 0.18) {
+        img = warm
+        a = b.a * (0.55 + 1.5 * near) * tw
+      } else a *= 0.75
+    }
+    if (a < 0.006) continue
+    c.globalAlpha = clamp(a)
+    c.drawImage(img, x - b.r, b.y - b.r, b.r * 2, b.r * 2)
+  }
+  c.globalAlpha = 1
+  c.globalCompositeOperation = 'source-over'
 }
 
 /* ------------------------------------------------------------- sunlight */
@@ -107,6 +200,7 @@ function sunlightScene() {
   let rays = []
   let motes = []
   let fish = []
+  let glints = []
   // share of the surface light at a given y: 100% at the top of the scale,
   // 10% half way, 1% at the bottom (200 m)
   const lightAt = (y, f) => Math.pow(10, -2 * clamp((y - f.y) / f.h, -0.25, 1.4))
@@ -130,6 +224,13 @@ function sunlightScene() {
         ph: r() * TAU,
         a: 0.35 + r() * 0.65,
         green: r() < 0.6,
+      }))
+      glints = Array.from({ length: Math.round(clamp(w / 34, 8, 24)) }, () => ({
+        x: r(),
+        v: 6 + r() * 14,
+        s: 2.5 + r() * 4,
+        sp: 0.6 + r() * 1.4,
+        ph: r() * TAU,
       }))
       const m = Math.round(clamp((w * h) / 2600, 80, 170))
       fish = Array.from({ length: m }, () => ({
@@ -166,27 +267,64 @@ function sunlightScene() {
         c.stroke()
       }
 
-      // shafts of sunlight, dimming tenfold every 100 m
-      const len = f.h * 1.15
-      const slant = h * 0.12
+      // where the sun is: high above and a little to the left. Its light
+      // comes through the surface as a bright, shifting window…
       const par = (0.5 - k) * w * 0.1
+      const sunX = w * 0.4 + par * 0.6 + Math.sin(t * 0.05) * w * 0.02
+      const sunY = sy - h * 1.1
+      const SN = sprites()
+      const bw = Math.min(w * 0.62, f.h * 1.4)
+      c.globalAlpha = 0.42 + 0.06 * Math.sin(t * 0.7)
+      c.drawImage(SN.snell, sunX + (sy - sunY) * 0.06 - bw / 2, sy - bw * 0.16, bw, bw * 0.32)
+      c.globalAlpha = 1
+
+      // …and falls as shafts that fan out from it, soft at their edges,
+      // dimming tenfold every 100 m
+      const len = f.h * 1.2
       for (const ray of rays) {
         const sway = Math.sin(t * ray.sp + ray.ph) * 22
-        const x0 = ray.x * w * 1.2 - w * 0.12 + sway + par
+        const x0 = ray.x * w * 1.2 - w * 0.1 + sway + par
         const q = (0.55 + 0.45 * Math.sin(t * ray.sp * 2.6 + ray.ph * 2)) * ray.a
-        const g = c.createLinearGradient(0, sy, 0, sy + len)
-        g.addColorStop(0, `rgba(217,251,255,${(0.2 * q).toFixed(3)})`)
-        g.addColorStop(0.43, `rgba(217,251,255,${(0.05 * q).toFixed(3)})`)
+        // direction away from the sun, so the shafts radiate
+        let dx = x0 - sunX
+        let dy = sy - sunY
+        const dl = Math.hypot(dx, dy)
+        dx /= dl
+        dy /= dl
+        const ex = x0 + dx * len
+        const ey = sy + dy * len
+        const spread = ray.bot / ray.top
+        const g = c.createLinearGradient(0, sy, 0, ey)
+        g.addColorStop(0, `rgba(217,251,255,${(0.16 * q).toFixed(3)})`)
+        g.addColorStop(0.12, `rgba(217,251,255,${(0.12 * q).toFixed(3)})`)
+        g.addColorStop(0.45, `rgba(217,251,255,${(0.035 * q).toFixed(3)})`)
         g.addColorStop(1, 'rgba(217,251,255,0)')
         c.fillStyle = g
-        c.beginPath()
-        c.moveTo(x0 - ray.top / 2, sy)
-        c.lineTo(x0 + ray.top / 2, sy)
-        c.lineTo(x0 + slant + ray.bot / 2, sy + len)
-        c.lineTo(x0 + slant - ray.bot / 2, sy + len)
-        c.closePath()
-        c.fill()
+        // three nested passes: a feathered shaft with a brighter core
+        for (const wk of [1, 0.6, 0.28]) {
+          const tw = (ray.top * wk) / 2
+          const bw2 = (ray.top * spread * wk) / 2
+          c.beginPath()
+          c.moveTo(x0 - tw * dy, sy + tw * dx)
+          c.lineTo(x0 + tw * dy, sy - tw * dx)
+          c.lineTo(ex + bw2 * dy, ey - bw2 * dx)
+          c.lineTo(ex - bw2 * dy, ey + bw2 * dx)
+          c.closePath()
+          c.fill()
+        }
       }
+
+      // glints where the waves focus the light, running along the surface
+      for (const gl of glints) {
+        const x = (((gl.x * w + t * gl.v + par) % (w + 40)) + w + 40) % (w + 40) - 20
+        const y = sy + Math.sin(x * 0.021 + t * 0.7) * 2.6 + Math.sin(x * 0.053 - t * 1.2) * 1.3
+        const tw = Math.max(0, Math.sin(t * gl.sp + gl.ph)) ** 6
+        if (tw < 0.03) continue
+        const s = gl.s * (0.6 + 0.4 * tw)
+        c.globalAlpha = 0.85 * tw
+        c.drawImage(SN.snell, x - s * 2.2, y - s * 0.7, s * 4.4, s * 1.4)
+      }
+      c.globalAlpha = 1
 
       // phytoplankton: thick where the light is, almost none at 200 m
       for (const p of motes) {
@@ -318,6 +456,17 @@ function twilightScene() {
       const cloud = cloudAt(k)
       out.cloud = cloud
       out.hour = (14 + s) % 24
+      // the swarm's own light, a faint blue haze around it, strongest at night
+      {
+        const hx = xs(clamp(k - 0.025))
+        const hy = f.y + f.h * cloud
+        const hr = Math.min(w * 0.2, f.h * 0.42) * (1 + 0.25 * (1 - day))
+        c.globalAlpha = 0.1 + 0.16 * (1 - day)
+        c.drawImage(S.blue, hx - hr, hy - hr * 0.8, hr * 2, hr * 1.6)
+        c.globalAlpha = 0.06 + 0.08 * (1 - day)
+        c.drawImage(S.glow, hx - hr * 0.5, hy - hr * 0.4, hr, hr * 0.8)
+        c.globalAlpha = 1
+      }
       if (lastCloud !== null) vel += ((cloud - lastCloud) / Math.max(dt, 1 / 120) - vel) * Math.min(1, dt * 6)
       lastCloud = cloud
       c.lineWidth = 1
@@ -592,10 +741,17 @@ function midnightScene() {
       const cx = Math.max(w * 0.5 + 66 * S0, 128 * S0 + (narrow ? 104 : 92)) + (0.5 - k) * w * 0.08 + Math.sin(t * 0.21) * 4
       const cy = f.y + f.h * 0.56 + Math.sin(t * 0.33) * 5
       const [lx, ly] = drawAngler(c, cx, cy, S0, lit, pulse, t, out.dpr || 1)
+      out.lure = [lx, ly, lit * pulse]
+
+      // the lure's light scattering in the water: a wide, faint warm halo
+      c.globalCompositeOperation = 'lighter'
+      const hr = 190 * S0 * (0.94 + 0.06 * pulse)
+      c.globalAlpha = 0.13 * lit * pulse
+      c.drawImage(S.lure, lx - hr, ly - hr, hr * 2, hr * 2)
+      c.globalAlpha = 1
 
       // marine snow, warmed where the lure lights it
       const R2 = (150 * S0) ** 2
-      c.globalCompositeOperation = 'lighter'
       for (const p of snow) {
         p.y += p.v * dt
         if (p.y > h) p.y = -2
@@ -886,7 +1042,22 @@ function abyssScene() {
         const x = q.x - pan * 0.15
         c.drawImage(q.blue ? S.blue : S.glow, x - q.s, q.y - q.s, q.s * 2, q.s * 2)
       }
-      c.globalAlpha = 1
+      // the plain runs out into a faint haze of distant living light at the
+      // horizon, brightest behind the sea cucumber
+      {
+        const far = horizon + (near - horizon) / 12
+        const hz = c.createLinearGradient(0, far - f.h * 0.14, 0, far + f.h * 0.1)
+        hz.addColorStop(0, 'rgba(58,168,255,0)')
+        hz.addColorStop(0.55, `rgba(58,168,255,${(0.06 + 0.015 * glow).toFixed(3)})`)
+        hz.addColorStop(0.72, 'rgba(108,248,232,0.04)')
+        hz.addColorStop(1, 'rgba(58,168,255,0)')
+        c.fillStyle = hz
+        c.fillRect(0, far - f.h * 0.14, w, f.h * 0.24)
+        const hw = w * 0.5
+        c.globalAlpha = 0.1 * glow
+        c.drawImage(S.glow, gx - hw, far - hw * 0.09, hw * 2, hw * 0.18)
+        c.globalAlpha = 1
+      }
       c.globalCompositeOperation = 'source-over'
 
       // sediment ripples, near → far; lit only near the glow
@@ -987,11 +1158,61 @@ function abyssScene() {
 }
 
 /* ---------------------------------------------------------------- hadal */
+// The trench as the sonar paints it, into a buffer the size of the window:
+// the darkest water in the world gathered in it (black at the bottom,
+// thinning to nothing at the rim), a lit skin where the sonar returns from
+// the rock, fading into the wall, and a faint glow along the profile.
+function paintTrench(w, h, f, dpr) {
+  const m = new DOMMatrix([f.w / 1000, 0, 0, f.h / 1000, f.x, f.y])
+  const line = new Path2D()
+  line.addPath(new Path2D(TRENCH_D), m)
+  const rock = new Path2D()
+  rock.addPath(new Path2D(`${TRENCH_D} L1000,1000 L0,1000 Z`), m)
+  const water = new Path2D()
+  water.addPath(new Path2D(`${TRENCH_D} L1000,-60 L0,-60 Z`), m)
+
+  const buf = document.createElement('canvas')
+  buf.width = Math.max(1, Math.round(w * dpr))
+  buf.height = Math.max(1, Math.round(h * dpr))
+  const c = buf.getContext('2d')
+  c.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const deepY = f.y + f.h * TRENCH_DEEP.y
+  const wg = c.createLinearGradient(0, f.y - f.h * 0.04, 0, deepY)
+  wg.addColorStop(0, 'rgba(0,1,5,0)')
+  wg.addColorStop(0.45, 'rgba(0,1,5,0.28)')
+  wg.addColorStop(1, 'rgba(0,0,2,0.72)')
+  c.fillStyle = wg
+  c.fill(water)
+  c.globalCompositeOperation = 'lighter'
+  c.lineJoin = 'round'
+  c.save()
+  c.clip(rock)
+  for (const [lw, al] of [[34, 0.026], [16, 0.04], [6, 0.07]]) {
+    c.lineWidth = lw
+    c.strokeStyle = `rgba(108,248,232,${al})`
+    c.stroke(line)
+  }
+  c.restore()
+  c.lineWidth = 5
+  c.strokeStyle = 'rgba(108,248,232,0.06)'
+  c.stroke(line)
+  return buf
+}
+
 function hadalScene() {
   let snow = []
   let pods = []
+  let lit = null // the trench's water and sonar-lit rock, drawn once per size
   return {
-    setup(w, h) {
+    setup(w, h, f, out) {
+      lit = null
+      if (TRENCH_D && typeof Path2D === 'function' && typeof DOMMatrix === 'function') {
+        try {
+          lit = paintTrench(w, h, f, out?.dpr || 1)
+        } catch {
+          lit = null
+        }
+      }
       const r = rng(41)
       const n = Math.round(clamp((w * h) / 12000, 16, 60))
       snow = Array.from({ length: n }, () => ({ x: r() * w, y: r() * h, v: 3 + r() * 6, s: 0.6 + r(), a: 0.08 + r() * 0.16 }))
@@ -1005,6 +1226,27 @@ function hadalScene() {
     },
     draw(c, t, dt, w, h, f, out) {
       const S = sprites()
+      const scan = out.scan ?? 1
+      if (lit && scan > 0.001) {
+        // only what the survey has reached so far
+        c.save()
+        c.beginPath()
+        c.rect(0, 0, f.x + f.w * scan, h)
+        c.clip()
+        c.drawImage(lit, 0, 0, w, h)
+        c.restore()
+        // the sweep's afterglow, trailing the beam while it surveys
+        if (scan < 0.999) {
+          const bx = f.x + f.w * scan
+          const tw = Math.min(110, f.w * 0.2)
+          const ag = c.createLinearGradient(bx - tw, 0, bx, 0)
+          ag.addColorStop(0, 'rgba(108,248,232,0)')
+          ag.addColorStop(1, 'rgba(108,248,232,0.07)')
+          c.globalCompositeOperation = 'lighter'
+          c.fillStyle = ag
+          c.fillRect(bx - tw, f.y - f.h * 0.04, tw, f.h * 1.08)
+        }
+      }
       c.globalCompositeOperation = 'lighter'
       for (const p of snow) {
         p.y += p.v * dt
@@ -1065,6 +1307,7 @@ const TRENCH = [
   [842, 6760], [896, 6260], [948, 5990], [1000, 5900],
 ]
 const TRENCH_DEEP = { x: 0.48, y: yOfDepth(10935) / 1000 }
+let TRENCH_D = '' // the profile as an SVG path (0…1000 units), for the canvas too
 const TRENCH_FISH = { x: 0.318, y: yOfDepth(8336) / 1000 }
 
 function buildTrench(focus, svg) {
@@ -1094,6 +1337,7 @@ function buildTrench(focus, svg) {
     const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6]
     d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0]},${p2[1].toFixed(1)}`
   }
+  TRENCH_D = d
   const deepY = yOfDepth(10935)
   let grid = ''
   for (const g of [7000, 8000, 9000, 10000]) {
@@ -1173,6 +1417,8 @@ export function init(ctx) {
       clockText: '',
       scene: SCENES[z.id]?.() ?? null,
       out: { cloud: 0.74, hour: 14, deep: 0, still: false },
+      bokeh: [],
+      seed: 101 + i * 17,
       f: { x: 0, y: 0, w: 1, h: 1 },
       w: 0,
       h: 0,
@@ -1313,6 +1559,7 @@ export function init(ctx) {
     hadal.focus.style.setProperty('--scan-on', v > 0.001 && v < 0.999 ? 1 : 0)
     for (const pin of pins) pin.el.style.setProperty('--on', v >= pin.x ? 1 : 0)
     hadal.out.deep = smooth(TRENCH_DEEP.x, TRENCH_DEEP.x + 0.15, v)
+    hadal.out.scan = v
   }
   paintScan()
 
@@ -1334,7 +1581,8 @@ export function init(ctx) {
     } else {
       p.f = { x: 0, y: h * 0.12, w, h: h * 0.68 }
     }
-    p.scene?.setup(w, h, p.f)
+    p.scene?.setup(w, h, p.f, p.out)
+    p.bokeh = makeBokeh(w, h, p.seed)
     p.sized = true
     return true
   }
@@ -1346,13 +1594,23 @@ export function init(ctx) {
     const e = age / 2.4
     c.globalCompositeOperation = 'lighter'
     c.lineWidth = 1.2
+    // a wavefront of sound in water: a soft band of light with a bright
+    // leading edge, its echo just behind it
     for (let j = 0; j < 2; j++) {
       const a = e - j * 0.08
       if (a <= 0) continue
       const r = a * p.h * 1.05
-      c.strokeStyle = `rgba(108,248,232,${(0.5 * (1 - a) ** 1.6 * (j ? 0.45 : 1)).toFixed(3)})`
+      const al = 0.5 * (1 - a) ** 1.6 * (j ? 0.45 : 1)
       c.beginPath()
       c.ellipse(p.w * 0.5, p.h * 0.02, r * 1.25, r, 0, Math.PI * 0.08, Math.PI * 0.92)
+      c.lineWidth = 9
+      c.strokeStyle = `rgba(58,168,255,${(al * 0.14).toFixed(3)})`
+      c.stroke()
+      c.lineWidth = 3.5
+      c.strokeStyle = `rgba(108,248,232,${(al * 0.22).toFixed(3)})`
+      c.stroke()
+      c.lineWidth = 1.1
+      c.strokeStyle = `rgba(170,255,244,${al.toFixed(3)})`
       c.stroke()
     }
     c.globalCompositeOperation = 'source-over'
@@ -1364,6 +1622,7 @@ export function init(ctx) {
     c.clearRect(0, 0, p.canvas.width, p.canvas.height)
     c.setTransform(p.dpr, 0, 0, p.dpr, 0, 0)
     p.scene.draw(c, p.t, dt, p.w, p.h, p.f, p.out, p.k)
+    drawBokeh(c, p.bokeh, p.z.id, p.t, dt, p.w, p.h, p.k, p.out.lure)
     drawPing(p)
     if (p.z.id === 'twilight') paintTwilight(p)
   }
@@ -1438,6 +1697,8 @@ export function init(ctx) {
           const p = panels.find((q) => q.canvas === e.target)
           if (!p) continue
           p.visible = e.isIntersecting
+          // the window's water only drifts while it can be seen
+          if (!reduced) p.el.classList.toggle('is-live', p.visible)
           if (!p.visible) p.side = 0 // no ping for the first crossing seen
           if (p.visible && reduced) still(p)
           if (!p.visible && p.sized && !reduced) {
