@@ -50,3 +50,15 @@ DESIGN.md               the design + engineering spec
 
 Each module exports `init(ctx)` and is loaded in isolation, so a failure in one
 section never takes down the page.
+
+## Also in this branch: Ground
+
+`ground/` is a second, separate website: **Ground**, a fictional London
+colourman that grinds historic pigments by hand. The whole page is a live
+fluid dish that every pigment is poured into. It is its own Vite project:
+
+```bash
+cd ground
+npm install
+npm run dev
+```
