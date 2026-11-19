@@ -324,7 +324,10 @@ export function init(ctx) {
     { passive: true },
   )
 
-  // the element under a still pointer can change as the page scrolls
+  // The element under a still pointer can change as the page scrolls. The
+  // hit test runs in a task between frames (layout is clean there, so it
+  // never forces a recalculation in the middle of a scroll frame), a few
+  // times a second while scrolling and once more when the water is still.
   const recheck = () => {
     if (!visible) return
     const el = document.elementFromPoint(mouse.x, mouse.y)
@@ -334,12 +337,17 @@ export function init(ctx) {
     }
   }
   let rq = 0
+  let trailT = 0
   const onScroll = () => {
-    if (rq) return
-    rq = requestAnimationFrame(() => {
-      rq = 0
-      recheck()
-    })
+    if (!visible) return
+    if (!rq) {
+      rq = setTimeout(() => {
+        rq = 0
+        recheck()
+      }, 140)
+    }
+    clearTimeout(trailT)
+    trailT = setTimeout(recheck, 160)
   }
   if (ctx.lenis) ctx.lenis.on('scroll', onScroll)
   else window.addEventListener('scroll', onScroll, { passive: true })

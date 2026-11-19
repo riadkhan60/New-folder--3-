@@ -53,9 +53,39 @@
   );
   -webkit-background-clip: text;
   background-clip: text;
-  -webkit-text-stroke: 1px rgb(108 248 232 / calc(var(--stroke) * 0.9));
   user-select: text;
   pointer-events: auto;
+}
+/* The drawn state: a solid copy of the word, turned by the SVG filter into
+   its outer edge only (a text-stroke would trace every overlapping contour
+   of the variable font). It lets go as the fill sweeps in. */
+.vessel__title::after {
+  content: attr(data-outline);
+  content: attr(data-outline) / '';
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  color: var(--c-photophore);
+  filter: url(#vessel-outline);
+  opacity: calc(var(--stroke) * 0.9);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 0.32) calc(var(--fill) * 130% - 30%),
+    #000 calc(var(--fill) * 130%)
+  );
+  mask-image: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 0.32) calc(var(--fill) * 130% - 30%),
+    #000 calc(var(--fill) * 130%)
+  );
+  pointer-events: none;
+  user-select: none;
+}
+.vessel__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .vessel__lead {
@@ -467,14 +497,6 @@
 .vessel__spec--key .vessel__unit {
   font-size: 1.3rem;
 }
-.vessel__note {
-  margin-left: auto;
-  font-family: var(--font-text);
-  font-style: italic;
-  font-weight: 400;
-  font-size: var(--fs-small);
-  color: var(--c-ink-3);
-}
 
 /* Readouts: label over value, three to a row */
 .vessel__spec--cell {
@@ -556,13 +578,17 @@
   font-family: var(--font-display);
   font-stretch: 100%;
   font-weight: 460;
-  font-size: 12.5px;
+  font-size: var(--ve-text, 12.5px);
 }
 
 /* ------------------------------------------------------ reduced motion */
 .vessel--static .vessel__title {
   --fill: 1;
   --stroke: 0;
+}
+.vessel--static .vessel__title::after,
+.vessel--stack .vessel__title::after {
+  content: none;
 }
 .vessel--static .vessel__act-fill {
   transform: none;
@@ -704,7 +730,8 @@
 }
 .vessel--stack .vessel__leaders,
 .vessel--stack .vessel__callouts,
-.vessel--stack .vessel__grab {
+.vessel--stack .vessel__grab,
+.vessel__story {
   display: none;
 }
 @media (min-width: 1024px) {
@@ -713,7 +740,9 @@
     display: block;
   }
 }
-.vessel--stack .vessel__acts {
+/* the plain stack (reduced motion, no WebGL, landscape phones): the acts
+   as a list under her */
+.vessel--list .vessel__acts {
   order: 4;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -723,22 +752,22 @@
   margin-top: var(--s-5);
   padding-bottom: 0;
 }
-.vessel--stack .vessel__act {
+.vessel--list .vessel__act {
   display: grid;
   grid-template-columns: 4.5rem 1fr;
   column-gap: var(--s-4);
   row-gap: 0;
 }
-.vessel--stack .vessel__act-name,
-.vessel--stack .vessel__act.is-active .vessel__act-name {
+.vessel--list .vessel__act-name,
+.vessel--list .vessel__act.is-active .vessel__act-name {
   grid-row: 1 / span 2;
   padding-top: 0.15rem;
   color: var(--c-photophore);
 }
-.vessel--stack .vessel__act-track {
+.vessel--list .vessel__act-track {
   display: none;
 }
-.vessel--stack .vessel__act-text {
+.vessel--list .vessel__act-text {
   position: static;
   opacity: 1;
   transform: none;
@@ -772,7 +801,7 @@
   .vessel--stack .vessel__title {
     font-size: clamp(5rem, 30vw, 9rem);
   }
-  .vessel--stack .vessel__acts {
+  .vessel--list .vessel__acts {
     display: flex;
     flex-direction: column;
   }
@@ -791,6 +820,114 @@
   .vessel__spec--cell {
     padding: 0.75rem 0 0.7rem;
   }
+}
+
+/* ------------------------------------------------------------ the story
+   Phones and portrait tablets: the view becomes a sticky scene, 100svh. She
+   holds in its upper part (the canvas takes whatever the acts leave), the
+   four acts change beneath her, and the story spacer under the scene gives
+   the scroll length. Same acts, same order, same sentence slot as the
+   pinned stage. */
+.vessel--stack.vessel--scrolly .vessel__view {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100svh;
+  margin-top: var(--s-4);
+  padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom, 0px));
+}
+.vessel--scrolly .vessel__canvas {
+  position: relative;
+  inset: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 84%, transparent 100%);
+}
+.vessel--stack.vessel--scrolly .vessel__leaders {
+  display: block;
+}
+.vessel--stack.vessel--scrolly .vessel__acts {
+  order: 1;
+  flex: none;
+  width: auto;
+  max-width: 34rem;
+  margin-top: 0;
+  pointer-events: auto;
+}
+.vessel--scrolly .vessel__act-text {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.vessel--stack.vessel--scrolly .vessel__story {
+  display: block;
+  order: 5;
+  height: 300vh;
+  height: 300svh;
+}
+@media (min-width: 700px) {
+  .vessel--stack.vessel--scrolly .vessel__callouts {
+    display: block;
+  }
+  .vessel--scrolly .vessel__act-text {
+    font-size: 1.08rem;
+  }
+}
+
+/* Narrow scenes: the spec callouts read as captions under the acts; on her,
+   only the photophore dot each one belongs to. */
+.vessel--stack.vessel--captions .vessel__callouts {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  display: block;
+  order: 2;
+  flex: none;
+  height: 5.1rem;
+  margin: 0.9rem calc(var(--rail) + var(--instrument)) 0 var(--rail);
+}
+.vessel--captions .vessel__callout {
+  right: 0;
+  height: auto;
+  padding-left: 1rem;
+  will-change: opacity;
+}
+.vessel--captions .vessel__callout[data-key='rated'],
+.vessel--captions .vessel__callout[data-key='viewports'],
+.vessel--captions .vessel__callout[data-key='wall'] {
+  top: 2.6rem;
+}
+.vessel--captions .vessel__callout::before {
+  content: '';
+  position: absolute;
+  left: 0.1rem;
+  top: 0.42rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--c-photophore);
+  box-shadow: 0 0 6px 1px rgb(108 248 232 / 0.75);
+}
+.vessel--captions .vessel__callout-title,
+.vessel--captions .vessel__callout-sub {
+  position: static;
+  display: block;
+  white-space: normal;
+}
+.vessel--captions .vessel__callout-title {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+.vessel--captions .vessel__callout-sub {
+  margin-top: 0.1rem;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+.vessel--captions .vessel__leader {
+  display: none;
 }
 
 /* Reduced motion keeps the same layout, but nothing waits on scroll */

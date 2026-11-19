@@ -4,13 +4,16 @@
       <h2 id="dives-title" class="pf__title">Three ways down</h2>
       <p class="pf__lead">
         Every dive we run is one of these three lines: hours since leaving the surface along
-        the top, depth down the side. Prices are per guest, for the whole trip.
+        the top, depth down the side.
       </p>
       <p class="pf__hint" data-pf-hint aria-hidden="true"><span class="pf__hint-dot"></span><span data-pf-hint-text>Choose a line to read it out</span></p>
     </header>
 
     <!-- The chart is drawn in JS at the figure's real pixel size. Each curve is
-         a button; the list beside it is the same three choices as text. -->
+         a button; the list beside it is the same three choices as text.
+         On phones the track holds the chart on screen while the sub rides
+         (elsewhere it is display: contents). -->
+    <div class="pf__track" data-pf-track>
     <figure class="pf__chart" data-pf-chart>
       <svg class="pf__svg" role="group" aria-label="Dive profiles: depth against hours since leaving the surface" focusable="false"></svg>
       <figcaption class="visually-hidden">
@@ -18,6 +21,7 @@
         hours. Hadal goes to 10,935 metres, the floor of the Challenger Deep, in twelve hours.
       </figcaption>
     </figure>
+    </div>
 
     <div class="pf__side">
       <ul class="pf__list" aria-label="Dive profiles" data-pf-list>
@@ -65,8 +69,9 @@
             <div class="pf__stat"><dt>Seats per season</dt><dd data-pf="seats">6</dd></div>
           </dl>
           <p class="pf__see" data-pf="see">
-            Snailfish on the way down, the deepest-living fish known. On the floor, amphipods
-            gather in the red light, and xenophyophores grow as wide as your hand from a single cell.
+            Snailfish, the deepest-living fish known, keep to the trench walls down to about
+            8,000&nbsp;m. On the floor, amphipods crowd the bait under the red lamps, and
+            xenophyophores, single cells as wide as your hand, rest on the mud.
           </p>
         </div>
         <button type="button" class="btn btn--solid pf__reserve" data-pf-reserve>

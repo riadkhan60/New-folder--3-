@@ -8,8 +8,8 @@
  * scrubbed): Twilight, then Abyss, then Hadal, last and deepest. The Hadal
  * line turns from blue-green to red at 6,000 m, where the lamps change.
  *
- * Then, while the stage holds, a small submersible rides the chosen profile
- * with your scroll. The water it has passed through fills in behind it in the
+ * Then, while the stage holds (on phones, the chart alone is held centred in
+ * its track), a small submersible rides the chosen profile with your scroll. The water it has passed through fills in behind it in the
  * real colours of the water column (depth.js colorAt: teal → black), and the
  * animals you would meet on that line (the ones from #life, and the hadal
  * ones) light up as it reaches them.
@@ -40,7 +40,7 @@ const PROFILES = [
     price: '$48,000',
     seats: 40,
     where: 'The twilight zone, where daylight runs out',
-    see: 'The blue light thins and goes out. Below it, lanternfish, siphonophores and comb jellies make their own light, and the dive spends long, slow minutes among them.',
+    see: 'The blue light thins and goes out. In the dark, lanternfish, siphonophores and comb jellies make their own light, and the dive spends long, slow minutes among them.',
     // hours, metres: a slow descent with a pause among the lanternfish
     pts: [[0, 0], [0.75, 540], [1.15, 590], [1.7, 1000], [3.4, 1000], [5, 0]],
     r: [0, 22, 18, 26, 26, 0],
@@ -57,7 +57,7 @@ const PROFILES = [
     price: '$195,000',
     seats: 18,
     where: 'The abyssal plain',
-    see: 'A flat floor of fine sediment, the most widespread landscape on Earth. Sea cucumbers, brittle stars and grenadier fish, and the tracks they leave in the mud.',
+    see: 'After two hours of descent, a floor of fine mud runs flat past the edge of the lamps. Grenadier fish cruise just above it, past the winding tracks of sea cucumbers.',
     pts: [[0, 0], [2, 5500], [7, 5500], [9, 0]],
     r: [0, 34, 34, 0],
     tagAt: 4.7,
@@ -75,7 +75,7 @@ const PROFILES = [
     price: '$750,000',
     seats: 6,
     where: 'The floor of the Challenger Deep',
-    see: 'Snailfish on the way down, the deepest-living fish known. On the floor, amphipods gather in the red light, and xenophyophores grow as wide as your hand from a single cell.',
+    see: 'Snailfish, the deepest-living fish known, keep to the trench walls down to about 8,000\u00a0m. On the floor, amphipods crowd the bait under the red lamps, and xenophyophores, single cells as wide as your hand, rest on the mud.',
     pts: [[0, 0], [4, 10935], [8, 10935], [12, 0]],
     r: [0, 40, 40, 0],
     tagAt: 6.4,
@@ -156,10 +156,11 @@ const hit = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + 
 export function init(ctx) {
   const root = document.getElementById('dives')
   if (!root) return
-  const { gsap, ScrollTrigger } = ctx
+  const { gsap } = ctx
   const reduced = ctx.reducedMotion
 
   const fig = root.querySelector('[data-pf-chart]')
+  const track = root.querySelector('[data-pf-track]')
   const svg = root.querySelector('.pf__svg')
   const list = root.querySelector('[data-pf-list]')
   const opts = [...root.querySelectorAll('[data-pf-opt]')]
@@ -169,6 +170,7 @@ export function init(ctx) {
   const status = root.querySelector('[data-pf-status]')
   const hint = root.querySelector('[data-pf-hint]')
   const hintText = root.querySelector('[data-pf-hint-text]')
+  const hintHome = hint?.parentElement
   const field = (k) => root.querySelector(`[data-pf="${k}"]`)
   const F = {
     name: field('name'),
@@ -351,7 +353,7 @@ export function init(ctx) {
           role: 'button',
           tabindex: p.id === selected ? '0' : '-1',
           'aria-pressed': String(p.id === selected),
-          'aria-label': `${p.name}: ${fmt(p.depth)} metres, ${p.hours}-hour dive, ${p.trip}, ${p.price}`,
+          'aria-label': `${p.name}: ${fmt(p.depth)} metres, ${p.hours}-hour dive, ${parseInt(p.trip)}-day trip, ${p.price} per guest`,
         },
         curvesG,
       )
@@ -506,7 +508,17 @@ export function init(ctx) {
       return
     }
 
-    const sticky = getComputedStyle(root.querySelector('.pf')).position === 'sticky'
+    // Desktop: the whole stage is sticky inside a tall section. Phones: the
+    // chart alone is held centred in its track while the sub rides, then
+    // scrolls on before the list and the price. Otherwise: the figure.
+    const stage = getComputedStyle(root.querySelector('.pf')).position === 'sticky'
+    const held = !stage && !!track && getComputedStyle(fig).position === 'sticky'
+    // while the chart is held, the "choose a line" hint hangs under it
+    // (the header has long scrolled away by the time the lines are drawn)
+    if (hint && hintHome) {
+      const home = held ? fig : hintHome
+      if (hint.parentElement !== home) home.appendChild(hint)
+    }
     tl = gsap.timeline({
       defaults: { ease: 'none' },
       onUpdate: () => {
@@ -520,9 +532,19 @@ export function init(ctx) {
         ride = clamp((t - RIDE[0]) / (RIDE[1] - RIDE[0]))
         placeSub()
       },
-      scrollTrigger: sticky
+      scrollTrigger: stage
         ? { trigger: root, start: 'top 55%', end: 'bottom bottom', scrub: 0.6 }
-        : { trigger: fig, start: 'top 82%', end: 'bottom 22%', scrub: 0.6 },
+        : held
+          ? { trigger: track, start: 'top 85%', end: 'bottom bottom', scrub: 0.6 }
+          : {
+              trigger: fig,
+              start: 'top 82%',
+              // when the chart is short enough, finish the ride before its
+              // top leaves the screen, so the whole ride is seen
+              end: () => (fig.offsetHeight <= window.innerHeight * 0.56 ? 'top 10%' : 'bottom 22%'),
+              invalidateOnRefresh: true,
+              scrub: 0.6,
+            },
     })
     tl.fromTo(grid, { opacity: 0 }, { opacity: 1, duration: 0.08 }, 0)
     for (const p of PROFILES) {
@@ -670,6 +692,10 @@ export function init(ctx) {
   build()
   syncDim()
 
+  // A new chart size only changes what is drawn inside the figure: rebuilding
+  // our own timeline is enough (its new ScrollTrigger measures itself), and
+  // ScrollTrigger's own resize refresh covers the rest of the page. No global
+  // refresh from here: one resize must not refresh the whole page twice.
   let rT
   let lastW = fig.clientWidth
   let lastH = fig.clientHeight
@@ -680,10 +706,7 @@ export function init(ctx) {
     lastW = w
     lastH = h
     clearTimeout(rT)
-    rT = setTimeout(() => {
-      build()
-      if (!reduced) ScrollTrigger.refresh()
-    }, 160)
+    rT = setTimeout(build, 160)
   })
   ro.observe(fig)
   document.fonts?.ready?.then(() => {

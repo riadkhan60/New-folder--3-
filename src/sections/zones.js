@@ -23,8 +23,12 @@
  *    tripod fish standing in the current, marine snow settling;
  *  - hadal: the trench in section, surveyed by a sonar sweep, amphipods
  *    scavenging at 10,935 m.
- * Phones and reduced motion: no pin, the panels stack; scenes render only
- * while on screen, and as a single still under reduced motion.
+ * Desktop rests on whole layers: when the scroll stops inside the pin it
+ * snaps on to the next layer in the direction of travel.
+ * Phones: no pin; the windows sit side by side in a scroll-snap strip with a
+ * depth ladder under it, and a swipe scrubs each scene. Tablets and reduced
+ * motion on wide screens: the panels stack. Scenes render only while on
+ * screen, and as a single still under reduced motion.
  */
 import '../styles/zones.css'
 
@@ -366,107 +370,128 @@ function anglerBody(c) {
 }
 const LIP_LO = [[-104, 14], [-90, 16], [-64, 14], [-48, 4]]
 const LIP_UP = [[-48, 4], [-64, -4], [-84, -10], [-96, -14]]
-const TEETH = [
-  ...[0.05, 0.18, 0.32, 0.47, 0.63].map((s, i) => ({ p: bez(...LIP_LO, s), dx: 2.5, dy: -[14, 12, 10, 7.5, 5][i] })),
-  ...[0.4, 0.58, 0.74, 0.88, 0.98].map((s, i) => ({ p: bez(...LIP_UP, s), dx: -1, dy: [5, 7, 9, 11, 12][i] })),
+// a few long, glassy needles near the front of the jaws (s along the lip,
+// length, lean): the only teeth near enough to the lure to catch its light
+const FANGS = [
+  { lip: LIP_LO, s: 0.1, len: 17, lean: 0.34 },
+  { lip: LIP_LO, s: 0.34, len: 12, lean: 0.24 },
+  { lip: LIP_UP, s: 0.93, len: 15, lean: -0.3 },
+  { lip: LIP_UP, s: 0.7, len: 10, lean: -0.2 },
 ]
+const LURE_R = 106 // reach of the lure's light, in fish units (~1.6x its glow)
 
-function drawAngler(c, cx, cy, S, lit, pulse, t) {
+// The anglerfish exists only where its own lure lights it, as in the
+// creatures' self-light pass: the body is drawn into a small buffer around
+// the lure, lit by a falloff from the esca, with a hairline rim on the edges
+// that face the light and a few translucent fangs; the buffer is then masked
+// by the reach of the light and added to the scene. Everything else is the
+// black of the water.
+let lureBuf = null
+let lureG = null
+function drawAngler(c, cx, cy, S, lit, pulse, t, dpr) {
   const ex = ESCA[0] + Math.sin(t * 0.9) * 3
   const ey = ESCA[1] + Math.cos(t * 0.7) * 2.4
   const on = lit * pulse
+  const R = LURE_R * (0.9 + 0.1 * pulse)
+  const k = S * dpr
+  const side = Math.max(2, Math.ceil(2 * LURE_R * k))
+  if (!lureBuf) {
+    lureBuf = document.createElement('canvas')
+    lureG = lureBuf.getContext('2d')
+  }
+  if (lureBuf.width < side || lureBuf.width > side * 1.5) lureBuf.width = lureBuf.height = side
+  const g = lureG
+  const B = lureBuf.width
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  g.globalCompositeOperation = 'source-over'
+  g.globalAlpha = 1
+  g.clearRect(0, 0, B, B)
+  // fish units → buffer pixels, with the lure at the buffer's centre
+  g.setTransform(k, 0, 0, k, B / 2 - ex * k, B / 2 - ey * k)
+
+  // 1. the rim: the silhouette, minus itself nudged away from the light,
+  //    leaves a hairline on every edge that faces the lure
+  const dx = -ex
+  const dy = -ey
+  const dl = Math.hypot(dx, dy) || 1
+  const shift = 1.15 / S // ≈ 1 px on screen
+  anglerBody(g)
+  g.fillStyle = 'rgba(255,232,196,0.95)'
+  g.fill()
+  g.save()
+  g.translate((dx / dl) * shift, (dy / dl) * shift)
+  g.globalCompositeOperation = 'destination-out'
+  anglerBody(g)
+  g.fill()
+  g.restore()
+
+  // 2. the skin, under the rim: warm where the light lands, gone beyond it
+  g.globalCompositeOperation = 'destination-over'
+  const skin = g.createRadialGradient(ex, ey, 0, ex, ey, R)
+  skin.addColorStop(0, 'rgba(255,190,112,0.5)')
+  skin.addColorStop(0.3, 'rgba(232,148,78,0.24)')
+  skin.addColorStop(0.62, 'rgba(190,110,56,0.07)')
+  skin.addColorStop(1, 'rgba(160,90,40,0)')
+  g.fillStyle = skin
+  anglerBody(g)
+  g.fill()
+
+  // 3. the fangs: glass needles, each with a lit edge toward the lure
+  g.globalCompositeOperation = 'lighter'
+  g.lineCap = 'round'
+  for (const f of FANGS) {
+    const [bx, by] = bez(...f.lip, f.s)
+    const up = f.lip === LIP_LO ? -1 : 1 // lower jaw teeth point up
+    const tx = bx + f.lean * f.len
+    const ty = by + up * f.len
+    const mx = bx + f.lean * f.len * 0.2 + 1.2
+    const my = by + up * f.len * 0.55
+    const near = clamp(1 - Math.hypot(bx - ex, by - ey) / R)
+    g.fillStyle = `rgba(255,214,160,${(0.22 + 0.3 * near).toFixed(3)})`
+    g.beginPath()
+    g.moveTo(bx - 1.3, by)
+    g.quadraticCurveTo(mx - 0.4, my, tx, ty)
+    g.quadraticCurveTo(mx + 0.6, my, bx + 1.3, by)
+    g.closePath()
+    g.fill()
+    g.strokeStyle = `rgba(255,246,228,${(0.35 + 0.55 * near).toFixed(3)})`
+    g.lineWidth = 0.55 / S
+    g.beginPath()
+    g.moveTo(bx - 0.8, by)
+    g.quadraticCurveTo(mx - 0.5, my, tx, ty)
+    g.stroke()
+  }
+
+  // 4. the reach of the light: nothing exists beyond it
+  g.globalCompositeOperation = 'destination-in'
+  const m = g.createRadialGradient(ex, ey, 0, ex, ey, R)
+  m.addColorStop(0, 'rgba(0,0,0,1)')
+  m.addColorStop(0.38, 'rgba(0,0,0,0.86)')
+  m.addColorStop(0.7, 'rgba(0,0,0,0.34)')
+  m.addColorStop(1, 'rgba(0,0,0,0)')
+  g.fillStyle = m
+  g.fillRect(ex - LURE_R, ey - LURE_R, LURE_R * 2, LURE_R * 2)
+  g.globalCompositeOperation = 'source-over'
+
+  // the lit fish, added to the water
+  const x = cx + ex * S
+  const y = cy + ey * S
+  const half = B / 2 / dpr
+  c.globalCompositeOperation = 'lighter'
+  c.globalAlpha = clamp(on * 1.1)
+  c.drawImage(lureBuf, 0, 0, B, B, x - half, y - half, half * 2, half * 2)
+  c.globalAlpha = 1
+
+  // the illicium: a hair-fine rod from the forehead, lit toward its tip
   c.save()
   c.translate(cx, cy)
   c.scale(S, S)
-  const lw = 1 / S
-
-  // the body is darker than the water: a shape seen only where light lands
-  anglerBody(c)
-  c.fillStyle = 'rgba(1,5,12,0.62)'
-  c.fill()
-  // the gape
-  c.beginPath()
-  c.moveTo(...LIP_LO[0])
-  c.bezierCurveTo(...LIP_LO[1], ...LIP_LO[2], ...LIP_LO[3])
-  c.bezierCurveTo(...LIP_UP[1], ...LIP_UP[2], ...LIP_UP[3])
-  c.closePath()
-  c.fillStyle = 'rgba(0,0,0,0.9)'
-  c.fill()
-
-  // the lure lights the face: a falloff across the skin…
-  c.save()
-  anglerBody(c)
-  c.clip()
-  c.globalCompositeOperation = 'lighter'
-  const skin = c.createRadialGradient(ex, ey, 0, ex, ey, 125)
-  skin.addColorStop(0, `rgba(255,176,84,${(0.3 * on).toFixed(3)})`)
-  skin.addColorStop(0.35, `rgba(255,150,70,${(0.07 * on).toFixed(3)})`)
-  skin.addColorStop(1, 'rgba(255,150,70,0)')
-  c.fillStyle = skin
-  c.fillRect(-140, -90, 270, 170)
-  c.restore()
-
-  // …and catches its edges: jaw, head, belly, then nothing
-  c.globalCompositeOperation = 'lighter'
-  const rim = c.createRadialGradient(ex, ey, 0, ex, ey, 200)
-  rim.addColorStop(0, `rgba(255,226,170,${(0.95 * on).toFixed(3)})`)
-  rim.addColorStop(0.3, `rgba(255,176,84,${(0.45 * on).toFixed(3)})`)
-  rim.addColorStop(0.6, `rgba(255,176,84,${(0.08 * on).toFixed(3)})`)
-  rim.addColorStop(1, 'rgba(255,176,84,0)')
-  c.strokeStyle = rim
-  c.lineWidth = 1.25 * lw
-  c.lineJoin = 'round'
-  anglerBody(c)
-  c.stroke()
-  // a faint cold rim on the far side, so the shape exists at all
-  c.strokeStyle = `rgba(150,200,255,${(0.025 + 0.025 * lit).toFixed(3)})`
-  c.lineWidth = lw
-  c.stroke()
-
-  // pectoral fin
-  c.strokeStyle = rim
-  c.lineWidth = 0.9 * lw
-  c.beginPath()
-  for (const [x, y] of [[24, 30], [29, 20], [26, 9]]) {
-    c.moveTo(2, 12)
-    c.lineTo(x, y)
-  }
-  c.stroke()
-
-  // teeth: needles, brightest nearest the lure
-  const tooth = c.createRadialGradient(ex, ey, 0, ex, ey, 120)
-  tooth.addColorStop(0, `rgba(255,246,228,${(0.95 * on).toFixed(3)})`)
-  tooth.addColorStop(0.6, `rgba(255,214,160,${(0.55 * on).toFixed(3)})`)
-  tooth.addColorStop(1, `rgba(255,190,120,${(0.08 * on).toFixed(3)})`)
-  c.fillStyle = tooth
-  c.beginPath()
-  for (const tt of TEETH) {
-    const [x, y] = tt.p
-    c.moveTo(x - 1.5, y)
-    c.lineTo(x + 1.5, y)
-    c.lineTo(x + tt.dx, y + tt.dy)
-    c.closePath()
-  }
-  c.fill()
-
-  // the eye: tiny, with one glint of the lure in it
-  c.globalCompositeOperation = 'source-over'
-  c.fillStyle = 'rgba(0,0,0,0.95)'
-  c.beginPath()
-  c.arc(-62, -31, 3.6, 0, TAU)
-  c.fill()
-  c.globalCompositeOperation = 'lighter'
-  c.fillStyle = `rgba(255,220,170,${(0.85 * on).toFixed(3)})`
-  c.beginPath()
-  c.arc(-63.4, -32.2, 1, 0, TAU)
-  c.fill()
-
-  // the illicium: a rod from the forehead, lit toward its tip
   const rod = c.createLinearGradient(-44, -66, ex, ey)
-  rod.addColorStop(0, `rgba(255,176,84,${(0.12 * lit).toFixed(3)})`)
+  rod.addColorStop(0, `rgba(255,176,84,${(0.05 * lit).toFixed(3)})`)
+  rod.addColorStop(0.6, `rgba(255,190,110,${(0.3 * on).toFixed(3)})`)
   rod.addColorStop(1, `rgba(255,226,170,${(0.85 * on).toFixed(3)})`)
   c.strokeStyle = rod
-  c.lineWidth = 1.1 * lw
+  c.lineWidth = 0.9 / S
   c.beginPath()
   c.moveTo(-44, -66)
   c.bezierCurveTo(-62, -114, -120, -106, ex, ey - 3)
@@ -475,9 +500,6 @@ function drawAngler(c, cx, cy, S, lit, pulse, t) {
 
   // the esca, in screen space
   const S2 = sprites()
-  const x = cx + ex * S
-  const y = cy + ey * S
-  c.globalCompositeOperation = 'lighter'
   const ls = 62 * S * (0.86 + 0.14 * pulse)
   c.globalAlpha = clamp(0.45 + 0.55 * lit) * pulse
   c.drawImage(S2.lure, x - ls, y - ls, ls * 2, ls * 2)
@@ -563,13 +585,13 @@ function midnightScene() {
       // the anglerfish: the lure comes up as it reaches the centre
       const lit = out.still ? 1 : 0.18 + 0.82 * smooth(0.18, 0.46, k)
       const pulse = 0.8 + 0.2 * Math.sin(t * 1.3) * (0.7 + 0.3 * Math.sin(t * 0.37 + 1))
-      // the whole fish (lure to tail ≈ 250 units) stays inside the window
-      // (on narrow windows the lure keeps clear of the scale's labels)
+      // only the lure and the face it lights are ever seen: centre that pair
+      // in the window (on narrow windows the lure keeps clear of the scale)
       const narrow = w < 600
-      const S0 = Math.min(w / (narrow ? 385 : 340), f.h / 205, 2.4)
-      const cx = Math.max(w * 0.53, 134 * S0 + (narrow ? 96 : 0)) + (0.5 - k) * w * 0.08 + Math.sin(t * 0.21) * 4
-      const cy = f.y + f.h * 0.5 + Math.sin(t * 0.33) * 5
-      const [lx, ly] = drawAngler(c, cx, cy, S0, lit, pulse, t)
+      const S0 = Math.min(w / (narrow ? 300 : 262), f.h / 172, 2.8)
+      const cx = Math.max(w * 0.5 + 66 * S0, 128 * S0 + (narrow ? 104 : 92)) + (0.5 - k) * w * 0.08 + Math.sin(t * 0.21) * 4
+      const cy = f.y + f.h * 0.56 + Math.sin(t * 0.33) * 5
+      const [lx, ly] = drawAngler(c, cx, cy, S0, lit, pulse, t, out.dpr || 1)
 
       // marine snow, warmed where the lure lights it
       const R2 = (150 * S0) ** 2
@@ -590,77 +612,138 @@ function midnightScene() {
 }
 
 /* ---------------------------------------------------------------- abyss */
-function drawTripod(c, x, y, s, a) {
-  // Bathypterois: stands on its pelvic rays and the lower lobe of its tail,
-  // facing into the current, pectoral rays held forward like feelers
-  c.save()
-  c.translate(x, y)
-  c.scale(s, s)
-  const lw = 1 / s
-  c.lineCap = 'round'
-  c.strokeStyle = `rgba(234,246,244,${(0.42 * a).toFixed(3)})`
-  c.lineWidth = 0.9 * lw
+// Bathypterois, drawn the way Vesper is: a specimen in hairline ink. A
+// fusiform body perched on two long pelvic rays and the lower ray of its
+// tail, pectoral rays held up and forward into the current. Units: the
+// sediment under it is y = 0, the fish faces left; the body is ~80 long.
+function tripodBody(c) {
   c.beginPath()
-  c.moveTo(-6, -38)
-  c.quadraticCurveTo(-11, -18, -15, 0)
-  c.moveTo(-3, -38)
-  c.quadraticCurveTo(-1, -18, 3, 0)
-  c.moveTo(34, -40)
-  c.quadraticCurveTo(42, -20, 46, 0)
-  // pectoral rays
-  for (const [px, py] of [[-62, -76], [-66, -66], [-58, -84]]) {
-    c.moveTo(-20, -46)
-    c.quadraticCurveTo(-38, -64, px, py)
-  }
-  c.stroke()
-  // body
-  c.beginPath()
-  c.moveTo(-33, -44)
-  c.bezierCurveTo(-22, -52, 14, -50, 36, -41)
-  c.lineTo(46, -48)
-  c.lineTo(44, -40)
-  c.bezierCurveTo(14, -36, -20, -37, -33, -44)
+  c.moveTo(-41, -58.6)
+  c.bezierCurveTo(-36, -64.2, -16, -67.6, 2, -66.4)
+  c.bezierCurveTo(16, -65.4, 27, -62.4, 35, -60.6)
+  c.lineTo(36.5, -59.4)
+  c.lineTo(35, -57.6)
+  c.bezierCurveTo(26, -56.4, 10, -55.2, -6, -55)
+  c.bezierCurveTo(-22, -54.8, -35, -55.6, -41, -58.6)
   c.closePath()
-  c.fillStyle = 'rgba(2,6,14,0.9)'
-  c.fill()
-  c.strokeStyle = `rgba(234,246,244,${(0.55 * a).toFixed(3)})`
-  c.lineWidth = lw
-  c.stroke()
-  c.fillStyle = `rgba(234,246,244,${(0.7 * a).toFixed(3)})`
-  c.beginPath()
-  c.arc(-27, -45, 1.1, 0, TAU)
-  c.fill()
-  c.restore()
 }
-
-function drawCucumber(c, x, y, s, glow) {
-  // a sea cucumber on its tube feet, papillae raised, glowing faintly
+function drawTripod(c, x, y, s, a, label) {
   c.save()
   c.translate(x, y)
   c.scale(s, s)
-  const lw = 1 / s
+  const px = 1 / s // one screen pixel, in fish units
   c.lineCap = 'round'
   c.lineJoin = 'round'
-  // tube feet
-  c.strokeStyle = `rgba(160,255,240,${(0.35 + 0.25 * glow).toFixed(3)})`
-  c.lineWidth = 0.8 * lw
+  const ink = (al) => `rgba(234,246,244,${(al * a).toFixed(3)})`
+
+  // the stilts: two pelvic rays and the tail's lower ray, down to the mud
+  c.strokeStyle = ink(0.6)
+  c.lineWidth = 0.75 * px
   c.beginPath()
-  for (let i = 0; i < 6; i++) {
-    const fx = -17 + i * 6.6
-    c.moveTo(fx, -2.5)
-    c.lineTo(fx - 1, 1.5)
-  }
-  // papillae, up front, and the feeding tentacles at the mouth
-  c.moveTo(-11, -13)
-  c.quadraticCurveTo(-15, -21, -13, -27)
-  c.moveTo(-5, -15.5)
-  c.quadraticCurveTo(-6, -24, -2, -29)
-  c.moveTo(-22, -5)
-  c.lineTo(-27, -3)
-  c.moveTo(-21, -3)
-  c.lineTo(-26, 0)
+  c.moveTo(-10, -55.3)
+  c.bezierCurveTo(-13, -38, -20, -16, -27, 1.4)
+  c.moveTo(-7, -55.1)
+  c.bezierCurveTo(-8, -36, -11, -16, -13, -0.4)
+  c.moveTo(35.5, -58.2)
+  c.bezierCurveTo(42, -44, 52, -20, 60, 0)
   c.stroke()
-  // the body: a soft, slightly lumpy sausage
+  // where each ray rests, a dimple in the sediment
+  c.strokeStyle = ink(0.3)
+  c.lineWidth = 0.6 * px
+  c.beginPath()
+  for (const [fx, fy] of [[-27, 1.4], [-13, -0.4], [60, 0]]) {
+    c.moveTo(fx - 3.2, fy + 0.4)
+    c.quadraticCurveTo(fx, fy + 1.3, fx + 3.2, fy + 0.4)
+  }
+  c.stroke()
+
+  // pectoral rays, a fan of feelers held up over the head
+  c.strokeStyle = ink(0.42)
+  c.lineWidth = 0.6 * px
+  c.beginPath()
+  for (const [ex, ey, qx, qy] of [[-74, -92, -38, -84], [-70, -101, -36, -88], [-63, -108, -33, -91], [-77, -84, -40, -79]]) {
+    c.moveTo(-23, -61)
+    c.quadraticCurveTo(qx, qy, ex, ey)
+  }
+  // dorsal fin and the upper lobe of the tail, as fine rays
+  c.moveTo(-7, -66.6)
+  c.lineTo(-2, -76)
+  c.moveTo(-3, -66.8)
+  c.lineTo(3, -75)
+  c.moveTo(1, -66.6)
+  c.lineTo(7, -72.5)
+  c.moveTo(36, -60)
+  c.lineTo(46, -68)
+  c.moveTo(36.4, -59.6)
+  c.lineTo(45, -64)
+  c.stroke()
+
+  // the body: occludes the plain behind it, outlined in one hairline
+  tripodBody(c)
+  c.fillStyle = 'rgba(2,7,16,0.92)'
+  c.fill()
+  c.strokeStyle = ink(0.62)
+  c.lineWidth = 0.75 * px
+  c.stroke()
+  // gill cover, lateral line, the small eye
+  c.strokeStyle = ink(0.36)
+  c.lineWidth = 0.55 * px
+  c.beginPath()
+  c.moveTo(-25, -64.6)
+  c.quadraticCurveTo(-21, -60.4, -25.4, -55.6)
+  c.moveTo(-21, -60.8)
+  c.bezierCurveTo(-2, -60.6, 18, -60.2, 34, -59.3)
+  c.moveTo(-32.4, -61)
+  c.arc(-33.6, -61, 1.2, 0, TAU)
+  c.stroke()
+  c.restore()
+
+  // a hairline dimension over the body, in screen pixels
+  if (label) {
+    const X0 = x - 41 * s
+    const X1 = x + 46 * s
+    const Y = y - 116 * s
+    c.strokeStyle = ink(0.34)
+    c.lineWidth = 0.75
+    c.setLineDash([2, 3])
+    c.beginPath()
+    c.moveTo(X0, y - 64 * s)
+    c.lineTo(X0, Y - 4)
+    c.moveTo(X1, y - 70 * s)
+    c.lineTo(X1, Y - 4)
+    c.stroke()
+    c.setLineDash([])
+    c.strokeStyle = ink(0.5)
+    c.beginPath()
+    c.moveTo(X0, Y)
+    c.lineTo(X1, Y)
+    c.moveTo(X0 + 3.5, Y - 2.5)
+    c.lineTo(X0, Y)
+    c.lineTo(X0 + 3.5, Y + 2.5)
+    c.moveTo(X1 - 3.5, Y - 2.5)
+    c.lineTo(X1, Y)
+    c.lineTo(X1 - 3.5, Y + 2.5)
+    c.stroke()
+    c.font = '500 10px Anybody, system-ui, sans-serif'
+    c.textAlign = 'center'
+    c.textBaseline = 'alphabetic'
+    c.fillStyle = ink(0.7)
+    c.fillText('about 30 cm', (X0 + X1) / 2, Y - 5)
+    // the note sits left of the front stilts, if it clears the scale
+    c.font = 'italic 12px Newsreader, Georgia, serif'
+    const note = 'stands on its fins'
+    const nx = x - 34 * s
+    if (nx - c.measureText(note).width > 44) {
+      c.textAlign = 'right'
+      c.fillStyle = ink(0.55)
+      c.fillText(note, nx, y + 3)
+    }
+  }
+}
+
+// A deep-sea cucumber: a translucent body that is brightest at its edges
+// (a fresnel rim), its gut showing through, on a row of tube feet.
+function cucumberBody(c) {
   c.beginPath()
   c.moveTo(24, -4)
   c.bezierCurveTo(25, -12, 16, -15.5, 6, -15)
@@ -669,24 +752,72 @@ function drawCucumber(c, x, y, s, glow) {
   c.bezierCurveTo(-6, -0.5, 10, -0.5, 18, -1)
   c.bezierCurveTo(22, -1.3, 24, -2, 24, -4)
   c.closePath()
-  const body = c.createLinearGradient(0, -16, 0, 0)
-  body.addColorStop(0, `rgba(160,255,240,${(0.16 + 0.14 * glow).toFixed(3)})`)
-  body.addColorStop(1, `rgba(108,248,232,${(0.05 + 0.06 * glow).toFixed(3)})`)
-  c.fillStyle = body
-  c.fill()
-  c.strokeStyle = `rgba(200,255,248,${(0.5 + 0.35 * glow).toFixed(3)})`
-  c.lineWidth = 0.9 * lw
+}
+function drawCucumber(c, x, y, s, glow) {
+  c.save()
+  c.translate(x, y)
+  c.scale(s, s)
+  const px = 1 / s
+  c.lineCap = 'round'
+  c.lineJoin = 'round'
+  // tube feet and papillae: glassy strands, their tips catching the light
+  c.strokeStyle = `rgba(160,255,240,${(0.22 + 0.16 * glow).toFixed(3)})`
+  c.lineWidth = 0.7 * px
+  c.beginPath()
+  for (let i = 0; i < 7; i++) {
+    const fx = -17 + i * 5.8
+    c.moveTo(fx, -2.2)
+    c.lineTo(fx - 0.8, 1.4)
+  }
+  c.moveTo(-11, -13.6)
+  c.quadraticCurveTo(-15, -21, -13.4, -27)
+  c.moveTo(-5, -15.6)
+  c.quadraticCurveTo(-6.4, -24, -2.6, -29.5)
+  c.moveTo(3, -15.4)
+  c.quadraticCurveTo(3.6, -20, 6.5, -22.5)
+  c.moveTo(-21.5, -6)
+  c.quadraticCurveTo(-25, -6, -27, -3.4)
+  c.moveTo(-21, -3.6)
+  c.quadraticCurveTo(-24, -2, -25.6, 0)
   c.stroke()
-  // a row of brighter spots along its back
-  c.fillStyle = `rgba(220,255,250,${(0.5 * glow).toFixed(3)})`
-  for (let i = 0; i < 5; i++) {
+  c.fillStyle = `rgba(220,255,250,${(0.4 + 0.4 * glow).toFixed(3)})`
+  for (const [tx, ty] of [[-13.4, -27], [-2.6, -29.5], [6.5, -22.5], [-27, -3.4], [-25.6, 0]]) {
     c.beginPath()
-    c.arc(-12 + i * 7, -12.5 + Math.abs(i - 2) * 0.6, 0.9, 0, TAU)
+    c.arc(tx, ty, 0.75 * px, 0, TAU)
     c.fill()
   }
+
+  // the body: almost clear inside…
+  cucumberBody(c)
+  c.fillStyle = `rgba(108,248,232,${(0.03 + 0.03 * glow).toFixed(3)})`
+  c.fill()
+  // …its gut, a loop of swallowed sediment seen through the skin…
+  c.strokeStyle = `rgba(234,246,244,${(0.16 + 0.08 * glow).toFixed(3)})`
+  c.lineWidth = 1.3 * px
+  c.beginPath()
+  c.moveTo(-17, -7)
+  c.bezierCurveTo(-9, -11.5, -2, -3.5, 5, -8)
+  c.bezierCurveTo(11, -12, 16, -6.5, 20, -6.4)
+  c.stroke()
+  // …and lit at the edges, where the light passes through the most skin
+  c.save()
+  cucumberBody(c)
+  c.clip()
+  for (const [lw, al] of [[7, 0.06], [4.2, 0.1], [2.2, 0.18], [1.1, 0.3]]) {
+    c.strokeStyle = `rgba(150,255,238,${(al * (0.7 + 0.5 * glow)).toFixed(3)})`
+    c.lineWidth = lw * px
+    cucumberBody(c)
+    c.stroke()
+  }
+  c.restore()
+  cucumberBody(c)
+  c.strokeStyle = `rgba(214,255,250,${(0.5 + 0.3 * glow).toFixed(3)})`
+  c.lineWidth = 0.8 * px
+  c.stroke()
   c.restore()
 }
 
+const CUC_X = 64 // the sea cucumber's place on the plain (it crawls left)
 function abyssScene() {
   let snow = []
   let geo = null
@@ -730,7 +861,7 @@ function abyssScene() {
       })
       // the sea cucumber's feeding trail, behind it on the floor
       trail = Array.from({ length: 70 }, (_, i) => ({
-        X: 40 + i * 5 + Math.sin(i * 0.31) * 6,
+        X: CUC_X + 30 + i * 5 + Math.sin(i * 0.31) * 6,
         z: 1.75 + i * 0.03 + Math.sin(i * 0.17) * 0.12,
       }))
     },
@@ -743,7 +874,7 @@ function abyssScene() {
       const glow = 0.72 + 0.28 * Math.sin(t * 0.9) * Math.sin(t * 0.31 + 2)
 
       // where the living light is: the sea cucumber
-      const cucX = 10
+      const cucX = CUC_X
       const cucZ = 1.7
       const gx = sx(cucX, cucZ)
       const gy = yAt(gx, cucZ)
@@ -811,11 +942,12 @@ function abyssScene() {
         c.fill()
       }
 
-      // a tripod fish, further off
+      // a tripod fish, a little further off, with its size noted
       {
-        const z = 2.3
-        const x = sx(-110, z)
-        drawTripod(c, x, yAt(x, z), (1.7 / z) * Math.min(1.6, w / 420), 1)
+        const z = 1.95
+        const x = sx(-150, z)
+        const ts = (1.7 / z) * Math.min(1.6, w / 400)
+        drawTripod(c, x, yAt(x, z), ts, 1, w > 420)
       }
 
       // the sea cucumber and its glow
@@ -990,7 +1122,7 @@ function buildTrench(focus, svg) {
   html.push('</div>')
   html.push(
     `<span class="zones__pin" style="--x:${TRENCH_FISH.x * 100}%;--y:${TRENCH_FISH.y * 100}%" data-x="${TRENCH_FISH.x}">` +
-      `<span class="zones__pin-label">Deepest fish seen <b>8,336 m</b></span></span>`,
+      `<span class="zones__pin-label">No fish seen below <b>8,336 m</b></span></span>`,
   )
   html.push(
     `<span class="zones__pin zones__pin--deep" style="--x:${TRENCH_DEEP.x * 100}%;--y:${TRENCH_DEEP.y * 100}%" data-x="${TRENCH_DEEP.x}">` +
@@ -1012,6 +1144,7 @@ export function init(ctx) {
 
   const track = root.querySelector('.zones__track')
   const list = root.querySelector('.zones__list')
+  const ladder = root.querySelector('.zones__ladder')
   if (reduced) root.classList.add('is-static')
 
   /* ------------------------------------------------------------ panels */
@@ -1065,8 +1198,17 @@ export function init(ctx) {
 
   /* ------------------------------------------------------------ layout */
   let horizontal = false
+  let strip = false // phones: a sideways swipe strip of windows
   let half = window.innerWidth / 2
   let dist = 0
+  // Scroll spent per pixel of sideways travel while pinned: the band moves a
+  // third faster than the page would, so five layers take ~4.7 screens.
+  const PACE = 0.75
+  const pinLen = () => Math.round(dist * PACE)
+  // Resting places, as progress through the pin: the intro, then each layer
+  // with its panel's left edge on the screen's (copy and window in the clear
+  // band between the rail and the ruler).
+  let stops = [0, 1]
 
   function layout() {
     horizontal = root.classList.contains('is-horizontal')
@@ -1092,6 +1234,25 @@ export function init(ctx) {
     panels.forEach((p, i) => {
       p.segLen = i === panels.length - 1 ? Math.max(40, dist + half - p.left) : p.width
     })
+    if (dist > 0) {
+      const raw = [0, ...panels.map((p) => clamp(p.left / dist)), 1].sort((a, b) => a - b)
+      stops = raw.filter((v, i) => i === 0 || v - raw[i - 1] > 0.02)
+    }
+  }
+
+  // Where to come to rest when the scroll stops inside the pin: carry on to
+  // the next layer in the direction of travel, unless the visitor only
+  // nudged a little way off the one they were on.
+  function snapStop(v, self) {
+    let i = 1
+    while (i < stops.length - 1 && stops[i] < v) i++
+    const a = stops[i - 1]
+    const b = stops[i]
+    if (v <= a) return a
+    if (v >= b) return b
+    const frac = (v - a) / (b - a)
+    if (self?.direction < 0) return frac > 0.82 ? b : a
+    return frac < 0.18 ? a : b
   }
 
   /* --------------------------------------------------- sonar, progress */
@@ -1161,6 +1322,7 @@ export function init(ctx) {
     const h = p.canvas.clientHeight
     if (!w || !h) return false
     p.dpr = Math.min(ctx.dpr, ctx.isMobile() ? 1.5 : 1.25)
+    p.out.dpr = p.dpr
     p.w = w
     p.h = h
     p.canvas.width = Math.round(w * p.dpr)
@@ -1235,15 +1397,20 @@ export function init(ctx) {
   function loop(time, deltaMs) {
     if (document.hidden) return
     const dt = Math.min(0.05, deltaMs / 1000)
-    // stacked: each window's progress comes from its place on the screen
-    // (read every rect first, then draw)
+    // stacked: each window's progress comes from its place on the screen,
+    // top to bottom; in the phone strip, from its place across the screen,
+    // so a swipe scrubs it like the pinned pass does (read every rect first,
+    // then draw)
     if (!horizontal) {
       const vh = window.innerHeight
+      const vw = window.innerWidth
       rects.length = 0
       for (const p of panels) rects.push(p.visible && p.frame ? p.frame.getBoundingClientRect() : null)
       panels.forEach((p, i) => {
         const r = rects[i]
-        if (r) progress(p, clamp((vh - r.top) / (vh + r.height)), r.left + r.width / 2, r.top + r.height / 2)
+        if (!r) return
+        const k = strip ? (vw - r.left) / (vw + r.width) : (vh - r.top) / (vh + r.height)
+        progress(p, clamp(k), r.left + r.width / 2, r.top + r.height / 2)
       })
     }
     for (const p of panels) {
@@ -1296,17 +1463,106 @@ export function init(ctx) {
     for (const p of panels) if (p.canvas) ro.observe(p.canvas)
   }
 
+  /* ------------------------------------------------------- phone strip */
+  // Phones: the windows sit side by side in a scroll-snap strip (CSS). Here:
+  // keyboard access, the depth ladder, and the trench survey, which plays
+  // when the hadal card arrives (a response to the swipe, so time-based).
+  function setupStrip() {
+    root.classList.remove('is-horizontal')
+    strip = true
+    layout()
+    list.setAttribute('tabindex', '0')
+    list.setAttribute('aria-labelledby', 'zones-title')
+    // sideways trackpad gestures scroll the strip, not the page
+    list.setAttribute('data-lenis-prevent-horizontal', '')
+    const steps = ladder ? [...ladder.querySelectorAll('.zones__step')] : []
+    if (ladder) ladder.hidden = false
+
+    let active = -1
+    let raf = 0
+    const offset = (i) => panels[i].el.offsetLeft - panels[0].el.offsetLeft
+    function sync() {
+      raf = 0
+      const step = offset(1) || 1
+      const pos = clamp(list.scrollLeft / step, 0, panels.length - 1)
+      ladder?.style.setProperty('--pos', pos.toFixed(3))
+      const i = Math.round(pos)
+      if (i !== active) {
+        active = i
+        steps.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'true' : 'false'))
+      }
+    }
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(sync)
+    }
+    const onStep = (e) => {
+      const b = e.target.closest('.zones__step')
+      if (!b) return
+      const i = clamp(+b.dataset.step || 0, 0, panels.length - 1)
+      list.scrollTo({ left: offset(i), behavior: reduced ? 'auto' : 'smooth' })
+    }
+    list.addEventListener('scroll', onScroll, { passive: true })
+    ladder?.addEventListener('click', onStep)
+    sync()
+
+    let sweepIO = null
+    let sweep = null
+    if (!reduced && hadal && 'IntersectionObserver' in window) {
+      scan.v = 0
+      paintScan()
+      sweepIO = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.intersectionRatio >= 0.6) {
+              if (!sweep && scan.v < 1) {
+                sweep = gsap.to(scan, { v: 1, duration: 2.6, ease: 'none', delay: 0.15, onUpdate: paintScan })
+              }
+            } else if (!e.isIntersecting) {
+              // gone from the strip: ready to survey again next time
+              sweep?.kill()
+              sweep = null
+              scan.v = 0
+              paintScan()
+            }
+          }
+        },
+        { root: list, threshold: [0, 0.6] },
+      )
+      sweepIO.observe(hadal.el)
+    }
+
+    return () => {
+      strip = false
+      list.removeEventListener('scroll', onScroll)
+      ladder?.removeEventListener('click', onStep)
+      cancelAnimationFrame(raf)
+      sweepIO?.disconnect()
+      sweep?.kill()
+      list.removeAttribute('tabindex')
+      list.removeAttribute('aria-labelledby')
+      list.removeAttribute('data-lenis-prevent-horizontal')
+      if (ladder) ladder.hidden = true
+      list.scrollLeft = 0
+      if (!reduced) {
+        scan.v = 0
+        paintScan()
+      }
+    }
+  }
+
   /* ------------------------------------------------------- the journey */
   const mm = gsap.matchMedia()
   mm.add(
     {
       wide: '(min-width: 900px) and (min-height: 600px) and (min-aspect-ratio: 1/1)',
+      phone: '(max-width: 767px)',
       reduce: '(prefers-reduced-motion: reduce)',
       // always true: matchMedia only calls back when some condition matches
       any: '(min-width: 0px)',
     },
     (m) => {
-      const { wide, reduce } = m.conditions
+      const { wide, phone, reduce } = m.conditions
+      if (phone) return setupStrip()
       if (!wide || reduce || reduced) {
         root.classList.remove('is-horizontal')
         layout()
@@ -1336,12 +1592,20 @@ export function init(ctx) {
       ScrollTrigger.create({
         trigger: root,
         start: 'top top',
-        end: () => `+=${dist}`,
+        end: () => `+=${pinLen()}`,
         pin: true,
         scrub: 0.9,
         animation: tween,
         anticipatePin: 1,
         invalidateOnRefresh: true,
+        // stop on whole layers, never on two half panels
+        snap: {
+          snapTo: snapStop,
+          duration: { min: 0.5, max: 1 },
+          delay: 0.14,
+          ease: 'power3.out',
+          inertia: false,
+        },
         onRefreshInit: layout,
         onRefresh: () => {
           layout()
@@ -1355,7 +1619,7 @@ export function init(ctx) {
       ScrollTrigger.create({
         trigger: root,
         start: 'top bottom',
-        end: () => `+=${dist + window.innerHeight * 2}`,
+        end: () => `+=${pinLen() + window.innerHeight * 2}`,
         onUpdate: () => {
           const r = root.getBoundingClientRect()
           const vh = window.innerHeight

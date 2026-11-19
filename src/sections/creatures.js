@@ -34,10 +34,11 @@
  * lamp flickers back on.
  *
  * Input: pointer (lagging lamp; data-cursor="lamp" on the stage), touch
- * (tap or sideways drag), keyboard (each animal is a real <button>: focus
- * places its label at once and glides the lamp to it), idle (the lamp
- * searches, visiting animals not yet found). Only finds the visitor caused
- * are announced to screen readers.
+ * (tap or sideways drag; while the visitor sinks, the lamp tours the six on
+ * its own, one beat of the scroll each), keyboard (each animal is a real
+ * <button>: focus places its label at once and brings the lamp to it), idle
+ * (the lamp searches, visiting animals not yet found). Only finds the
+ * visitor caused are announced to screen readers.
  *
  * Reduced motion: no sticky stage, one still frame, all labels shown.
  * Renders only while the section is on screen; pauses when the tab is hidden.
@@ -2056,25 +2057,35 @@ export function init(ctx) {
   const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches && !ctx.isTouch
   section.classList.add('is-live', reduced ? 'is-static' : 'is-float')
 
-  const hint = reduced ? 'Here are the animals that made them.' : fine ? null : 'Tap the dark to see who made them.'
+  // The partial's hint is for the still list (no JS, reduced motion). A
+  // mouse moves the lamp; on touch it finds them on its own as the visitor
+  // sinks (the tour), and a tap aims it.
+  const hint = reduced ? null : fine ? 'Move the lamp to see who made them.' : 'The lamp finds them as you sink.'
   if (hint) section.querySelectorAll('[data-hint]').forEach((el) => (el.textContent = hint))
 
-  const sp = {
-    cyan: makeSprite(C.cyan),
-    blue: makeSprite(C.blue),
-    lure: makeSprite(C.lure),
-    red: makeSprite(C.red, 64, 0.7),
-    ink: makeSprite(C.ink, 64, 0.8),
-    lamp: makeSprite(C.lamp, 32),
-    cyanSoft: makeSoft(C.cyan),
-    blueSoft: makeSoft(C.blue),
-    lureSoft: makeSoft(C.lure, 128),
-    redSoft: makeSoft(C.red),
-    inkSoft: makeSoft(C.ink),
-    spec: makeSpec(),
+  // Sprites and the beam are baked the first time the section comes near
+  // the screen, never during the intro.
+  let sp = null
+  let beamTex = null
+  function assets() {
+    if (sp) return
+    sp = {
+      cyan: makeSprite(C.cyan),
+      blue: makeSprite(C.blue),
+      lure: makeSprite(C.lure),
+      red: makeSprite(C.red, 64, 0.7),
+      ink: makeSprite(C.ink, 64, 0.8),
+      lamp: makeSprite(C.lamp, 32),
+      cyanSoft: makeSoft(C.cyan),
+      blueSoft: makeSoft(C.blue),
+      lureSoft: makeSoft(C.lure, 128),
+      redSoft: makeSoft(C.red),
+      inkSoft: makeSoft(C.ink),
+      spec: makeSpec(),
+    }
+    SPR = sp
+    beamTex = makeBeam()
   }
-  SPR = sp
-  const beamTex = makeBeam()
 
   const animals = [new Siphonophore(), new Atolla(), new Comb(), new Angler(), new Dragon(), new Squid()]
   const byId = Object.fromEntries(animals.map((a) => [a.id, a]))
@@ -2116,7 +2127,7 @@ export function init(ctx) {
   let t = 8.0
   let shift = 0
   let lastShift = 0
-  let lastSY = window.scrollY
+  let lastSY = scrollPos()
   let dScroll = 0 // page scroll since last frame (px): the descent speed
   let running = false
   let visible = false
@@ -2135,15 +2146,17 @@ export function init(ctx) {
   let secTop = 0
   let secH = 1
   let stageLeft = 0
+  let vh = window.innerHeight
   let near = false // within ~1.5 screens: the canvas is allocated
-  let introA = 1
-  let logA = 1
+  let introA = '' // last written --intro-a
+  let logA = '' // last written --log-a
   // touch: the lamp follows the descent from animal to animal (the tour)
   let tourOrder = []
   let tapped = false
-  let lastInputT = -1e9
-  let lastFindT = -1e9
-  let glideUntil = 0
+  let lastScrollT = -1e9 // the last frame the page moved
+  let lastActT = -1e9 // the last frame anything asked for full frame rate
+  let glideA = null // the animal a keyboard glide is bringing into view
+  let focusRaf = 0
 
   // pow: the lamp's own state (off, flickering on, on); on: what it gives
   // after the six-of-six dimming
@@ -2184,11 +2197,14 @@ export function init(ctx) {
   }
 
   /* ----------------------------------------------------------- layout */
+  // Document geometry, cached: per frame the scene is pure arithmetic on
+  // the scroll position, with no layout reads.
   function measureGeo() {
     const r = section.getBoundingClientRect()
     secTop = r.top + window.scrollY
     secH = Math.max(1, r.height)
     stageLeft = stage.getBoundingClientRect().left
+    vh = window.innerHeight
   }
   // where the stage's top edge is on screen: sticky in the floating scene
   function stageTop(sy = scrollPos()) {
@@ -2211,8 +2227,12 @@ export function init(ctx) {
       maskGrad = null
     }
   }
-  // The order the lamp visits the animals on touch: as each one rises
-  // through the middle of the screen.
+  // The tour: the order the lamp visits the animals as the visitor sinks, by
+  // when each one rises through the middle of the screen. Each gets an
+  // equal beat of the pinned scroll.
+  const TOUR_A = 0.07
+  const TOUR_B = 0.9
+  const aim = (a) => (a.id === 'siphonophore' ? a.beacon() : a.center())
   function planTour() {
     const yT = H * (mobile ? 0.42 : 0.45)
     tourOrder = animals
@@ -2223,6 +2243,23 @@ export function init(ctx) {
       })
       .sort((u, v) => u.p - v.p)
       .map((o) => o.a)
+  }
+  function inView(a) {
+    const [x, y] = aim(a)
+    const yMax = logRect && mobile ? logRect.y - 10 : H * 0.86
+    return x > W * 0.04 && x < W - rightInset && y > H * 0.12 && y < yMax
+  }
+  function tourTarget() {
+    const n = tourOrder.length
+    if (!n) return null
+    const i = clamp(Math.round(((progress - TOUR_A) / (TOUR_B - TOUR_A)) * (n - 1)), 0, n - 1)
+    // catch up first: an earlier animal the lamp missed, still in view
+    for (let j = 0; j < i; j++) {
+      const a = tourOrder[j]
+      if (!a.found && inView(a)) return a
+    }
+    if (inView(tourOrder[i])) return tourOrder[i]
+    return null
   }
 
   function measure() {
@@ -2715,17 +2752,17 @@ export function init(ctx) {
     lamp.on = lamp.pow * dim
     if (reduced) return
 
-    const rect = stage.getBoundingClientRect()
     let tx
     let ty
     let k
+    let tour = null
     if (focusA) {
       ;[tx, ty] = focusA.center()
       k = 0.07
       lamp.mode = 'focus'
     } else if (fine && pointer.inside && now - pointer.t < 9000) {
-      tx = pointer.cx - rect.left
-      ty = pointer.cy - rect.top
+      tx = pointer.cx - stageLeft
+      ty = pointer.cy - stageTop()
       k = 0.13
       lamp.mode = 'pointer'
     } else if (now - touch.t < 7000) {
@@ -2733,6 +2770,14 @@ export function init(ctx) {
       ty = touch.y
       k = 0.09
       lamp.mode = 'touch'
+    } else if (active && now - lastScrollT < 3500 && (tour = tourTarget())) {
+      // sinking with no hand on the lamp (touch, or keys): it goes from
+      // animal to animal on its own, one beat of the scroll each
+      ;[tx, ty] = aim(tour)
+      tx += Math.sin(t * 0.5) * lamp.r * 0.08
+      ty += Math.cos(t * 0.37) * lamp.r * 0.06
+      k = 0.085
+      lamp.mode = 'tour'
     } else {
       if (lamp.mode !== 'idle') {
         lamp.mode = 'idle'
@@ -2769,10 +2814,11 @@ export function init(ctx) {
 
   /* ----------------------------------------------------- discoveries */
   const NOTES = {
-    start: 'Vesper logged all six on the way down, between 610 and 2,870 m. Down here the water is emptier.',
+    start: 'This deep, the water is emptier. All six were logged higher up.',
     all: 'All six found. In one survey off California, about three quarters of the animals seen in open water could make light.',
-    still:
-      'Vesper logged all six on the way down, between 610 and 2,870 m. In one survey off California, about three quarters of the animals seen in open water could make light.',
+    still: 'In one survey off California, about three quarters of the animals seen in open water could make light.',
+    // touch, until the first tap: the hint, beside the log
+    tap: 'Tap the dark to aim the lamp.',
   }
   const LAST_HINT = {
     comb: 'One more. Look for color, not light.',
@@ -2784,11 +2830,18 @@ export function init(ctx) {
   }
   function noteFor() {
     if (foundCount >= 6) return NOTES.all
+    if (!fine && !tapped) return NOTES.tap
     if (foundCount === 5) {
       const last = animals.find((a) => !a.found)
       return (last && LAST_HINT[last.id]) || NOTES.start
     }
     return NOTES.start
+  }
+  function setNote() {
+    if (!noteEl || reduced) return
+    const text = noteFor()
+    if (noteEl.textContent !== text) noteEl.textContent = text
+    noteEl.classList.toggle('is-tap', text === NOTES.tap)
   }
   // `by`: 'quiet' (still frame), 'idle' (the lamp found it on its own), or
   // 'visitor' (pointer, touch or keyboard). Only the visitor's finds are
@@ -2804,17 +2857,23 @@ export function init(ctx) {
     pips.get(a.id)?.classList.add('is-found')
     if (foundEl) foundEl.textContent = String(foundCount)
     if (countEl) countEl.dataset.count = String(foundCount)
-    if (noteEl) noteEl.textContent = noteFor()
+    setNote()
     section.dataset.found = String(foundCount)
     if (by === 'visitor' && announceEl && lab) {
       announceEl.textContent = foundCount === 6 ? `${lab.name} found. All six found.` : `${lab.name} found. ${foundCount} of 6.`
     }
     if (!quiet) {
       a.react()
-      const r = stage.getBoundingClientRect()
+      lastActT = performance.now() + 2500 // its reaction plays at full frame rate
       const [cx, cy] = a.center()
-      ctx.emit('sonar', { x: r.left + cx, y: r.top + cy, strength: 0.28 })
+      ctx.emit('sonar', { x: stageLeft + cx, y: stageTop() + cy, strength: 0.28 })
       if (foundCount === 6) startFinale()
+      // a phone answers a find the visitor made with a tick
+      if (by === 'visitor' && !fine && navigator.userActivation?.hasBeenActive) {
+        try {
+          navigator.vibrate?.(8)
+        } catch {}
+      }
     }
   }
   function startFinale() {
@@ -2831,8 +2890,7 @@ export function init(ctx) {
       finale.pinged = true
       finale.pingT = finale.t
       ;[finale.px, finale.py] = byId[LOG_ORDER[LOG_ORDER.length - 1]].beacon()
-      const r = stage.getBoundingClientRect()
-      ctx.emit('sonar', { x: r.left + finale.px, y: r.top + finale.py, strength: 0.6 })
+      ctx.emit('sonar', { x: stageLeft + finale.px, y: stageTop() + finale.py, strength: 0.6 })
     }
     if (finale.t > F_RELIT + 2.4) {
       finale.t = -1
@@ -2841,7 +2899,7 @@ export function init(ctx) {
   }
 
   function updateAnimals(dt, now) {
-    const by = lamp.mode === 'idle' ? 'idle' : 'visitor'
+    const by = lamp.mode === 'idle' || lamp.mode === 'tour' ? 'idle' : 'visitor'
     for (const a of animals) {
       a.shift(shift)
       a.update(t, dt)
@@ -2985,6 +3043,8 @@ export function init(ctx) {
       }
     }
     placed.length = 0
+    // while a label is open, any other one gets out of its way quickly
+    if (listEl && listEl.classList.contains('has-on') !== !!best) listEl.classList.toggle('has-on', !!best)
     const order = best ? [best, ...animals.filter((a) => a !== best)] : animals
     for (const a of order) {
       const lab = labels.get(a)
@@ -3040,10 +3100,9 @@ export function init(ctx) {
     lamp.want = v || reduced
     if (v && lamp.onT < 0 && !reduced) {
       // the lamp comes on where the visitor is pointing, or near the squid
-      const r = stage.getBoundingClientRect()
       if (fine && pointer.inside) {
-        lamp.x = pointer.cx - r.left
-        lamp.y = pointer.cy - r.top
+        lamp.x = pointer.cx - stageLeft
+        lamp.y = pointer.cy - stageTop()
       } else if (!focusA) {
         ;[lamp.x, lamp.y] = byId.squid.center()
         lamp.x -= lamp.r * 0.25
@@ -3052,21 +3111,20 @@ export function init(ctx) {
     ctx.emit('lamp', { on: v })
   }
   function updateScroll() {
-    const r = section.getBoundingClientRect()
-    const vh = window.innerHeight
-    const sy = window.scrollY
+    // cached document geometry + the scroll position: no layout reads
+    const sy = scrollPos()
+    const top = secTop - sy
+    const bottom = top + secH
     dScroll = clamp(sy - lastSY, -90, 90)
     lastSY = sy
-    // read live geometry every frame: robust to other sections changing
-    // the page height after their own triggers were measured
-    progress = clamp(-r.top / Math.max(1, r.height - vh))
-    setActive(r.top < vh * 0.45 && r.bottom > vh * 0.55)
+    progress = clamp(-top / Math.max(1, secH - vh))
+    setActive(top < vh * 0.45 && bottom > vh * 0.55)
     // darkness: the stage is the water with its lights switched off
-    const enter = clamp((vh - r.top) / (vh * 0.85))
-    const exit = clamp(r.bottom / (vh * 0.85))
+    const enter = clamp((vh - top) / (vh * 0.85))
+    const exit = clamp(bottom / (vh * 0.85))
     const dark = smooth(0, 1, enter) * smooth(0, 1, exit)
-    const edge = Math.max(0, r.top) * 1.25
-    const edgeB = Math.max(0, vh - r.bottom) * 1.25
+    const edge = Math.max(0, top) * 1.25
+    const edgeB = Math.max(0, vh - bottom) * 1.25
     if (Math.abs(dark - lastDark) > 0.004 || Math.abs(edge - lastEdge) > 1 || Math.abs(edgeB - lastEdgeB) > 1) {
       lastDark = dark
       lastEdge = edge
@@ -3078,6 +3136,13 @@ export function init(ctx) {
     if (reduced) {
       shift = 0
       return
+    }
+    // the log belongs to the dark: it is gone before the stage lets go
+    // and the itinerary rises in under it
+    const la = smooth(0.62, 0.97, bottom / vh).toFixed(2)
+    if (la !== logA) {
+      logA = la
+      stage.style.setProperty('--log-a', la)
     }
     const p = progress
     lastShift = shift
@@ -3092,6 +3157,13 @@ export function init(ctx) {
       introY = 0
       intro.style.transform = ''
     }
+    // wide screens: once the animals rise into it, the intro sinks into
+    // the dark too; only the lamp still finds it
+    const ia = (mobile ? 1 : 1 - 0.7 * smooth(0.42, 0.8, p)).toFixed(2)
+    if (ia !== introA) {
+      introA = ia
+      intro.style.setProperty('--intro-a', ia)
+    }
   }
 
   /* ------------------------------------------------------------- loop */
@@ -3099,6 +3171,14 @@ export function init(ctx) {
   let cost = 0
   function tick() {
     const now = performance.now()
+    if (scrollPos() !== lastSY) lastScrollT = now
+    // Nothing has moved for a while (no scroll, no pointer, no reaction or
+    // flicker in progress): the slow drift that is left runs at ~30 fps.
+    const calm =
+      now - Math.max(lastScrollT, pointer.t, touch.t, focusSince, lastActT) > 1200 &&
+      finale.t < 0 &&
+      (lamp.onT < 0 || lamp.onT > 1.2)
+    if (calm && now - lastNow < 30) return
     const dt = Math.min(0.05, (now - lastNow) / 1000)
     lastNow = now
     t += dt
@@ -3149,6 +3229,18 @@ export function init(ctx) {
   }
 
   /* ---------------------------------------------------- visibility */
+  // near (~1.5 screens away): bake the sprites and allocate the canvas;
+  // far: free it again
+  const nearIo = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) near = e.isIntersecting
+      if (near) assets()
+      alloc()
+      if (near && reduced) still()
+    },
+    { rootMargin: '150% 0px' },
+  )
+  nearIo.observe(section)
   const io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) visible = e.isIntersecting
@@ -3161,6 +3253,24 @@ export function init(ctx) {
   document.addEventListener('visibilitychange', sync)
 
   /* ----------------------------------------------------------- input */
+  // Touch: a tap aims the lamp, a sideways drag steers it. A vertical
+  // swipe is the visitor sinking, not aiming (pointerdown alone would
+  // move the lamp at the start of every scroll).
+  const tap = { id: -1, x: 0, y: 0, t: 0, drag: false }
+  function aimAt(cx, cy) {
+    touch.x = cx - stageLeft
+    touch.y = cy - stageTop()
+    touch.t = performance.now()
+    if (reduced) {
+      lamp.x = touch.x
+      lamp.y = touch.y
+      focusA = null
+      still()
+    } else if (!tapped && !fine) {
+      tapped = true
+      setNote()
+    }
+  }
   stage.addEventListener(
     'pointermove',
     (e) => {
@@ -3169,11 +3279,13 @@ export function init(ctx) {
         pointer.cy = e.clientY
         pointer.t = performance.now()
         pointer.inside = true
-      } else if (e.pointerType === 'touch') {
-        const r = stage.getBoundingClientRect()
-        touch.x = e.clientX - r.left
-        touch.y = e.clientY - r.top
-        touch.t = performance.now()
+      } else if (e.pointerType === 'touch' && e.pointerId === tap.id && !reduced) {
+        const dx = e.clientX - tap.x
+        const dy = e.clientY - tap.y
+        if (tap.drag || (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2)) {
+          tap.drag = true
+          aimAt(e.clientX, e.clientY)
+        }
       }
     },
     { passive: true },
@@ -3186,35 +3298,77 @@ export function init(ctx) {
   stage.addEventListener(
     'pointerdown',
     (e) => {
-      const r = stage.getBoundingClientRect()
-      if (e.pointerType === 'touch' || !fine) {
-        touch.x = e.clientX - r.left
-        touch.y = e.clientY - r.top
-        touch.t = performance.now()
-      }
-      if (reduced) {
-        lamp.x = e.clientX - r.left
-        lamp.y = e.clientY - r.top
-        focusA = null
-        still()
+      if (e.pointerType === 'touch') {
+        tap.id = e.pointerId
+        tap.x = e.clientX
+        tap.y = e.clientY
+        tap.t = performance.now()
+        tap.drag = false
+      } else if (!fine || reduced) {
+        // a mouse on a touch-first device, or the still scene: aim at once
+        aimAt(e.clientX, e.clientY)
       }
     },
     { passive: true },
   )
+  stage.addEventListener(
+    'pointerup',
+    (e) => {
+      if (e.pointerId !== tap.id) return
+      tap.id = -1
+      if (tap.drag) return
+      if (performance.now() - tap.t < 700 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 14) aimAt(e.clientX, e.clientY)
+    },
+    { passive: true },
+  )
+  stage.addEventListener('pointercancel', (e) => {
+    if (e.pointerId === tap.id) tap.id = -1
+  })
 
   // Keyboard: every animal is a real button. Focus shows its label at once,
-  // beside the animal, and glides the lamp (and the scene) to it.
+  // beside the animal, and brings the lamp (and the scene) to it.
+  // where an animal sits in the scene's own layout (its rest height)
+  const restY = (a) => (a.id === 'siphonophore' && a.pts.length ? a.pts[Math.floor(a.pts.length * 0.35)].by : a.baseY)
+  function stopGlide() {
+    glideA = null
+    const ln = ctx.lenis
+    if (!ln || ln.isScrolling !== 'smooth') return
+    if (typeof ln.reset === 'function') ln.reset()
+    else ln.scrollTo(window.scrollY, { immediate: true, force: true })
+  }
   function bringIntoView(a) {
     if (reduced) return
-    const r = section.getBoundingClientRect()
-    const vh = window.innerHeight
-    const [, y] = a.center()
-    const pinned = r.top <= 1 && r.bottom >= vh - 1
+    measureGeo()
+    // where the page really is: the browser may just have scrolled the
+    // button into view on its own
+    const sy = window.scrollY
+    const top = secTop - sy
+    const pinned = top <= 1 && top + secH >= vh - 1
+    const [, y] = aim(a)
     if (pinned && y > H * 0.16 && y < H * 0.84) return
     // the progress at which this animal sits at about half height
-    const p = clamp(0.5 - (H * 0.5 - a.baseY) / (L.travel * H * a.z), 0.02, 0.98)
-    const top = r.top + window.scrollY
-    ctx.scrollTo(top + p * Math.max(0, r.height - vh), { duration: 1.4 })
+    const p = clamp(0.5 - (H * 0.5 - restY(a)) / (L.travel * H * a.z), 0.02, 0.98)
+    const target = secTop + p * Math.max(0, secH - vh)
+    const ln = ctx.lenis
+    if (!ln) return window.scrollTo(0, target)
+    // never glide from a stale position: sync Lenis to the page first
+    stopGlide()
+    if (Math.abs(ln.animatedScroll - sy) > 0.5) ln.scrollTo(sy, { immediate: true, force: true })
+    if (!pinned) {
+      // arriving from outside the section: go straight there
+      ln.scrollTo(target, { immediate: true, force: true })
+      return
+    }
+    // within the pinned stage: glide the scene to it
+    glideA = a
+    ln.scrollTo(target, {
+      duration: 1.4,
+      easing: (k) => 1 - Math.pow(1 - k, 4),
+      force: true,
+      onComplete: () => {
+        if (glideA === a) glideA = null
+      },
+    })
   }
   function showNow(a) {
     if (reduced) return
@@ -3243,44 +3397,62 @@ export function init(ctx) {
       focusA = a
       focusSince = performance.now()
       showNow(a)
-      bringIntoView(a)
-      if (reduced) still()
+      if (reduced) return still()
+      // after the browser's own scroll-into-view (which follows the focus
+      // event), so Lenis starts from where the page really is
+      cancelAnimationFrame(focusRaf)
+      focusRaf = requestAnimationFrame(() => {
+        if (focusA === a) bringIntoView(a)
+      })
     })
     lab.btn.addEventListener('blur', () => {
       if (focusA === a) focusA = null
+      cancelAnimationFrame(focusRaf)
+      // Tab pressed mid-glide: stop, so the browser can bring the next
+      // stop into view without being dragged back here
+      if (glideA === a) stopGlide()
     })
     lab.btn.addEventListener('click', () => {
       focusA = a
       showNow(a)
-      bringIntoView(a)
+      if (glideA !== a) bringIntoView(a)
       if (!a.found && !reduced) setFound(a, 'visitor')
       if (reduced) still()
     })
   }
 
   /* ---------------------------------------------------------- resize */
-  measure()
+  // The first measure comes with the observer's first callback, after the
+  // browser's own layout: init never forces one while the intro plays.
   if (reduced) {
     lamp.want = true
     lamp.pow = lamp.on = 1
-    still()
-  } else {
-    // place every animal before the first frame so nothing pops
-    updateScroll()
-    for (const a of animals) {
-      a.shift(shift)
-      a.update(t, 0)
-    }
-  }
+  } else setNote()
+  let laidOut = false
   const ro = new ResizeObserver(() => {
     measure()
     if (reduced) still()
+    else if (!laidOut) {
+      // place every animal before the first frame so nothing pops
+      updateScroll()
+      for (const a of animals) {
+        a.shift(shift)
+        a.update(t, 0)
+      }
+    }
+    laidOut = true
   })
   ro.observe(stage)
   document.fonts?.ready?.then(() => {
     measure()
     if (reduced) still()
   })
+  // other sections (pins above this one) can move it: keep the cached
+  // offsets true
+  ctx.ScrollTrigger?.addEventListener?.('refresh', measureGeo)
+  const mainEl = section.closest('main')
+  if (mainEl) new ResizeObserver(() => measureGeo()).observe(mainEl)
+  window.addEventListener('resize', () => (vh = window.innerHeight), { passive: true })
 
   // handy for QA in the console
   section.__creatures = {

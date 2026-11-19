@@ -14,13 +14,15 @@
 }
 
 /* ---------------------------------------------------------------- title */
-/* Centred on the viewport (not the instrument-offset .wrap): the light
-   falls from the middle of the surface, so the title sits under it. */
+/* The stage is the page's content column (.wrap: it keeps the right gutter
+   clear for the depth ruler), and the title is centred in it, like the
+   lead and the fact below. It is a size container, so the title is fitted
+   to the column, not to the viewport. */
 .hero__stage {
   display: grid;
   align-items: center;
-  padding-inline: calc(var(--rail) + var(--instrument));
   min-width: 0;
+  container-type: inline-size;
 }
 
 .hero__title {
@@ -29,20 +31,27 @@
   --wght: 250;
   --lh: 0.86;
   /* --squeeze (0 → 1, scrubbed by hero.js as you leave the surface) puts
-     the title under pressure: wdth 150 → 60, wght 250 → 800, lines packed
-     tighter, tracking opened up so heavy glyphs never touch. */
+     the title under the first of the pressure: it narrows and thickens to
+     the type of the water it is sinking into (the descent section's own
+     compression, ctx.depth.compression(100), written to --sq-wdth/--sq-wght
+     by hero.js), and its lines and letters pack tighter. Every heading
+     further down is squeezed harder still: the effect only ever grows. */
+  --sq-wdth: 128;
+  --sq-wght: 394;
   --squeeze: 0;
   position: relative;
   margin: 0;
   text-align: center;
-  /* "way down." measures 7.11em at full width: fit it to the stage */
-  font-size: min(15.5rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 7.2));
+  /* "way down." measures 7.11em at full width: fit it to the column with
+     a clear margin either side, so it never crowds the ruler's figures */
+  font-size: min(15.5rem, calc((100vw - 2 * var(--rail) - var(--instrument)) / 7.8));
+  font-size: min(15.5rem, calc(100cqi / 7.8));
   line-height: calc(var(--lh) - 0.06 * var(--squeeze));
-  letter-spacing: calc(-0.04em + 0.034em * var(--squeeze));
+  letter-spacing: calc(-0.04em - 0.012em * var(--squeeze));
   color: var(--c-ink);
   /* --breath / --press: the intro's exhale, layered on top */
-  font-stretch: calc((var(--wdth) - 90 * var(--squeeze) + var(--breath, 0)) * 1%);
-  font-weight: calc(var(--wght) + 550 * var(--squeeze) + var(--press, 0));
+  font-stretch: calc((var(--wdth) + (var(--sq-wdth) - var(--wdth)) * var(--squeeze) + var(--breath, 0)) * 1%);
+  font-weight: calc(var(--wght) + (var(--sq-wght) - var(--wght)) * var(--squeeze) + var(--press, 0));
   white-space: nowrap;
   will-change: transform;
   translate: 0 -2vh;
@@ -98,10 +107,11 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
 
 /* ------------------------------------------------- scroll cue + plumb */
 /* The bob comes to rest on the same baseline as the lead and the fact, and
-   the cue spans the lead's height, so it never touches the fold. */
+   the cue spans the lead's height, so it never touches the fold. Centred
+   on the content column, under the title. */
 .hero__cue {
   position: absolute;
-  left: 50%;
+  left: calc(50% - var(--instrument) / 2);
   bottom: 0;
   display: grid;
   justify-items: center;
@@ -157,8 +167,9 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
   .hero__title {
     /* "the way" is the widest phone line at 5.64em */
     --lh: 0.9;
-    font-size: min(9rem, calc((100vw - 2 * (var(--rail) + var(--instrument))) / 5.75));
-    letter-spacing: calc(-0.045em + 0.038em * var(--squeeze));
+    font-size: min(9rem, calc((100vw - 2 * var(--rail) - var(--instrument)) / 5.75));
+    font-size: min(9rem, calc(100cqi / 5.75));
+    letter-spacing: calc(-0.045em - 0.01em * var(--squeeze));
     translate: 0 -4svh;
   }
 

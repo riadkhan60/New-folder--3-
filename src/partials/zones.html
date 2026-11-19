@@ -1,13 +1,25 @@
 <section id="zones" class="zones" data-depth-start="200" data-depth-end="1000" aria-labelledby="zones-title">
   <div class="zones__track">
     <header class="zones__intro">
-      <h2 id="zones-title" class="zones__title t-display">Five layers of&nbsp;ocean.</h2>
+      <h2 id="zones-title" class="zones__title t-display">Five layers of&nbsp;ocean</h2>
       <p class="zones__lead">
         Oceanographers divide the water column into five layers. Each is darker than the one
         above it, and under more pressure. You are in the second now. Vesper passes through all
         five on the way down.
       </p>
     </header>
+
+    <!-- phones only (zones.js shows it): a depth ladder over the strip of
+         windows; it shows which layer is in view, and each station brings
+         its layer in -->
+    <div class="zones__ladder" role="group" aria-label="Go to a layer" hidden>
+      <button type="button" class="zones__step" data-step="0" aria-label="Sunlight zone, 0 to 200 metres"><i></i><span aria-hidden="true">0 m</span></button>
+      <button type="button" class="zones__step" data-step="1" aria-label="Twilight zone, 200 to 1,000 metres"><i></i><span aria-hidden="true">200 m</span></button>
+      <button type="button" class="zones__step" data-step="2" aria-label="Midnight zone, 1,000 to 4,000 metres"><i></i><span aria-hidden="true">1,000 m</span></button>
+      <button type="button" class="zones__step" data-step="3" aria-label="The abyss, 4,000 to 6,000 metres"><i></i><span aria-hidden="true">4,000 m</span></button>
+      <button type="button" class="zones__step" data-step="4" aria-label="Hadal zone, 6,000 to 10,935 metres"><i></i><span aria-hidden="true">6,000 m</span></button>
+      <span class="zones__ladder-bead" aria-hidden="true"></span>
+    </div>
 
     <!-- Each layer gets a window of its own water (its colour from depth.js),
          with a scale of its own depths. The page around it stays at the depth
@@ -129,8 +141,9 @@
           <p class="zones__range"><span class="zones__num" aria-hidden="true">4,000<span class="zones__dash">–</span>6,000<span class="zones__unit">m</span></span><span class="visually-hidden">From 4,000 to 6,000 metres</span></p>
           <p class="zones__sci">Abyssopelagic</p>
           <p class="zones__text">
-            Flat plains of soft sediment cover most of the deep sea floor. Sea cucumbers, brittle
-            stars and tripod fish live on marine snow, the slow fall of debris from above.
+            Flat plains of soft sediment cover most of the deep sea floor. Sea cucumbers and brittle
+            stars feed on marine snow, the slow fall of debris from above; tripod fish stand on
+            their fins and wait for prey to drift by.
           </p>
           <dl class="zones__data">
             <div><dt>Light</dt><dd>Living light only</dd></div>
@@ -158,9 +171,9 @@
           <p class="zones__range"><span class="zones__num" aria-hidden="true">6,000<span class="zones__dash">–</span>10,935<span class="zones__unit">m</span></span><span class="visually-hidden">From 6,000 to 10,935 metres</span></p>
           <p class="zones__sci">Hadalpelagic</p>
           <p class="zones__text">
-            Trenches, where one tectonic plate sinks beneath another. A snailfish filmed at
-            8,336 metres is the deepest fish ever seen; below it, amphipods scavenge all the way
-            to the bottom.
+            Trenches, where one tectonic plate sinks beneath another. The deepest fish ever seen, a
+            snailfish, was filmed at 8,336 metres in a trench off Japan; below that, amphipods
+            scavenge all the way to the bottom.
           </p>
           <dl class="zones__data">
             <div><dt>Light</dt><dd>Living light only</dd></div>

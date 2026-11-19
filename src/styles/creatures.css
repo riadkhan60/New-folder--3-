@@ -115,6 +115,11 @@
   display: block;
   color: var(--c-ink-2);
 }
+/* wide screens: once the animals rise into the intro, its text sinks into
+   the dark (JS scrubs --intro-a); the lamp's warm copy still finds it */
+#life.is-float .creatures__intro .creatures__base {
+  opacity: var(--intro-a, 1);
+}
 .creatures__lit {
   display: none;
 }

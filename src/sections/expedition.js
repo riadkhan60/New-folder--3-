@@ -15,8 +15,10 @@
  * released again on the way up (the site's pressure compression, in one
  * figure). The big figure is time, not depth: the profile shape belongs to
  * #dives and the 10,935 m figure to the finale. A small readout rides beside
- * the signal with Vesper's depth ("on the floor" at the bottom), stepping
- * round the phase captions so they never collide.
+ * the signal with Vesper's depth ("on the floor" at the bottom), clear of the
+ * sloping line and stepping round the phase captions so they never collide.
+ * On phones, where the clock comes to rest right beside the floor, the
+ * readout bows out while Vesper is on the floor.
  *
  * The section opens with the switch to red lamps. When the dive crosses
  * 6,000 m going down, Vesper's lamp head (22 LEDs) flickers white, goes dark
@@ -216,6 +218,7 @@ export function init(ctx) {
 
   /* ---------------------------------------------------------- sketches */
   const sketches = new Map()
+  const sketchSvgs = [...root.querySelectorAll('.exp__sketch svg')]
   days.forEach((day) => {
     const fig = day.querySelector('.exp__sketch')
     if (!fig) return
@@ -260,13 +263,23 @@ export function init(ctx) {
       const r = p.getBoundingClientRect()
       return { x: r.left - lr.left - 6, y: r.top - lr.top - 4, width: r.width + 12, height: r.height + 8 }
     })
-    return { W, H, T, D, pTop, pBot, h, nodes, phaseBoxes }
+    // viewBox units per screen pixel of each logbook sketch, so its labels
+    // can keep a readable size however small the drawing is set
+    const skUnits = sketchSvgs.map((s) => {
+      const w = s.getBoundingClientRect().width
+      const vb = s.viewBox?.baseVal
+      return w > 0 && vb?.width ? vb.width / w : 0
+    })
+    return { W, H, T, D, pTop, pBot, h, nodes, phaseBoxes, skUnits }
   }
 
   function build() {
     const g = measure()
     if (!g.H || !g.W) return
     const { W, H, T, D, pTop, pBot, h } = g
+    g.skUnits.forEach((u, i) => {
+      if (u) sketchSvgs[i].style.setProperty('--sk-u', u.toFixed(3))
+    })
     const r0 = Math.min(56, h * 0.06)
     const rD = Math.min(90, h * 0.09)
     const yA1 = pTop - r0 // track A ends, plunge begins
@@ -371,6 +384,7 @@ export function init(ctx) {
   const phaseLit = phases.map(() => false)
   let floor = false
   let diving = false
+  let reading = false
   let shallow = false
   let near = false
   let clockRed = false
@@ -478,12 +492,19 @@ export function init(ctx) {
       }
     }
 
-    // Vesper's depth, riding beside the signal while it is on the swing
+    // Vesper's depth, riding beside the signal while it is on the swing.
+    // On phones the dive clock comes to rest right beside the floor, so the
+    // readout bows out there and hands over to the lit "on the floor" caption.
+    const narrow = W < 560
     const inDive = y > pTop - 2 && y < G.pBot + 2
     if (inDive !== diving) {
       diving = inDive
       plunge.classList.toggle('is-diving', inDive)
-      readout?.classList.toggle('is-on', inDive)
+    }
+    const readOn = inDive && !(narrow && shownM >= MAX)
+    if (readOn !== reading) {
+      reading = readOn
+      readout?.classList.toggle('is-on', readOn)
     }
     const isShallow = inDive && depthM < RED_FROM
     if (isShallow !== shallow) {
@@ -492,18 +513,32 @@ export function init(ctx) {
     }
     if (inDive && readout) {
       // keep the readout on the open side of the line (inside the swing on
-      // phones), and step round the phase captions
+      // phones), clear of the sloping line itself, and step round the phase
+      // captions
       const rw = G.readW
       const top = y - 18
       const rh = 38
       const side = (l, dy = 0) => (l ? { x: x - rw, y: top + dy, width: rw - 18, height: rh } : { x: x + 18, y: top + dy, width: rw - 18, height: rh })
       const collides = (b) => G.phaseBoxes.some((p) => hit(b, p))
-      let left = x > W - 190 || (W < 560 && x > 150)
-      let dy = 0
-      if (collides(side(left))) {
-        const other = side(!left)
-        if (!collides(other) && other.x >= 0 && other.x + other.width <= W) left = !left
-        else dy = collides(side(left, 44)) ? -44 : 44
+      // On a sloping leg the line runs on past the signal: drop the readout
+      // below it where the line rises towards that side, lift it where the
+      // line falls away, so the line never strikes through the text.
+      const mdx = (atY(lut, y + 6).x - atY(lut, y - 6).x) / 12 // dx per dy
+      const clear = (l) => {
+        if (Math.abs(mdx) < 0.25) return 0 // (near) vertical: nothing to cross
+        const k = 1 / mdx // dy per dx
+        const need = Math.max(0, 24 - 20 * Math.abs(k))
+        return k * (l ? -1 : 1) < 0 ? need : -need
+      }
+      let left = x > W - 190 || (narrow && x > 150)
+      let dy = clear(left)
+      if (collides(side(left, dy))) {
+        const dy2 = clear(!left)
+        const other = side(!left, dy2)
+        if (!collides(other) && other.x >= 0 && other.x + other.width <= W) {
+          left = !left
+          dy = dy2
+        } else dy += collides(side(left, dy + 44)) ? -44 : 44
       }
       if (left !== readLeft) {
         readLeft = left

@@ -53,6 +53,8 @@
 }
 
 /* ----------------------------------------------------------------- chart */
+/* A plain wrapper except on phones, where it holds the chart (see below). */
+.pf__track { display: contents; }
 .pf__chart {
   grid-column: 1 / -1;
   position: relative;
@@ -505,7 +507,31 @@
 /* ------------------------------------------------------------------ mobile */
 @media (max-width: 767px) {
   .pf { row-gap: var(--s-6); padding-block: var(--s-8); }
-  .pf__chart { height: min(122vw, 32rem); margin-inline: -0.25rem; }
+  /* The chart is held, centred, for a little over a screen of scroll while
+     the lines draw and the sub rides; then it scrolls on and the list and
+     the price follow. (The bottom padding is where the hint hangs.) */
+  #dives.profiles { --pf-ch: min(122vw, 32rem, calc(100svh - 8rem)); }
+  .pf__track {
+    display: block;
+    grid-column: 1 / -1;
+    height: calc(var(--pf-ch) + 140svh);
+    padding-bottom: 2.75rem;
+    box-sizing: content-box;
+  }
+  .pf__chart {
+    position: sticky;
+    top: max(0.75rem, calc((100svh - var(--pf-ch)) / 2));
+    height: var(--pf-ch);
+    margin-inline: -0.25rem;
+  }
+  .pf__chart .pf__hint {
+    position: absolute;
+    left: 0.25rem;
+    top: 100%;
+    margin-top: 0.9rem;
+  }
+  #dives.is-static .pf__track { height: auto; padding-bottom: 0; }
+  #dives.is-static .pf__chart { position: relative; top: auto; }
   .pf__opt { min-height: 3.75rem; }
   .pf__price-n { font-size: clamp(3rem, 15vw, 4.2rem); }
   .pf__hint { margin-top: var(--s-4); }

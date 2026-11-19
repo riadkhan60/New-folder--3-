@@ -18,6 +18,12 @@
   outline-color: var(--fin-red);
 }
 
+/* in-page links focus the figure (tabindex -1) for screen readers; it is not
+   a control, so it gets no ring */
+.fin__figure:focus {
+  outline: none;
+}
+
 /* ================================================================ stage */
 .fin__stage {
   position: relative;
@@ -1194,6 +1200,28 @@
   .fin__done-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* touch: the form's controls are full-size tap targets (the type is already
+   above 16 px, so iOS never zooms into a field) */
+@media (pointer: coarse) {
+  #reserve .fin__input,
+  #reserve .fin__select,
+  #reserve .fin__select-btn {
+    min-height: 48px;
+  }
+  #reserve .fin__select-btn {
+    align-items: center;
+  }
+  #reserve .fin__ping {
+    min-height: 44px;
+  }
+  /* the extra height goes above the words, so the underline stays under them */
+  #reserve .fin__again {
+    display: inline-flex;
+    align-items: flex-end;
+    min-height: 44px;
   }
 }
 

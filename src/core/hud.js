@@ -12,9 +12,17 @@
  *  - when anything visible enters the full instrument's footprint, it
  *    folds into a slim glass chip (FLIP: the odometer flies down into it);
  *    in open water it unfolds again;
- *  - when something sits under the chip itself and the visitor stops to
- *    read, the chip tucks away, and comes back as soon as the dive resumes.
- * Short or narrow screens and touch devices always get the chip.
+ *  - when body text sits under the chip and the visitor stops to read, the
+ *    chip tucks away, and comes back as soon as the dive resumes. Headings,
+ *    big type, buttons and form fields make it tuck at once.
+ * The chip keeps one live reading beside the depth, chosen by layer: the
+ * sunlight left in the sunlit zone, the falling temperature through the
+ * twilight zone's thermocline, then the pressure all the way down.
+ * Short or narrow screens and touch devices always get the chip. There it
+ * docks at the top, in the nav's place: it slides in when the nav hides on
+ * the way down and makes way when the nav returns, so it only ever sits on
+ * lines already read. (With reduced motion the nav never hides, so the chip
+ * stays at the bottom.)
  *
  * Ruler (right edge, ≥ 1024 px): a scale for the whole page. Ticks sit at
  * the scroll positions where depth.js reaches each depth, so the spacing
@@ -41,6 +49,13 @@ const C_RED = [255, 59, 47]
 
 // screens that always get the slim chip instead of the full instrument
 const CHIP_ONLY = '(max-width: 1023px), (max-height: 700px), (hover: none) and (pointer: coarse)'
+
+// the chip's live reading, by layer: what changes most down there
+const READ_KIND = { sunlight: 'light', twilight: 'temperature' } // then pressure
+
+// things the chip must never sit on, even for a moment
+const HEADINGS = 'h1, h2, h3'
+const CONTROLS = '.btn, button, input:not([type="hidden"]), select, textarea'
 
 /** Sunlight as a share of what reaches the surface. */
 export function formatLight(depth, light) {
@@ -159,6 +174,32 @@ export function init(ctx) {
   const zoneSci = $('.hud__zone-sci')
   const unitEl = $('.hud__unit')
   const dirEl = $('.hud__dir')
+  const readEl = $('.hud__read')
+  const readSwap = $('.hud__read-swap')
+  const readV = $('.hud__read-v')
+  const readU = $('.hud__read-u')
+  const swaps = [zoneSwap, readSwap].filter(Boolean)
+
+  /* ------------------------------------------------- the chip's reading */
+  let readKind = 'light'
+  function renderRead(s) {
+    if (!readEl) return
+    let v
+    let u
+    if (readKind === 'light') {
+      const L = formatLight(s.depth, s.light)
+      v = L.v
+      u = L.u ? '% light' : 'light'
+    } else if (readKind === 'temperature') {
+      v = s.temperature.toFixed(1)
+      u = '°C'
+    } else {
+      v = s.pressure < 99.95 ? s.pressure.toFixed(1) : fmt(s.pressure)
+      u = 'bar'
+    }
+    setText(readV, v)
+    setText(readU, u)
+  }
 
   /* ------------------------------------------------------ zone swap */
   let zoneId = null
@@ -169,24 +210,28 @@ export function init(ctx) {
     zoneSci.textContent = z.sci
     bandFrom.textContent = fmt(z.from)
     bandTo.textContent = fmt(z.to)
+    // the reading changes with the layer, in the same roll as the zone
+    readKind = READ_KIND[z.id] || 'pressure'
+    if (readEl) readEl.dataset.kind = readKind
+    renderRead(D.get())
   }
   function swapZone(z) {
     pendingZone = z
     if (reduced || !hud.classList.contains('is-on')) {
       zoneTl?.kill()
-      gsap.set(zoneSwap, { clearProps: 'all' })
+      gsap.set(swaps, { clearProps: 'all' })
       applyZone(z)
       return
     }
     zoneTl?.kill()
     zoneTl = gsap
       .timeline()
-      .to(zoneSwap, { yPercent: -120, opacity: 0, filter: 'blur(3px)', duration: 0.32, ease: 'power2.in' })
+      .to(swaps, { yPercent: -120, opacity: 0, filter: 'blur(3px)', duration: 0.32, ease: 'power2.in' })
       .call(() => applyZone(pendingZone))
       .fromTo(
-        zoneSwap,
+        swaps,
         { yPercent: 120, opacity: 0, filter: 'blur(3px)' },
-        { yPercent: 0, opacity: 1, filter: 'blur(0px)', duration: 0.9, ease: 'expo.out' },
+        { yPercent: 0, opacity: 1, filter: 'blur(0px)', duration: 0.9, ease: 'expo.out', stagger: 0.06 },
       )
       .fromTo(
         $('.hud__live'),
@@ -214,6 +259,22 @@ export function init(ctx) {
   hud.classList.toggle('is-chip-only', chipOnly)
   hud.classList.toggle('is-compact', compact)
 
+  // chip-only screens: the chip docks at the top while the nav is away
+  let topDock = false
+  const setTopDock = () => {
+    topDock = chipOnly && !reduced
+    hud.classList.toggle('is-topdock', topDock)
+  }
+  setTopDock()
+  let navAway = !!document.querySelector('.nav')?.classList.contains('is-hidden')
+  hud.classList.toggle('is-nav-away', navAway)
+  ctx.on('nav', (d) => {
+    const v = !!d?.hidden && !d?.open
+    if (v === navAway) return
+    navAway = v
+    hud.classList.toggle('is-nav-away', v)
+  })
+
   // FLIP: the zone line and the odometer fly between the two layouts
   const flips = [
     { el: zoneRow, ref: zoneName },
@@ -226,7 +287,8 @@ export function init(ctx) {
   function setCompact(v, animate = true) {
     if (v === compact) return
     compact = v
-    const motion = animate && !reduced && on && !chipOnly && !document.hidden
+    // no flight (and no ghosts) while the readout is stepped aside
+    const motion = animate && !reduced && on && !chipOnly && !document.hidden && !tucked && !docked
     if (!motion) {
       gsap.killTweensOf(flipEls)
       gsap.set(flipEls, { clearProps: 'transform' })
@@ -285,6 +347,7 @@ export function init(ctx) {
     const roots = [main, document.getElementById('footer') || document.querySelector('body > footer')].filter(Boolean)
     const found = new Set()
     const art = new Set()
+    const hard = new Set()
     const disp = new Map()
     const display = (el) => {
       let d = disp.get(el)
@@ -316,10 +379,22 @@ export function init(ctx) {
         .forEach((el) => {
           if (!el.parentElement?.closest('svg') && !found.has(el)) art.add(el)
         })
+      // what you act on: the chip gives way to it at once
+      root.querySelectorAll(CONTROLS).forEach((el) => {
+        if (el.closest('[hidden]')) return
+        found.add(el)
+        hard.add(el)
+      })
     }
-    return { text: found, art }
+    // headings and big type: the chip gives way to them at once as well
+    for (const el of found) {
+      if (hard.has(el)) continue
+      if (el.matches(HEADINGS) || parseFloat(getComputedStyle(el).fontSize) >= 32) hard.add(el)
+    }
+    return { text: found, art, hard }
   }
 
+  let hardEls = new Set()
   const expHits = new Set()
   const chipHits = new Set()
   let expIO = null
@@ -333,7 +408,7 @@ export function init(ctx) {
     let probe = null
     if (asCompact !== compact) {
       probe = document.createElement('div')
-      probe.className = `hud${asCompact ? ' is-compact' : ''}${chipOnly ? ' is-chip-only' : ''}`
+      probe.className = `hud${asCompact ? ' is-compact' : ''}${chipOnly ? ' is-chip-only' : ''}${topDock ? ' is-topdock' : ''}`
       probe.setAttribute('aria-hidden', 'true')
       probe.style.cssText = `${hud.style.cssText};visibility:hidden`
       el = readout.cloneNode(true)
@@ -380,7 +455,8 @@ export function init(ctx) {
     chipIO?.disconnect()
     expHits.clear()
     chipHits.clear()
-    const { text, art } = collectTargets()
+    const { text, art, hard } = collectTargets()
+    hardEls = hard
     expIO = chipOnly ? null : observer(expHits, footprint(false), 14, -2)
     chipIO = observer(chipHits, footprint(true), 4, -2)
     // the full instrument steps out of the way of text and drawings alike;
@@ -396,14 +472,16 @@ export function init(ctx) {
 
   const visible = (el) =>
     el.isConnected && (!el.checkVisibility || el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
-  const covered = (hits) => {
-    for (const el of hits) if (visible(el)) return true
+  const covered = (hits, only = null) => {
+    for (const el of hits) if ((!only || only.has(el)) && visible(el)) return true
     return false
   }
 
+  let docked = false
   let foldT = 0
   let unfoldT = 0
   let chipCovered = false
+  let chipHard = false
   function evaluate() {
     if (!ready) return
     if (!chipOnly) {
@@ -429,15 +507,18 @@ export function init(ctx) {
       }
     }
     chipCovered = covered(chipHits)
+    chipHard = chipCovered && covered(chipHits, hardEls)
     updateTuck()
   }
+  // Evaluated in a task, after the frame has been drawn: layout is clean
+  // then, so checking visibility never forces a recalculation mid-frame.
   let evQ = 0
   function schedule() {
     if (!evQ) {
-      evQ = requestAnimationFrame(() => {
+      evQ = setTimeout(() => {
         evQ = 0
         evaluate()
-      })
+      }, 0)
     }
   }
   // reveals that happen without scrolling (tweens, pins settling)
@@ -445,12 +526,16 @@ export function init(ctx) {
     if (ready && !document.hidden && (expHits.size || chipHits.size || compact)) schedule()
   }, 450)
 
-  // the chip steps aside while the visitor reads what is under it
+  // The chip steps aside while the visitor reads what is under it, and at
+  // once for headings, big type and controls. Docked at the top it only
+  // ever passes over lines already read, so there it waits for a pause.
   let idle = true
   let idleT = 0
+  let paused = true
+  let pauseT = 0
   let tucked = false
   function updateTuck() {
-    const t = compact && chipCovered && idle
+    const t = compact && ((chipHard && (!topDock || paused)) || (chipCovered && idle))
     if (t !== tucked) {
       tucked = t
       hud.classList.toggle('is-tucked', t)
@@ -458,15 +543,21 @@ export function init(ctx) {
   }
   let lastEvalAt = 0
   function activity() {
-    if (idle) {
+    if (idle || paused) {
       idle = false
+      paused = false
       updateTuck()
     }
     clearTimeout(idleT)
     idleT = setTimeout(() => {
       idle = true
       schedule()
-    }, 1000)
+    }, 650)
+    clearTimeout(pauseT)
+    pauseT = setTimeout(() => {
+      paused = true
+      schedule()
+    }, 260)
     const now = performance.now()
     if (now - lastEvalAt > 90) {
       lastEvalAt = now
@@ -477,6 +568,7 @@ export function init(ctx) {
   chipMQ.addEventListener?.('change', () => {
     chipOnly = chipMQ.matches
     hud.classList.toggle('is-chip-only', chipOnly)
+    setTopDock()
     if (chipOnly) setCompact(true, false)
     remeasure()
   })
@@ -489,6 +581,7 @@ export function init(ctx) {
   const fill = $('.hud__fill')
   let rulerH = 0
   let map = null // { yFor(d), maxScroll }
+  let maxP = 1 // where the needle stops: the 10,935 m tick
 
   marksEl.innerHTML = MARKS.map(
     (m, i) =>
@@ -528,6 +621,7 @@ export function init(ctx) {
 
   function measure() {
     map = buildMap()
+    maxP = clamp(map.yFor(D.MAX) / map.maxScroll) || 1
     if (getComputedStyle(ruler).display === 'none') return
     rulerH = ruler.clientHeight
     if (!rulerH) return
@@ -587,6 +681,16 @@ export function init(ctx) {
   document.fonts?.ready.then(remeasure)
 
   /* --------------------------------------------------------- update */
+  // The scroll position without a layout read: Lenis knows it, and without
+  // Lenis it is read once, at the start of the scroll event.
+  let nativeY = window.scrollY
+  let vh = window.innerHeight
+  window.addEventListener('resize', () => {
+    vh = window.innerHeight
+    nativeY = window.scrollY
+  })
+  const scrollPos = () => (ctx.lenis ? ctx.lenis.scroll : nativeY)
+
   let lastHadal = -1
   let lastF = -1
   let lastBand = -1
@@ -595,18 +699,21 @@ export function init(ctx) {
   let fast = false
   let fastT = 0
   let a11yT = 0
+  let a11yTrail = 0
 
   function updateScroll(force = false) {
     const s = D.get()
+    const y = scrollPos()
     // visibility: quiet in the hero, on once the descent begins
-    const nextOn = ready && (s.depth > 0.5 || window.scrollY > window.innerHeight * 0.3)
+    const nextOn = ready && (s.depth > 0.5 || y > vh * 0.3)
     if (nextOn !== on) {
       on = nextOn
       hud.classList.toggle('is-on', on)
     }
-    // ruler needle (scroll-driven: depth is constant in the hero and footer)
+    // ruler needle (scroll-driven: depth is constant in the hero), held at
+    // the 10,935 m tick once the floor is reached
     if (rulerH && map) {
-      const p = clamp(window.scrollY / map.maxScroll)
+      const p = clamp(y / map.maxScroll, 0, maxP)
       if (Math.abs(p - lastProgress) > 0.0002 || force) {
         lastProgress = p
         needle.style.transform = `translate3d(0, ${(p * rulerH).toFixed(1)}px, 0)`
@@ -654,6 +761,7 @@ export function init(ctx) {
     const L = formatLight(s.depth, s.light)
     setText(fields.light, L.v)
     setText(fields.lightUnit, L.u)
+    renderRead(s)
 
     const isFast = !reduced && Math.abs(s.velocity) > 14
     if (isFast !== fast) {
@@ -683,12 +791,15 @@ export function init(ctx) {
       }
     }
 
-    // screen-reader text, without chattering every frame
+    // screen-reader text, without chattering every frame, and always
+    // settled on the final depth once the water is still (e.g. after a jump)
     const now = performance.now()
     if (now - a11yT > 600 || force) {
       a11yT = now
       setText(depthText, fmt(s.depth))
     }
+    clearTimeout(a11yTrail)
+    a11yTrail = setTimeout(() => setText(depthText, fmt(D.get().depth)), 650)
   }
 
   // at the floor the footer's small print owns the bottom-left corner:
@@ -696,7 +807,10 @@ export function init(ctx) {
   const footer = document.getElementById('footer') || document.querySelector('body > footer')
   if (footer && 'IntersectionObserver' in window) {
     new IntersectionObserver(
-      ([e]) => hud.classList.toggle('is-docked', e.isIntersecting),
+      ([e]) => {
+        docked = e.isIntersecting
+        hud.classList.toggle('is-docked', docked)
+      },
       { rootMargin: '0px 0px -24px 0px' },
     ).observe(footer)
   }
@@ -708,5 +822,14 @@ export function init(ctx) {
     activity()
   }
   if (ctx.lenis) ctx.lenis.on('scroll', onScroll)
-  else window.addEventListener('scroll', onScroll, { passive: true })
+  else {
+    window.addEventListener(
+      'scroll',
+      () => {
+        nativeY = window.scrollY
+        onScroll()
+      },
+      { passive: true },
+    )
+  }
 }

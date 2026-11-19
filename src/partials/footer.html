@@ -8,7 +8,15 @@
           <span class="visually-hidden">Noctiluca</span>
           <span class="foot__word-type" aria-hidden="true">Noct<span class="foot__i">ı<span class="foot__tittle"></span></span>luca</span>
         </p>
-        <p class="foot__line">Crewed submersible dives to the floor of the Challenger Deep, from Apra Harbor, Guam.</p>
+        <p class="foot__line">Crewed submersible dives from Apra Harbor, Guam, to 1,000&nbsp;m, 5,500&nbsp;m and the floor of the Challenger Deep.</p>
+      </div>
+
+      <div class="foot__ascent">
+        <button class="foot__return" type="button" data-foot-return>
+          <span class="foot__rope" aria-hidden="true"><span class="foot__bead"></span></span>
+          <span class="foot__return-label">Return to the surface</span>
+        </button>
+        <p class="foot__return-note">In Vesper the ascent takes about four hours. This takes a few seconds.</p>
       </div>
 
       <nav class="foot__nav" aria-label="Footer">
@@ -27,14 +35,6 @@
         <a class="foot__mail" href="mailto:dives@noctiluca.example">dives@noctiluca.example</a>
         <p class="foot__addr">Apra Harbor, Guam</p>
       </div>
-
-      <div class="foot__ascent">
-        <button class="foot__return" type="button" data-foot-return>
-          <span class="foot__rope" aria-hidden="true"><span class="foot__bead"></span></span>
-          <span class="foot__return-label">Return to the surface</span>
-        </button>
-        <p class="foot__return-note">In Vesper the ascent takes about four hours. This takes a few seconds.</p>
-      </div>
     </div>
 
     <div class="foot__base">
@@ -43,7 +43,10 @@
     </div>
   </div>
 
-  <!-- the ascent: bubbles stream past, then a moment of sunlight at the surface -->
+  <!-- the ascent: the page dissolves into water and light while bubbles
+       stream past, then a moment of sunlight at the surface -->
+  <div class="foot__veil" data-foot-veil aria-hidden="true"></div>
   <canvas class="foot__bubbles" data-foot-bubbles aria-hidden="true"></canvas>
   <div class="foot__surfaced" data-foot-surfaced aria-hidden="true"></div>
+  <p class="foot__surfaced-line" data-foot-surfaced-line role="status"></p>
 </footer>

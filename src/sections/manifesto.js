@@ -165,6 +165,9 @@ export function init(ctx) {
     g.fillRect(0, 0, 64, 64)
   }
 
+  // The backing store is allocated on the first spark and released whenever
+  // the section leaves the screen (a full-viewport canvas is ~11 MB at 2x).
+  let sized = false
   function sizeCanvas() {
     if (!canvas) return
     cdpr = Math.min(ctx.dpr, ctx.isMobile() ? 1.25 : 1.5)
@@ -172,10 +175,22 @@ export function init(ctx) {
     ch = stage.clientHeight
     canvas.width = Math.round(cw * cdpr)
     canvas.height = Math.round(ch * cdpr)
+    sized = true
+  }
+  function releaseCanvas() {
+    if (!canvas || !sized) return
+    if (running) {
+      gsap.ticker.remove(tickSparks)
+      running = false
+    }
+    particles.length = 0
+    canvas.width = canvas.height = 0
+    sized = false
   }
 
   function sparkWord(el, count, withBloom = true) {
     if (!c2d || !onScreen || document.hidden || particles.length > 260) return
+    if (!sized) sizeCanvas()
     const sr = stage.getBoundingClientRect()
     const r = el.getBoundingClientRect()
     // one soft bloom behind the word: the disturbed water lighting up
@@ -303,7 +318,8 @@ export function init(ctx) {
   function measure() {
     H = root.offsetHeight
     SH = stage.offsetHeight
-    sizeCanvas()
+    // re-size an allocated canvas to the new stage; otherwise stay lazy
+    if (sized) sizeCanvas()
   }
   measure()
   // scroll position (from the section's top) at a share of the stuck range
@@ -399,7 +415,7 @@ export function init(ctx) {
     end: 'bottom top',
     onToggle: (self) => {
       onScreen = self.isActive
-      if (!onScreen) particles.length = 0
+      if (!onScreen) releaseCanvas()
     },
   })
 

@@ -1,9 +1,14 @@
 /**
  * core/nav — fixed top bar.
  *
- * - Anchor links scroll with ctx.scrollTo (Lenis) and light the active section.
+ * - Anchor links: main.js scrolls (pin-aware), keeps history and moves
+ *   keyboard focus; the nav closes its menu and parks focus on the target.
+ *   The active section is lit as the dive passes it.
  * - Hides on the way down, returns on the way up (or when the pointer nears
- *   the top edge, or focus enters it).
+ *   the top edge, or focus enters it). Only the visitor's own scrolling
+ *   brings it back: a scripted scroll upwards (a form error, a hand-off)
+ *   leaves it away so it never lands on what was scrolled to. Announces
+ *   ctx.emit('nav', { hidden, open }) — the HUD docks in its place.
  * - Sound toggle: emits ctx.emit('sound', { on }). The preference is stored by
  *   core/audio under SOUND_KEY; the button follows audio's 'sound:state', so
  *   it only reads "on" while sound is really playing.
@@ -54,41 +59,25 @@ export function init(ctx) {
   })
 
   /* ------------------------------------------------------- anchors */
+  // main.js scrolls to every in-page anchor (pin-aware, with history and
+  // keyboard focus). The nav only has to get its menu out of the way first:
+  // this runs before main's handler, which sits on the document.
   nav.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#"]')
-    if (!a) return
+    if (!a || !menuOpen) return
     const id = a.getAttribute('href')
-    const target = id.length > 1 ? document.querySelector(id) : null
-    if (!target) return
-    e.preventDefault()
-    // Lenis also listens for anchor clicks (on window); its second scrollTo
-    // would replace ours and drop the onComplete that moves focus.
-    e.stopPropagation()
-    const fromKeyboard = e.detail === 0
-    const wasOpen = menuOpen
-    if (menuOpen) closeMenu({ restoreFocus: false })
-    // Keyboard users, and anyone leaving the menu (whose link just
-    // vanished), continue from the section they chose, not from <body>.
-    const moveFocus = fromKeyboard || wasOpen
-    const land = () => {
-      if (!moveFocus) return
-      const focusEl = target.querySelector('h1, h2') || target
+    let target = null
+    try {
+      target = id.length > 1 ? document.querySelector(id) : null
+    } catch {}
+    closeMenu({ restoreFocus: false })
+    // the link just vanished with the menu: park focus on the section the
+    // visitor chose, so it never falls to <body> while the water scrolls
+    const focusEl = target && (target.matches('h1, h2') ? target : target.querySelector('h1, h2') || target)
+    if (focusEl) {
       if (!focusEl.hasAttribute('tabindex')) focusEl.setAttribute('tabindex', '-1')
       focusEl.focus({ preventScroll: true })
     }
-    if (moveFocus && wasOpen) {
-      // park focus on the target straight away, so it never falls to <body>
-      // while the water scrolls
-      land()
-    }
-    // A pinned section sits inside a .pin-spacer; once scrolled past, the
-    // section itself is parked at the end of its pin. Aim for the spacer, so
-    // "The layers" from below lands at the start of the pass, not its end.
-    const p = target.parentElement
-    const dest = p && p.classList.contains('pin-spacer') ? p : target
-    if (id === '#surface') ctx.scrollTo(0, { onComplete: land })
-    else ctx.scrollTo(dest, { onComplete: land })
-    if (!ctx.lenis) land()
   })
 
   /* ------------------------------------------------- active section */
@@ -106,8 +95,12 @@ export function init(ctx) {
       if (a.getAttribute('href') === `#${active}`) a.setAttribute('aria-current', 'location')
       else a.removeAttribute('aria-current')
     }
-    placeIndicator()
+    // measured in a task after the frame (this runs mid-frame, from the
+    // depth listener, where reading offsets would force a recalculation)
+    clearTimeout(indT)
+    indT = setTimeout(() => placeIndicator(), 0)
   }
+  let indT = 0
   function placeIndicator(immediate = false) {
     const link = links.find((l) => l.dataset.section === active)
     if (!link || !list.offsetParent) {
@@ -124,28 +117,81 @@ export function init(ctx) {
 
   /* ------------------------------------- hide on down, show on up */
   let hidden = false
+  const announce = () => ctx.emit('nav', { hidden, open: menuOpen })
   const setHidden = (v) => {
     if (v === hidden) return
     hidden = v
     nav.classList.toggle('is-hidden', v)
+    announce()
   }
-  let lastY = window.scrollY
+  // keyboard focus inside the bar keeps it out (tracked on focus changes,
+  // so scrolling never has to ask the style engine). A link that merely
+  // kept focus from a click doesn't pin the bar open.
+  let focusInside = false
+  const isKeyFocus = (el) => {
+    try {
+      return !!el?.matches(':focus-visible')
+    } catch {
+      return true
+    }
+  }
+  // (focusin, which follows focusout when focus moves within the bar, sets it again)
+  nav.addEventListener('focusin', (e) => (focusInside = isKeyFocus(e.target)))
+  nav.addEventListener('focusout', () => (focusInside = false))
+
+  // Is the visitor scrolling, or a script? A scroll session starts with a
+  // wheel, a touch, a scroll key or a scrollbar drag and lasts while the
+  // scroll events keep coming (Lenis' easing tail, touch momentum).
+  let intentAt = -1e9
+  let lastScrollAt = -1e9
+  let userScroll = false
+  const intent = () => (intentAt = performance.now())
+  const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar'])
+  const opts = { passive: true, capture: true }
+  window.addEventListener('wheel', intent, opts)
+  // a swipe, not a tap: a tap on a button that scrolls the page (a form's
+  // error, a hand-off) is a script's scroll
+  window.addEventListener('touchmove', intent, opts)
+  window.addEventListener('keydown', (e) => {
+    if (!SCROLL_KEYS.has(e.key)) return
+    const t = e.target instanceof Element ? e.target : null
+    if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
+    // Space on a button or link presses it; it doesn't scroll
+    if ((e.key === ' ' || e.key === 'Spacebar') && t?.closest('button, a[href], [role="button"]')) return
+    intent()
+  }, opts)
+  // a press on the page's own scrollbar lands on <html>
+  window.addEventListener('pointerdown', (e) => {
+    if (e.target === html) intent()
+  }, opts)
+
+  let lastY = ctx.lenis ? ctx.lenis.scroll : window.scrollY
   let acc = 0
-  function onScroll() {
-    const y = window.scrollY
+  let scrolled = null
+  function onScroll(y) {
     const dy = y - lastY
     lastY = y
-    nav.classList.toggle('is-scrolled', y > 24)
+    const now = performance.now()
+    if (now - intentAt < 260) userScroll = true
+    else if (now - lastScrollAt > 180) userScroll = false
+    lastScrollAt = now
+    const isScrolled = y > 24
+    if (isScrolled !== scrolled) {
+      scrolled = isScrolled
+      nav.classList.toggle('is-scrolled', isScrolled)
+    }
     if (menuOpen || reduced) return
     if (y < 140) return setHidden(false)
     // a little hysteresis so tiny trackpad wobbles don't flicker the bar
     acc = Math.sign(dy) === Math.sign(acc) ? acc + dy : dy
-    if (acc > 24 && !nav.matches(':focus-within')) setHidden(true)
-    else if (acc < -36) setHidden(false)
+    if (acc > 24 && !focusInside) setHidden(true)
+    else if (acc < -36 && userScroll) setHidden(false)
   }
-  if (ctx.lenis) ctx.lenis.on('scroll', onScroll)
-  else window.addEventListener('scroll', onScroll, { passive: true })
-  onScroll()
+  // the scroll position comes from Lenis (no layout read mid-frame), or is
+  // read once at the start of the native scroll event
+  if (ctx.lenis) ctx.lenis.on('scroll', (l) => onScroll(l.scroll))
+  else window.addEventListener('scroll', () => onScroll(window.scrollY), { passive: true })
+  onScroll(lastY)
 
   if (!ctx.isTouch) {
     window.addEventListener(
@@ -232,6 +278,7 @@ export function init(ctx) {
     menuOpen = true
     setBackgroundInert(true)
     setHidden(false)
+    announce()
     menu.hidden = false
     nav.classList.add('is-open')
     html.classList.add('nav-is-open')
@@ -277,6 +324,7 @@ export function init(ctx) {
   function closeMenu({ restoreFocus = true } = {}) {
     if (!menuOpen) return
     menuOpen = false
+    announce()
     setBackgroundInert(false)
     nav.classList.remove('is-open')
     html.classList.remove('nav-is-open')

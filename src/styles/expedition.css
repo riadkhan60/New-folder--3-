@@ -412,18 +412,21 @@
 .exp__sketch .exp__sk-beams path { stroke: color-mix(in srgb, var(--exp-accent) 55%, transparent); stroke-width: 0.75; }
 .exp__sketch .exp__sk-hatch { fill: url(#exp-hatch); stroke: none; }
 .exp__sketch pattern path { stroke: var(--c-line-strong); stroke-width: 1; }
+/* Label sizes are in the drawing's own units. --sk-u (viewBox units per
+   screen pixel, set by expedition.js) keeps them at a readable size on
+   screen when the drawing is set small (tablet, phone). */
 .exp__sketch .exp__sk-label {
   fill: var(--c-ink-3);
   font-family: var(--font-display);
   font-stretch: 100%;
   font-weight: 420;
-  font-size: 12px;
+  font-size: max(12px, calc(11px * var(--sk-u, 0)));
   font-variant-numeric: tabular-nums lining-nums;
 }
 .exp__sketch .exp__sk-label--it {
   font-family: var(--font-text);
   font-style: italic;
-  font-size: 13px;
+  font-size: max(13px, calc(12px * var(--sk-u, 0)));
   fill: var(--c-ink-2);
 }
 .exp__sketch .exp__sk-label--ink { fill: var(--c-ink-2); }
@@ -616,9 +619,10 @@
   #expedition.expedition {
     --exp-numw: 3rem;
     --exp-rail: 1.25rem;
-    --exp-pad: 1.9rem;
+    --exp-pad: 1.6rem;
     padding-block: var(--s-9) var(--s-8);
   }
+  .exp__log { margin-top: 4.5rem; }
   .exp__head { column-gap: 0.9rem; }
   .exp__title,
   .exp__lead,
@@ -634,6 +638,8 @@
   .exp__sketch { width: min(100%, 15.5rem); margin-top: var(--s-4); }
   /* phones: the deck view is atmosphere only; keep the log moving */
   .exp__sketch--deck { display: none; }
+  /* the stamp's lettering would be too small to read; the ring says it */
+  .exp__sketch .exp__sk-label--stamp { display: none; }
 
   .exp__day--descent .exp__num-n { font-size: 4.2rem; }
   .exp__day--descent .exp__node { top: calc(var(--exp-pad) + 2.6rem); }

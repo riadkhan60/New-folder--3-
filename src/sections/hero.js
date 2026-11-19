@@ -1,20 +1,25 @@
 /**
  * hero.js — #surface. The page's only <h1>, just under the surface.
  *
- * 1. Intro (after ctx.ready): the title's characters settle into focus the
- *    way things do seen through moving water — a ripple travels out from
- *    the centre, each glyph wavers, stretches and un-blurs, while the whole
- *    line breathes out to its full surface width.
+ * 1. Intro: the title's characters settle into focus the way things do seen
+ *    through moving water — a ripple travels out from the centre, each glyph
+ *    wavers, stretches and un-blurs, while the whole line breathes out to
+ *    its full surface width. With the loader it starts as the flood's
+ *    waterline reaches the title band (the loader's .is-exiting + 0.55 s),
+ *    so the water uncovers the headline as it forms; ctx.ready is the
+ *    fallback (?skipintro, or a fast-forwarded intro).
  * 2. Scroll: the hero's exit is the first, plainest demonstration of the
  *    site's one idea. The composition holds almost still for the first
  *    screen of scroll (it rises at a few percent of the scroll speed and
  *    eases into full speed), so the squeeze happens in plain view:
  *      - the lead, the fact and the cue let go first;
- *      - the title is put under pressure: Anybody wdth 150 → 60,
- *        wght 250 → 800, lines packed tighter. power2.in, so the pressure
- *        visibly builds;
- *      - only once it is a dense, narrow block does it rise away and dim,
- *        handing over to the manifesto.
+ *      - the title takes on the first of the pressure: it narrows and
+ *        thickens to the type of the water below it (Anybody wdth/wght of
+ *        ctx.depth.compression(100), the descent section's own state), its
+ *        lines and letters pack tighter. power2.in, so the pressure builds.
+ *        Compression only ever grows with depth: every heading further down
+ *        is narrower and heavier than this one ends up;
+ *      - then it rises away and dims, handing over to the manifesto.
  *    One CSS variable (--squeeze, 0 → 1) drives every axis; hero.css maps it.
  * 3. A plumb line pays out under "Scroll to descend", slowly, on a loop.
  */
@@ -42,6 +47,13 @@ export function init(ctx) {
 
   root.classList.add('is-armed')
   let introDone = false
+
+  // the squeeze ends at the type of the water the title sinks into
+  const sq = ctx.depth?.compression?.(100)
+  if (sq) {
+    title.style.setProperty('--sq-wdth', sq.wdth)
+    title.style.setProperty('--sq-wght', sq.wght)
+  }
 
   /* ------------------------------------------------------------ split */
   let split = null
@@ -75,7 +87,13 @@ export function init(ctx) {
   }
 
   /* ----------------------------------------------------------- intro */
-  function playIntro() {
+  let played = false
+  // ghost: started by the flood, while the loader's wordmark still sits on
+  // the title band. The title forms as a soft, faint shape in the water and
+  // only pulls into focus as the wordmark lifts away toward the nav.
+  function playIntro(ghost = false) {
+    if (played) return
+    played = true
     root.classList.remove('is-armed')
     const ease = gsap.parseEase('abyss')
     const tb = title.getBoundingClientRect()
@@ -86,12 +104,16 @@ export function init(ctx) {
       const r = el.getBoundingClientRect()
       const x = clamp((r.left + r.width / 2 - cx) / half, -1, 1)
       const line = r.top - tb.top > tb.height * 0.4 ? 1 : 0
-      return { el, s: el.style, x, line, delay: Math.abs(x) * 0.7 + line * 0.16 }
+      return { el, s: el.style, x, line, delay: Math.abs(x) * 0.45 + line * 0.12 }
     })
 
-    const DUR = 2.0
-    const total = DUR + 0.7 + 0.16 + 0.05
+    // legible ~0.4 s after it starts at the centre, ~0.9 s at the ends;
+    // the ripple's last wavering settles over the long tail
+    const DUR = 1.7
+    const total = DUR + 0.45 + 0.12 + 0.05
     const st = { t: 0 }
+    const g = ghost ? { op: 0.36, blur: 9 } : { op: 1, blur: 0 }
+    if (ghost) gsap.to(g, { op: 1, blur: 0, duration: 0.5, ease: 'power2.inOut', delay: GHOST_FOCUS })
 
     const draw = () => {
       for (const c of data) {
@@ -104,8 +126,8 @@ export function init(ctx) {
         const x = inv * 0.05 * Math.sin(ph * 1.3 + 0.8)
         const sk = inv * 7 * Math.cos(ph)
         const sy = 1 + inv * 0.5
-        const blur = inv * inv * 18
-        c.s.opacity = Math.min(1, lp * 2.6).toFixed(3)
+        const blur = inv * inv * 18 + g.blur
+        c.s.opacity = (Math.min(1, lp * 3.2) * g.op).toFixed(3)
         c.s.transform = `translate3d(${x.toFixed(4)}em, ${y.toFixed(4)}em, 0) skewX(${sk.toFixed(2)}deg) scaleY(${sy.toFixed(4)})`
         c.s.filter = blur > 0.1 ? `blur(${blur.toFixed(2)}px)` : 'none'
       }
@@ -123,7 +145,12 @@ export function init(ctx) {
       gsap.to(st, { t: total, duration: total, ease: 'none', onUpdate: draw, onComplete: done })
     }
     // the line exhales to its full surface width as the light floods in
-    gsap.to(title, { '--breath': 0, '--press': 0, duration: 2.8, ease: 'abyss' })
+    gsap.to(title, { '--breath': 0, '--press': 0, duration: 2.6, ease: 'abyss' })
+
+    gsap.delayedCall(1.9, () => {
+      introDone = true
+      if (plumbST.isActive && !document.hidden) plumb.play()
+    })
 
     // the rest comes into focus, as if through water
     gsap.fromTo(
@@ -135,7 +162,7 @@ export function init(ctx) {
         duration: 1.6,
         ease: 'abyss',
         stagger: 0.16,
-        delay: 1.0,
+        delay: 0.8,
         clearProps: 'filter',
       },
     )
@@ -197,13 +224,36 @@ export function init(ctx) {
     },
   })
 
+  // With the loader: start as the flood's waterline reaches the title band
+  // (it crosses the screen in 1.2 s; at 0.55 s it is under the first line),
+  // while the loader's wordmark lifts away toward the nav.
+  const FLOOD_TO_TITLE = 0.55
+  // …and focus as the wordmark (it flies at flood + 0.7 s) clears the band
+  const GHOST_FOCUS = 0.45
+  let offFlood = null
+  let floodObs = null
+  const onFlood = () => {
+    offFlood?.()
+    floodObs?.disconnect()
+    offFlood = floodObs = null
+    if (!played) gsap.delayedCall(FLOOD_TO_TITLE, playIntro, [true])
+  }
+  const loaderEl = ctx.skipIntro ? null : document.querySelector('.loader')
+  if (loaderEl) {
+    offFlood = ctx.on('intro:flood', onFlood)
+    if (loaderEl.classList.contains('is-exiting')) onFlood()
+    else if (typeof MutationObserver !== 'undefined') {
+      floodObs = new MutationObserver(() => {
+        if (loaderEl.classList.contains('is-exiting')) onFlood()
+      })
+      floodObs.observe(loaderEl, { attributes: true, attributeFilter: ['class'] })
+    }
+  }
+  // ?skipintro, no loader, or an intro fast-forwarded past the flood
   ctx.ready.then(() => {
-    // after the loader, give its wordmark a beat to clear the centre
-    gsap.delayedCall(ctx.skipIntro ? 0 : 0.3, playIntro)
-    gsap.delayedCall(1.9, () => {
-      introDone = true
-      if (plumbST.isActive && !document.hidden) plumb.play()
-    })
+    offFlood?.()
+    floodObs?.disconnect()
+    playIntro(false)
   })
 
   document.addEventListener('visibilitychange', () => {

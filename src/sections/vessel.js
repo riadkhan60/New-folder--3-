@@ -324,11 +324,12 @@ function elevationSVG(variant) {
   const xl = -2.28
   const xr = 2.32
   out.push('<g class="ve-dim">')
-  out.push(`<path d="M${X(xl)} ${Y(dy + 0.1)}L${X(xl)} ${Y(dy - 0.1)}M${X(xr)} ${Y(dy + 0.1)}L${X(xr)} ${Y(dy - 0.1)}M${X(xl)} ${Y(dy)}L${X(-0.32)} ${Y(dy)}M${X(0.36)} ${Y(dy)}L${X(xr)} ${Y(dy)}"/>`)
+  out.push(`<path d="M${X(xl)} ${Y(dy + 0.1)}L${X(xl)} ${Y(dy - 0.1)}M${X(xr)} ${Y(dy + 0.1)}L${X(xr)} ${Y(dy - 0.1)}M${X(xl)} ${Y(dy)}L${X(-0.44)} ${Y(dy)}M${X(0.48)} ${Y(dy)}L${X(xr)} ${Y(dy)}"/>`)
   out.push(`<path d="M${X(xl + 0.09)} ${Y(dy + 0.045)}L${X(xl)} ${Y(dy)}L${X(xl + 0.09)} ${Y(dy - 0.045)}M${X(xr - 0.09)} ${Y(dy + 0.045)}L${X(xr)} ${Y(dy)}L${X(xr - 0.09)} ${Y(dy - 0.045)}"/>`)
   out.push(`<text x="${X(0.02)}" y="${Y(dy - 0.055)}" text-anchor="middle">4.6 m</text>`)
-  out.push(`<path d="M${X(S.x)} ${Y(S.y + S.inner)}L${X(S.x)} ${Y(1.5)}L${X(S.x + 0.5)} ${Y(1.5)}"/>`)
-  out.push(`<text x="${X(S.x + 0.56)}" y="${Y(1.5 - 0.055)}">1.5 m inside</text>`)
+  // the label reads leftward, over the deck, so it has room to grow on phones
+  out.push(`<path d="M${X(S.x)} ${Y(S.y + S.inner)}L${X(S.x)} ${Y(1.5)}L${X(S.x - 0.5)} ${Y(1.5)}"/>`)
+  out.push(`<text x="${X(S.x - 0.56)}" y="${Y(1.5 - 0.055)}" text-anchor="end">1.5 m inside</text>`)
   out.push('</g>')
   out.push('</svg>')
   return out.join('')
@@ -592,9 +593,18 @@ function sliceInto(out, src) {
   }
 }
 
-function blueprintGeometry(geos) {
+async function blueprintGeometry(geos, step) {
   const seg = []
-  for (const g of geos) sliceInto(seg, g)
+  let n = 0
+  for (const g of geos) {
+    sliceInto(seg, g)
+    // the hull and the sphere are the big ones: yield after each large part
+    n += g.attributes.position.count
+    if (n > 60000) {
+      n = 0
+      await step()
+    }
+  }
   const count = seg.length / 3
   const aSeg = new Float32Array(count * 2)
   const maxD = 3.5
@@ -912,10 +922,11 @@ function drawLivery(c) {
    The scene
    ========================================================================== */
 
-function createVesper(canvas, { dpr, maxDpr, mobile }) {
-  // MSAA only where it is cheap: on high-density screens the backbuffer is
-  // already finer than the eye can resolve edges at.
-  const renderer = new WebGLRenderer({ canvas, antialias: maxDpr < 1.5, alpha: true, powerPreference: 'high-performance' })
+async function createVesper(canvas, { context, dpr, mobile }, step) {
+  // The context is created (and checked) by init, so three.js never has to
+  // report a failure of its own. The work is done in stages, with a yield
+  // (`step`) between them, so no single task holds the main thread for long.
+  const renderer = new WebGLRenderer({ canvas, context })
   renderer.setClearColor(0x000000, 0)
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
@@ -931,6 +942,7 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
   scene.environmentIntensity = 0.55
   room.dispose?.()
   pmrem.dispose()
+  await step()
 
   const camera = new PerspectiveCamera(19, 1, 0.1, 90)
   const target = new Vector3(0.06, -0.12, 0)
@@ -1039,6 +1051,8 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
   hullCap.visible = false
   root.add(hullCap)
 
+  await step()
+
   /* ---- livery decals, one per side, sitting exactly on the side planes */
   const liveryCanvas = document.createElement('canvas')
   liveryCanvas.width = 2048
@@ -1069,6 +1083,7 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     U,
     'livery',
   )
+  let liveryPort = null
   for (const side of [1, -1]) {
     const g = new PlaneGeometry(LIVERY.x1 - LIVERY.x0, LIVERY.y1 - LIVERY.y0, 4, 2)
     g.translate((LIVERY.x0 + LIVERY.x1) / 2, (LIVERY.y0 + LIVERY.y1) / 2, 0)
@@ -1083,6 +1098,7 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     m.renderOrder = 1
     root.add(m)
     surfaces.push(m)
+    if (side < 0) liveryPort = m
   }
 
   /* ---- titanium pressure sphere, flange, bolts, viewports */
@@ -1101,6 +1117,8 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     portRings.push(placed(new TorusGeometry(0.172, 0.018, 10, 48), S.clone().addScaledVector(d, SPHERE.r + 0.01), q.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2))))
   }
   add(merge(ports), M.acrylic, false)
+
+  await step()
 
   /* ---- inside the sphere: cabin wall, deck, three seats, three screens.
      Only drawn while the cutaway is open. */
@@ -1154,6 +1172,8 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
   ring.visible = false
   ring.renderOrder = 1
   root.add(ring)
+
+  await step()
 
   /* ---- frame: skids, posts, struts, brow bar, cross member */
   const satin = [flange, ...portRings]
@@ -1212,6 +1232,8 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     arm.push(rod(j, j.clone().add(new Vector3(0.05, -0.1, s * 0.035)), 0.012, 8))
   }
   add(merge(arm), M.satin)
+
+  await step()
 
   /* ---- thrusters (instanced) */
   const T = thrusterGeometry()
@@ -1280,6 +1302,8 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     return mesh
   })
 
+  await step()
+
   /* ---- marine snow caught in the beams */
   const N = mobile ? 1400 : 3200
   const sp = new Float32Array(N * 3)
@@ -1307,8 +1331,9 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
   })
 
   /* ---- blueprint */
+  await step()
   const lineMat = lineMaterial()
-  const lines = new LineSegments(blueprintGeometry(sliceSrc), lineMat)
+  const lines = new LineSegments(await blueprintGeometry(sliceSrc, step), lineMat)
   lines.renderOrder = 3
   lines.frustumCulled = false
   root.add(lines)
@@ -1446,6 +1471,9 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     interior.visible = open
     hullCap.visible = open
     ring.visible = open
+    // the port side's paint would show, mirrored, through the notch (the
+    // camera is always on the starboard side while it is open)
+    if (open) liveryPort.visible = false
     if (open) {
       ring.position.z = cut
       ringMat.uniforms.uRing.value.set(Math.sqrt(Math.max(0, SPHERE.inner ** 2 - cut * cut)), Math.sqrt(SPHERE.r ** 2 - cut * cut))
@@ -1533,20 +1561,16 @@ function createVesper(canvas, { dpr, maxDpr, mobile }) {
     return out
   }
 
-  /** Compile every program up front so nothing hitches mid-scroll. */
+  /** Compile every program up front so nothing hitches mid-scroll. three.js
+   *  prepares every material in the scene, hidden or not, so nothing has to
+   *  be made visible for it (and no frame can show parts out of turn). */
   async function warm() {
-    const vis = []
-    scene.traverse((o) => {
-      vis.push([o, o.visible])
-      o.visible = true
-    })
     try {
-      if (renderer.compileAsync) await renderer.compileAsync(scene, camera)
+      if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera)
       else renderer.compile(scene, camera)
     } catch {
       /* compiling lazily is fine too */
     }
-    for (const [o, v] of vis) o.visible = v
   }
 
   return { renderer, setSize, setDpr, sleep, wake, update, render, project, screenBox, sphereBox, warm, sizeInfo: () => ({ W, H }) }
@@ -1575,6 +1599,33 @@ const ELEV = [0.78, 0.97] // turning to a true side elevation
 const DISSOLVE = [0.85, 0.985] // surfaces go back to lines, outside in
 const STACK_RANGE = [-0.6, 0.74]
 const STATIC_C = 0.57 // reduced motion: lamps on, sonar quiet
+
+// Phones and portrait tablets tell the same four acts as a sticky scene: she
+// holds at the top of the screen, the acts change beneath her. (Landscape
+// phones are too short for that, and keep the plain stack.)
+const STORY_MQ = '(min-height: 540px)'
+const STORY_END = 0.74 // the cutaway is open and the camera is in close
+const STORY_PRE = 0.85 // viewports of pre-roll while the scene scrolls in
+// story progress → c: one act per quarter, then a short hold
+const STORY_KEYS = [
+  [0, 0],
+  [0.25, ACTS[1][0]],
+  [0.5, ACTS[2][0]],
+  [0.75, ACTS[3][0]],
+  [0.94, STORY_END],
+  [1, STORY_END],
+]
+const ACTS_STORY = [...ACTS.slice(0, 3), [ACTS[3][0], STORY_END]]
+const storyC = (q) => {
+  for (let i = 1; i < STORY_KEYS.length; i++) {
+    const [q1, c1] = STORY_KEYS[i]
+    const [q0, c0] = STORY_KEYS[i - 1]
+    if (q <= q1) return lerp(c0, c1, range(q, q0, q1))
+  }
+  return STORY_END
+}
+// below this width the spec callouts read as captions under the acts
+const CAPTION_W = 700
 
 // [c, azimuth°, elevation°, distance at 19° (m), target x, y, z, view shift x, y]
 const CAM_PIN = [
@@ -1642,6 +1693,8 @@ export function init(ctx) {
   const grab = $('.vessel__grab')
   const plate = $('.vessel__plate')
   const drawing = $('.vessel__drawing')
+  const elevation = $('.vessel__elevation')
+  const story = $('.vessel__story')
   const actEls = [...root.querySelectorAll('.vessel__act')]
   const fillEls = actEls.map((a) => a.querySelector('.vessel__act-fill'))
   const textEls = actEls.map((a) => a.querySelector('.vessel__act-text'))
@@ -1657,35 +1710,66 @@ export function init(ctx) {
   const reduced = ctx.reducedMotion
   const touch = ctx.isTouch
   const mobile = ctx.isMobile()
+  const idle = (fn, timeout) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout }) : setTimeout(fn, 60))
   let stacked = true
   let pinned = false
+  let scrolly = false // the sticky story (phones, portrait tablets)
+  let captions = false // ...narrow enough that callouts become captions
 
   if (reduced) root.classList.add('vessel--static')
 
-  /* ---- 2D: the plate drawing, always */
-  $('.vessel__elevation').innerHTML = elevationSVG('plate')
+  /* ---- 2D: the plate drawing, always. Its dimensions stay legible however
+     small the drawing gets (≥ 11.5 px on screen). */
+  elevation.innerHTML = elevationSVG('plate')
+  const fitDims = () => {
+    const w = elevation.firstElementChild?.getBoundingClientRect().width || 0
+    if (w > 0) elevation.style.setProperty('--ve-text', Math.max(12.5, (11.5 * SVG_W * 100) / w).toFixed(2) + 'px')
+  }
+  new ResizeObserver(fitDims).observe(elevation)
 
-  /* ---- 3D, if the browser can */
+  /* ---- 3D: the context is checked now (it decides the layout); three.js,
+     the geometry, the environment map and the shaders wait until the intro
+     is over or she is about to come on screen. */
   const maxDpr = mobile ? Math.min(ctx.dpr, 1.25) : Math.min(ctx.dpr, 1.5)
   let dprNow = Math.min(maxDpr, 1.25)
-  let gl = null
-  try {
-    if (new URLSearchParams(location.search).has('nogl')) throw new Error('nogl')
-    gl = createVesper(canvas, { dpr: dprNow, maxDpr, mobile })
-  } catch (err) {
-    console.warn('[vessel] WebGL unavailable, showing the drawing instead', err)
-    gl = null
+  let glCtx = null
+  if (!new URLSearchParams(location.search).has('nogl')) {
+    try {
+      // MSAA only where it is cheap: on high-density screens the backbuffer
+      // is already finer than the eye can resolve edges at.
+      glCtx = canvas.getContext('webgl2', { antialias: maxDpr < 1.5, alpha: true, powerPreference: 'high-performance' })
+    } catch {
+      glCtx = null
+    }
   }
+  let glOK = !!glCtx
+  let gl = null
+  let warming = false
   const noGL = () => {
     root.classList.add('vessel--nogl')
     const fb = $('.vessel__fallback')
     if (!fb.firstChild) fb.innerHTML = elevationSVG('stage')
   }
-  if (!gl) noGL()
+  if (!glOK) {
+    console.info('[vessel] WebGL unavailable, showing the drawing')
+    noGL()
+  }
+  // Losing WebGL after the layout was chosen for it: fall back to the stack.
+  const failGL = () => {
+    gl = null
+    if (!glOK) return
+    glOK = false
+    console.info('[vessel] WebGL unavailable, showing the drawing')
+    noGL()
+    if (pinned || scrolly) {
+      setupLayout()
+      ScrollTrigger.refresh()
+    }
+  }
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault()
-    gl = null
-    noGL()
+    glCtx = null
+    failGL()
   })
 
   /* ---- callouts: DOM + leader paths. Two at most per act; an act's labels
@@ -1717,8 +1801,19 @@ export function init(ctx) {
   const bounds = { minX: 24, maxX: 1000 }
   let calloutsOn = false
   const measureCallouts = () => {
-    calloutsOn = !!gl && (!stacked || view.clientWidth >= 1024)
-    if (!calloutsOn) return
+    calloutsOn = !!gl && (!stacked || scrolly || view.clientWidth >= 1024)
+    // decided before she is built, so the scene's layout never shifts
+    const cap = scrolly && view.clientWidth < CAPTION_W
+    if (cap !== captions) {
+      captions = cap
+      root.classList.toggle('vessel--captions', cap)
+      callouts.forEach((c) => {
+        c.el.style.transform = c.el.style.width = ''
+        c.hidden = false
+        hideCallout(c)
+      })
+    }
+    if (!calloutsOn || captions) return
     callouts.forEach((c) => {
       c.w = Math.max(c.el.querySelector('.vessel__callout-title').offsetWidth, c.el.querySelector('.vessel__callout-sub').offsetWidth)
       c.el.style.width = c.w + 'px'
@@ -1736,7 +1831,7 @@ export function init(ctx) {
 
   /* ---- the act sentences share one slot: reserve the tallest */
   const measureActs = () => {
-    if (stacked) {
+    if (stacked && !scrolly) {
       actsEl.style.removeProperty('--act-h')
       return
     }
@@ -1792,8 +1887,10 @@ export function init(ctx) {
     const k = sampleKeys(stacked ? CAM_STACK : CAM_PIN, c)
     const { W, H } = gl.sizeInfo()
     let dist = k[2]
-    // narrower views see less of her length: step back
-    if (stacked) dist *= clamp(1.25 / (W / H), 1, 1.9)
+    // narrower views see less of her length: step back (the story's scene
+    // is nearly square and has nothing beside her, so she can fill it)
+    if (scrolly) dist *= clamp(1.02 / (W / H), 0.9, 1.7)
+    else if (stacked) dist *= clamp(1.25 / (W / H), 1, 1.9)
     else dist *= clamp(1.6 / (W / H), 1, 1.3)
     const cam = { az: k[0], el: k[1], f: H / 2 / (dist * TAN_19), fov: 19, tx: k[3], ty: k[4], tz: k[5], sx: k[6] * shift.x, sy: k[7] * shift.y }
     if (e > 0 && handoff.w > 0) {
@@ -1839,27 +1936,30 @@ export function init(ctx) {
 
   /* ---- DOM, per frame (cheap writes only when values change) */
   function updateDOM(c) {
-    if (stacked) return
+    if (stacked && !scrolly) return
     const p = Math.max(0, c)
-    const fill = range(p, 0.2, 0.4)
-    const f = Math.round(fill * 1000) / 1000
-    if (f !== lastFill) {
-      lastFill = f
-      title.style.setProperty('--fill', f.toFixed(3))
-      title.style.setProperty('--stroke', (1 - range(p, 0.36, 0.44)).toFixed(3))
+    if (pinned) {
+      const fill = range(p, 0.2, 0.4)
+      const f = Math.round(fill * 1000) / 1000
+      if (f !== lastFill) {
+        lastFill = f
+        title.style.setProperty('--fill', f.toFixed(3))
+        title.style.setProperty('--stroke', (1 - range(p, 0.36, 0.44)).toFixed(3))
+      }
     }
-    const act = p < ACTS[1][0] ? 0 : p < ACTS[2][0] ? 1 : p < ACTS[3][0] ? 2 : 3
+    const R = scrolly ? ACTS_STORY : ACTS
+    const act = p < R[1][0] ? 0 : p < R[2][0] ? 1 : p < R[3][0] ? 2 : 3
     if (act !== lastAct) {
       lastAct = act
       actEls.forEach((a, i) => a.classList.toggle('is-active', i === act))
     }
-    ACTS.forEach(([a, b], i) => (fillEls[i].style.transform = `scaleX(${range(p, a, b).toFixed(4)})`))
+    R.forEach(([a, b], i) => (fillEls[i].style.transform = `scaleX(${range(p, a, b).toFixed(4)})`))
   }
 
   const pt = { x: 0, y: 0, facing: 1 }
   const box = { l: 0, r: 0, t: 0, b: 0 }
   const live = []
-  const hideCallout = (co) => {
+  function hideCallout(co) {
     if (co.hidden) return
     co.hidden = true
     co.el.style.opacity = '0'
@@ -1875,6 +1975,17 @@ export function init(ctx) {
       return x > Math.min(q.ex, q.end) - 4 && x < Math.max(q.ex, q.end) + 4
     }
     return hit(a, b) || hit(b, a)
+  }
+  /** A callout's anchor dot and halo, pulsing on her. */
+  const placeDot = (co, vis) => {
+    const ax = co.pt.x.toFixed(1)
+    const ay = co.pt.y.toFixed(1)
+    co.dot.setAttribute('cx', ax)
+    co.dot.setAttribute('cy', ay)
+    co.halo.setAttribute('cx', ax)
+    co.halo.setAttribute('cy', ay)
+    co.dot.style.opacity = vis.toFixed(3)
+    co.halo.style.opacity = (vis * (0.55 + 0.45 * Math.sin(time * 2.2 + co.pt.x * 0.01))).toFixed(3)
   }
   function updateCallouts(c) {
     if (!gl || !calloutsOn) return
@@ -1895,6 +2006,14 @@ export function init(ctx) {
       }
       gl.project(co.key, co.pt)
       co.face = clamp((co.pt.facing + 0.05) / 0.3)
+      if (captions) {
+        // a caption under the acts; on her, only the dot it belongs to
+        co.hidden = false
+        placeDot(co, co.v * co.face)
+        co.el.style.opacity = clamp((co.v - 0.15) / 0.85).toFixed(3)
+        co.el.style.setProperty('--reveal', clamp((co.v - 0.2) / 0.8).toFixed(3))
+        continue
+      }
       co.ax = co.pt.x
       co.ay = co.pt.y
       co.up = co.cfg.place === 'above'
@@ -1944,12 +2063,7 @@ export function init(ctx) {
       co.path.style.strokeDasharray = `${len.toFixed(1)} ${len.toFixed(1)}`
       co.path.style.strokeDashoffset = (len * (1 - co.v)).toFixed(1)
       co.path.style.opacity = co.face.toFixed(3)
-      co.dot.setAttribute('cx', ax.toFixed(1))
-      co.dot.setAttribute('cy', ay.toFixed(1))
-      co.halo.setAttribute('cx', ax.toFixed(1))
-      co.halo.setAttribute('cy', ay.toFixed(1))
-      co.dot.style.opacity = vis.toFixed(3)
-      co.halo.style.opacity = (vis * (0.55 + 0.45 * Math.sin(time * 2.2 + ax * 0.01))).toFixed(3)
+      placeDot(co, vis)
       co.el.style.opacity = clamp((vis - 0.25) / 0.75).toFixed(3)
       co.el.style.transform = `translate3d(${(side > 0 ? ex + 7 : ex - 7 - co.w).toFixed(1)}px, ${ey.toFixed(1)}px, 0)`
       co.el.style.setProperty('--reveal', clamp((co.v - 0.35) / 0.65).toFixed(3))
@@ -1981,18 +2095,20 @@ export function init(ctx) {
     grab.style.height = h + 'px'
   }
 
-  /* ---- sizing */
+  /* ---- sizing: the canvas is the whole view, except in the story, where
+     it is the part of the scene above the acts */
   function resize() {
     if (!gl) return
-    const r = view.getBoundingClientRect()
-    shift.x = stacked ? 0 : r.width >= 1200 ? 0.11 : r.width >= 1100 ? 0.13 : 0.15
+    const w = view.clientWidth
+    shift.x = stacked ? 0 : w >= 1200 ? 0.11 : w >= 1100 ? 0.13 : 0.15
     shift.y = stacked ? 0 : 0.045
-    gl.setSize(Math.round(r.width), Math.round(r.height))
+    gl.setSize(Math.round(canvas.clientWidth), Math.round(canvas.clientHeight))
     measureCallouts()
     dirty = true
   }
   const ro = new ResizeObserver(() => resize())
   ro.observe(view)
+  ro.observe(canvas)
 
   /* ---- render only while on screen, and give the memory back when not */
   const io = new IntersectionObserver(
@@ -2006,6 +2122,59 @@ export function init(ctx) {
   )
   io.observe(view)
   document.addEventListener('visibilitychange', () => (dirty = true))
+
+  /* ---- build the 3D: once the intro has handed over (in idle time), or as
+     soon as she is within ~1.5 screens, whichever comes first */
+  let building = false
+  let urgent = false // she is close: stop waiting for idle time
+  const step = () =>
+    new Promise((r) => {
+      if (urgent || !window.requestIdleCallback) setTimeout(r, 0)
+      else requestIdleCallback(() => r(), { timeout: 400 })
+    })
+  async function build() {
+    if (gl || building || !glOK || !glCtx) return
+    building = true
+    let made = null
+    try {
+      made = await createVesper(canvas, { context: glCtx, dpr: dprNow, mobile }, step)
+    } catch {
+      made = null
+    }
+    building = false
+    if (!glOK) return // the context went while she was being built
+    if (!made) {
+      failGL()
+      return
+    }
+    gl = made
+    if (!active) gl.sleep()
+    resize()
+    measureHandoff()
+    dirty = true
+    blank = false
+    // compile every program before the first frame (in idle time, unless
+    // she is already on screen)
+    warming = true
+    const done = () => {
+      warming = false
+      dirty = true
+    }
+    idle(() => (gl ? gl.warm().then(done, done) : done()), active ? 100 : 2500)
+  }
+  if (glOK) {
+    const near = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return
+        near.disconnect()
+        urgent = true
+        build()
+      },
+      { rootMargin: '150% 0px' },
+    )
+    near.observe(root)
+    ctx.ready.then(() => setTimeout(() => idle(build, 4000), ctx.skipIntro ? 1200 : 2600))
+  }
 
   /* ---- scroll */
   const strokes = () => {
@@ -2029,95 +2198,136 @@ export function init(ctx) {
     return els.sort((a, b) => d.get(a) - d.get(b))
   }
   const syncTarget = () => (S.target = S.pre - 1 + S.pin)
-  const mm = gsap.matchMedia()
-  mm.add({ pin: PIN_MQ, any: '(min-width: 0px)' }, (mc) => {
-    pinned = !!mc.conditions.pin && !reduced && !!gl
-    stacked = !pinned
-    root.classList.toggle('vessel--stack', stacked)
-    root.classList.toggle('vessel--pinned', pinned)
-    lastAct = lastFill = -1
-    if (stacked) actEls.forEach((a) => a.classList.add('is-active'))
-    resize()
-    measureActs()
-
-    if (reduced) {
-      S.c = S.target = STATIC_C
-      banks.forEach((b) => setBank(b, true))
-      dirty = true
-      return () => actEls.forEach((a) => a.classList.remove('is-active'))
-    }
-
-    if (pinned) {
-      const stageH = () => stage.offsetHeight
-      // the copy scrolls on with the page while she holds for the hand-off
-      const tailY = (self) => Math.max(0, self.progress * (self.end - self.start) - (self.end - self.start - stageH()))
-      ScrollTrigger.create({
-        trigger: stage,
-        start: 'top 80%',
-        end: 'top top',
-        onUpdate: (self) => {
-          S.pre = self.progress
-          syncTarget()
-        },
-      })
-      const pinST = ScrollTrigger.create({
-        trigger: stage,
-        start: 'top top',
-        end: () => '+=' + Math.round(stageH() * PIN_LEN),
-        pin: true,
-        anticipatePin: 1,
-        invalidateOnRefresh: true,
-        onUpdate: (self) => {
-          S.pin = self.progress
-          syncTarget()
-          setCopyY(tailY(self))
-        },
-        onRefresh: (self) => setCopyY(tailY(self)),
-      })
-      // the title is squeezed by pressure as it arrives
-      gsap.fromTo(
-        title,
-        { '--squeeze': 1 },
-        { '--squeeze': 0, ease: 'none', scrollTrigger: { trigger: root, start: 'top 90%', end: 'top top', scrub: true } },
-      )
-      // hand-off: once the drawing lies exactly over her, it draws itself
-      // from the sphere outward while the 3D lines let go
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: plate,
-          start: () => pinST.end,
-          end: () => pinST.end + Math.round(window.innerHeight * 0.42),
-          scrub: true,
-          invalidateOnRefresh: true,
-          onUpdate: (self) => (S.hand = self.progress),
-        },
-      })
-      tl.fromTo(drawing, { '--draw-a': 0 }, { '--draw-a': 1, duration: 0.12, ease: 'none' }, 0)
-      tl.fromTo(strokes(), { drawSVG: '0%' }, { drawSVG: '100%', duration: 0.42, ease: 'none', stagger: { amount: 0.4 } }, 0.02)
-      tl.fromTo(drawing, { '--cap-a': 0 }, { '--cap-a': 1, duration: 0.3, ease: 'none' }, 0.7)
-      return () => {
-        setCopyY(0)
-        S.pre = S.pin = S.hand = 0
+  let mm = null
+  function setupLayout() {
+    mm?.revert()
+    mm = gsap.matchMedia()
+    mm.add({ pin: PIN_MQ, tall: STORY_MQ, any: '(min-width: 0px)' }, (mc) => {
+      pinned = !!mc.conditions.pin && !reduced && glOK
+      stacked = !pinned
+      scrolly = stacked && !reduced && glOK && !!mc.conditions.tall
+      root.classList.toggle('vessel--stack', stacked)
+      root.classList.toggle('vessel--pinned', pinned)
+      root.classList.toggle('vessel--scrolly', scrolly)
+      root.classList.toggle('vessel--list', stacked && !scrolly)
+      // in the story the acts ride in the scene, under her
+      if (scrolly) view.append(actsEl)
+      lastAct = lastFill = -1
+      if (stacked && !scrolly) actEls.forEach((a) => a.classList.add('is-active'))
+      measureCallouts()
+      resize()
+      measureActs()
+      const undo = () => {
+        if (actsEl.parentElement !== copy) copy.append(actsEl)
+        actEls.forEach((a) => a.classList.remove('is-active'))
+        fillEls.forEach((f) => (f.style.transform = ''))
+        actsEl.style.removeProperty('--act-h')
+        root.classList.remove('vessel--scrolly', 'vessel--list', 'vessel--captions')
+        captions = false
       }
-    }
 
-    // stacked: one pass while the view crosses the screen
-    ScrollTrigger.create({
-      trigger: view,
-      start: 'top 78%',
-      end: 'bottom 62%',
-      onUpdate: (self) => {
-        S.target = lerp(STACK_RANGE[0], STACK_RANGE[1], self.progress)
-      },
+      if (reduced) {
+        S.c = S.target = STATIC_C
+        banks.forEach((b) => setBank(b, true))
+        dirty = true
+        return undo
+      }
+
+      if (pinned) {
+        const stageH = () => stage.offsetHeight
+        // the copy scrolls on with the page while she holds for the hand-off
+        const tailY = (self) => Math.max(0, self.progress * (self.end - self.start) - (self.end - self.start - stageH()))
+        ScrollTrigger.create({
+          trigger: stage,
+          start: 'top 80%',
+          end: 'top top',
+          onUpdate: (self) => {
+            S.pre = self.progress
+            syncTarget()
+          },
+        })
+        const pinST = ScrollTrigger.create({
+          trigger: stage,
+          start: 'top top',
+          end: () => '+=' + Math.round(stageH() * PIN_LEN),
+          pin: true,
+          anticipatePin: 1,
+          invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            S.pin = self.progress
+            syncTarget()
+            setCopyY(tailY(self))
+          },
+          onRefresh: (self) => setCopyY(tailY(self)),
+        })
+        // the title is squeezed by pressure as it arrives
+        gsap.fromTo(
+          title,
+          { '--squeeze': 1 },
+          { '--squeeze': 0, ease: 'none', scrollTrigger: { trigger: root, start: 'top 90%', end: 'top top', scrub: true } },
+        )
+        // hand-off: once the drawing lies exactly over her, it draws itself
+        // from the sphere outward while the 3D lines let go
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: plate,
+            start: () => pinST.end,
+            end: () => pinST.end + Math.round(window.innerHeight * 0.42),
+            scrub: true,
+            invalidateOnRefresh: true,
+            onUpdate: (self) => (S.hand = self.progress),
+          },
+        })
+        tl.fromTo(drawing, { '--draw-a': 0 }, { '--draw-a': 1, duration: 0.12, ease: 'none' }, 0)
+        tl.fromTo(strokes(), { drawSVG: '0%' }, { drawSVG: '100%', duration: 0.42, ease: 'none', stagger: { amount: 0.4 } }, 0.02)
+        tl.fromTo(drawing, { '--cap-a': 0 }, { '--cap-a': 1, duration: 0.3, ease: 'none' }, 0.7)
+        return () => {
+          undo()
+          setCopyY(0)
+          S.pre = S.pin = S.hand = 0
+        }
+      }
+
+      if (scrolly) {
+        // The scene (100svh, sticky) holds while the story spacer under it
+        // scrolls by. Pre-roll as it scrolls in: the lines plan draws.
+        const sceneH = () => view.offsetHeight
+        const preH = () => Math.round(window.innerHeight * STORY_PRE)
+        let pre = preH()
+        ScrollTrigger.create({
+          trigger: story,
+          start: () => `top ${sceneH() + preH()}px`,
+          end: () => `bottom ${sceneH()}px`,
+          invalidateOnRefresh: true,
+          onRefresh: () => (pre = preH()),
+          onUpdate: (self) => {
+            const len = self.end - self.start
+            const s = self.progress * len
+            S.target = s < pre ? lerp(STACK_RANGE[0], 0, s / pre) : storyC((s - pre) / Math.max(1, len - pre))
+          },
+        })
+        S.target = Math.max(S.target, STACK_RANGE[0])
+      } else {
+        // the plain stack: one pass while the view crosses the screen
+        ScrollTrigger.create({
+          trigger: view,
+          start: 'top 78%',
+          end: 'bottom 62%',
+          onUpdate: (self) => {
+            S.target = lerp(STACK_RANGE[0], STACK_RANGE[1], self.progress)
+          },
+        })
+        S.target = Math.max(S.target, STACK_RANGE[0])
+      }
+      gsap.fromTo(
+        strokes(),
+        { drawSVG: '0%' },
+        { drawSVG: '100%', ease: 'none', stagger: 0.012, scrollTrigger: { trigger: drawing, start: 'top 85%', end: 'bottom 60%', scrub: true } },
+      )
+      return undo
     })
-    S.target = Math.max(S.target, STACK_RANGE[0])
-    gsap.fromTo(
-      strokes(),
-      { drawSVG: '0%' },
-      { drawSVG: '100%', ease: 'none', stagger: 0.012, scrollTrigger: { trigger: drawing, start: 'top 85%', end: 'bottom 60%', scrub: true } },
-    )
-    return () => actEls.forEach((a) => a.classList.remove('is-active'))
-  })
+  }
+  setupLayout()
   if (!reduced) {
     const rows = root.querySelectorAll('.vessel__spec')
     gsap.fromTo(
@@ -2204,6 +2414,10 @@ export function init(ctx) {
     for (let i = 0; i < 3; i++) setBank(banks[i], c >= BANKS_AT[i])
     updateDOM(c)
     if (!gl) return
+    if (warming) {
+      dirty = true
+      return
+    }
     const st = stateAt(c)
     // after the hand-off there is nothing left to draw: clear once, then rest
     const empty = st.build < 0.001 && (st.wire < 0.003 || st.draw < 0.001) && st.glow < 0.002
@@ -2218,7 +2432,7 @@ export function init(ctx) {
 
     if (!sonarDone && !reduced && c >= SONAR_AT && c < TAIL) {
       sonarDone = true
-      const r = view.getBoundingClientRect()
+      const r = canvas.getBoundingClientRect()
       const s = gl.project('lamps', pt)
       ctx.emit('sonar', { x: r.left + s.x, y: r.top + s.y, strength: 0.5 })
     }
@@ -2230,8 +2444,8 @@ export function init(ctx) {
     measureCallouts()
     measureActs()
     measureHandoff()
+    fitDims()
     dirty = true
     blank = false
   })
-  if (gl) gl.warm().then(() => (dirty = true))
 }

@@ -20,6 +20,11 @@
  *   3. Bioluminescent sparks from ~200 m — brief, scattered flashes, some in
  *      siphonophore-like chains — tinted red in the hadal zone.
  *
+ * Boot: init() only builds plain JS objects. The WebGL context, the
+ * renderer and the shaders (compiled in parallel where the browser can) are
+ * created in idle time while the intro plays, and nothing is drawn while the
+ * loader's black panel still covers the page.
+ *
  * Intro: the light comes up WITH the loader's flood (bus 'intro:flood', or
  * the loader gaining .is-exiting), so the rising waterline uncovers a sun
  * window that is already shimmering. The water it brings is stirred: the
@@ -27,8 +32,13 @@
  * the snow rushes up past the lens as we go under. Without the loader
  * (?skipintro) the light simply rises on ctx.ready.
  *
+ * Cost: nothing is drawn while the water is hidden (bus 'ocean:cover'
+ * { on }, or the creatures' stage fully blacked out); in deep, still water
+ * (no sunlight, no scroll, no pointer, no ping) it draws at 30 fps.
+ *
  * Listens: ctx.on('sonar', { x, y, strength }) → a ring passes through the
- * snow and lights it up.  Never throws: if WebGL is missing, it does nothing.
+ * snow and lights it up. Never throws. Without WebGL2 it adds html.no-webgl
+ * and ocean.css paints a still, CSS-only sun window instead.
  */
 import '../styles/ocean.css'
 import {
@@ -414,26 +424,23 @@ export function init(ctx) {
   }
 }
 
+// Work that may take a few milliseconds runs in idle time, never inside
+// init(): the intro is playing while the modules initialise.
+const idle = (fn, timeout) =>
+  typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(fn, { timeout })
+    : setTimeout(fn, 16)
+
 function createOcean(ctx, canvas) {
   const { gsap } = ctx
   const params = new URLSearchParams(location.search)
   const adaptive = !params.has('hq')
 
-  // Create the context ourselves so a missing WebGL2 never logs an error.
-  const gl = canvas.getContext('webgl2', {
-    alpha: false,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    premultipliedAlpha: true,
-    preserveDrawingBuffer: false,
-    powerPreference: 'high-performance',
-  })
-  if (!gl) return
-
-  const renderer = new WebGLRenderer({ canvas, context: gl, antialias: false })
-  renderer.autoClear = false
-  renderer.setClearColor(0x000000, 1)
+  // The GL context and renderer are created later, in build().
+  let renderer = null
+  let live = false // drawing (or the CSS fallback is up)
+  let disposed = false
+  let fbTick = null
 
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const quad = new PlaneGeometry(2, 2)
@@ -618,30 +625,35 @@ function createOcean(ctx, canvas) {
   function resize(force = false) {
     const w = window.innerWidth
     const h = window.innerHeight
-    // Mobile URL bars resize the viewport while scrolling: ignore small
-    // height-only changes (the canvas is stretched by CSS meanwhile).
-    if (!force && w === W && Math.abs(h - H) < 120) return
-    if (w !== W || Math.abs(h - stableVh) > 120) stableVh = h
+    // Mobile URL bars resize the viewport while scrolling: on touch devices
+    // ignore small height-only changes (the canvas is stretched by CSS
+    // meanwhile). A desktop window always gets an exact backing store.
+    if (!force && w === W && h === H) return
+    if (!force && w === W && ctx.isTouch && Math.abs(h - H) < 120) return
+    if (w !== W || !ctx.isTouch || Math.abs(h - stableVh) > 120) stableVh = h
     W = w
     H = h
-    renderer.setPixelRatio(pr)
-    renderer.setSize(W, H, false)
-    lightRT.setSize(Math.max(2, Math.round(W * lightScale)), Math.max(2, Math.round(H * lightScale)))
     lightU.uAspect.value = W / H
     snowU.uAspect.value = W / H
     snowU.uPR.value = pr
     // keep particle sizes sensible on very small / very large screens
     snowU.uScale.value = clamp(Math.sqrt((W * H) / (1440 * 900)), 0.75, 1.25)
     dirty = true
+    if (!renderer) return
+    renderer.setPixelRatio(pr)
+    renderer.setSize(W, H, false)
+    lightRT.setSize(Math.max(2, Math.round(W * lightScale)), Math.max(2, Math.round(H * lightScale)))
   }
 
   // ---- input
   const mouse = new Vector2(9, 9)
   let mouseTarget = 0
+  let movedAt = 0
   const fine = !ctx.isTouch && !ctx.reducedMotion
   const onMove = (e) => {
     mouse.set((e.clientX / W) * 2 - 1, 1 - (e.clientY / H) * 2)
     mouseTarget = 1
+    movedAt = performance.now()
   }
   const onLeave = () => (mouseTarget = 0)
   if (fine) {
@@ -656,6 +668,29 @@ function createOcean(ctx, canvas) {
     dirty = true
   })
 
+  // ---- covered: nothing of the water can be seen, so nothing is drawn.
+  // A section can say so on the bus (`ocean:cover`, { on }). The creatures'
+  // stage also tells us through the darkness it eases in: while its --dark
+  // is full and it has no soft edges on screen, it blacks out the viewport.
+  let busCover = false
+  const offCover = ctx.on('ocean:cover', (d = {}) => {
+    busCover = !!d.on
+    dirty = true
+  })
+  let lifeStage = null
+  function blackedOut() {
+    if (busCover) return true
+    if (depthState.section !== 'life') return false
+    lifeStage ??= document.querySelector('#life.is-float .creatures__stage')
+    if (!lifeStage) return false
+    const st = lifeStage.style
+    return (
+      parseFloat(st.getPropertyValue('--dark')) >= 0.995 &&
+      parseFloat(st.getPropertyValue('--edge')) === 0 &&
+      parseFloat(st.getPropertyValue('--edge-b')) === 0
+    )
+  }
+
   // ---- state
   let time = ctx.reducedMotion ? 14 : 0
   let last = performance.now()
@@ -663,40 +698,52 @@ function createOcean(ctx, canvas) {
   let vel = 0
   let dirty = true
   let drawnY = -1
+  let frame = 0
   // intro: light 0 → 1; stir: freshly flooded water, 1 → 0; rush: extra
   // upward flow of the snow (screens) as we go under
   const fx = { intro: ctx.reducedMotion ? 1 : 0, stir: 0, rush: 0 }
   let lastRush = 0
   let lastDepth = -1
-  const depthState = { depth: 0, sun: 1, hadal: 0 }
+  const depthState = { depth: 0, sun: 1, hadal: 0, section: null }
 
-  ctx.depth.onChange((s) => {
+  const offDepth = ctx.depth.onChange((s) => {
     depthState.depth = s.depth
     depthState.sun = s.sun
     depthState.hadal = s.hadal
+    depthState.section = s.section
     if (Math.abs(s.depth - lastDepth) > 0.01) dirty = true
     lastDepth = s.depth
   })
 
   // The light comes up with the flood (or, without the loader, as the page
-  // hands over). Whichever arrives first wins; the rest are no-ops.
+  // hands over). Whichever arrives first wins; the rest are no-ops. Until
+  // the flood the loader's black panel covers the page: nothing is drawn.
+  let veiled = !ctx.skipIntro && !!document.querySelector('.loader')
+  let pendingRaise = null
+  function doRaise(flood) {
+    pendingRaise = null
+    if (!flood) {
+      gsap.to(fx, { intro: 1, duration: 3.2, ease: 'power2.out' })
+      return
+    }
+    // the waterline takes 1.2 s to cross the screen (loader T.floodDur)
+    gsap.to(fx, { intro: 1, duration: 1.5, ease: 'power2.out', delay: 0.05 })
+    gsap.fromTo(fx, { stir: 1 }, { stir: 0, duration: 3.4, ease: 'power2.out' })
+    gsap.to(fx, { rush: 0.34, duration: 2.2, ease: 'power3.out' })
+  }
   let offFlood = null
   let floodObs = null
   if (!ctx.reducedMotion) {
     let raised = false
     const raise = (flood) => {
+      veiled = false
       if (raised) return
       raised = true
       offFlood?.()
       floodObs?.disconnect()
-      if (!flood) {
-        gsap.to(fx, { intro: 1, duration: 3.2, ease: 'power2.out' })
-        return
-      }
-      // the waterline takes 1.2 s to cross the screen (loader T.floodDur)
-      gsap.to(fx, { intro: 1, duration: 1.5, ease: 'power2.out', delay: 0.05 })
-      gsap.fromTo(fx, { stir: 1 }, { stir: 0, duration: 3.4, ease: 'power2.out' })
-      gsap.to(fx, { rush: 0.34, duration: 2.2, ease: 'power3.out' })
+      // not drawing yet (a slow device): rise as soon as it can
+      if (live) doRaise(flood)
+      else pendingRaise = flood
     }
     offFlood = ctx.on('intro:flood', () => raise(true))
     const loaderEl = ctx.skipIntro ? null : document.querySelector('.loader')
@@ -707,6 +754,8 @@ function createOcean(ctx, canvas) {
       floodObs.observe(loaderEl, { attributes: true, attributeFilter: ['class'] })
     }
     ctx.ready.then(() => raise(false))
+  } else {
+    veiled = false
   }
 
   // ---- adaptive quality (skipped with ?hq). Measured only once the page
@@ -814,14 +863,14 @@ function createOcean(ctx, canvas) {
     sparkU.uHadal.value = hadal
   }
 
-  function render() {
-    const lightOn = lightU.uAmt.value > 0.004
+  function render(warm = false) {
+    const lightOn = warm || lightU.uAmt.value > 0.004
     if (lightOn) {
       renderer.setRenderTarget(lightRT)
       renderer.render(lightScene, camera)
     }
     comp.visible = lightOn
-    sparks.visible = sparkU.uAmt.value > 0.002
+    sparks.visible = warm || sparkU.uAmt.value > 0.002
     renderer.setRenderTarget(null)
     renderer.clear(true, false, false)
     renderer.render(scene, camera)
@@ -838,6 +887,7 @@ function createOcean(ctx, canvas) {
       // changed.
       const sy = window.scrollY
       if (!dirty && (sy > stableVh * 1.05 || Math.abs(sy - drawnY) < 2)) return
+      if (blackedOut()) return
       dirty = false
       drawnY = sy
       update(1 / 60)
@@ -846,6 +896,18 @@ function createOcean(ctx, canvas) {
     }
     time += dt
     update(dt)
+    // under the loader's black panel, or blacked out by a section
+    if (veiled || blackedOut()) return
+    // Deep, still water (no sunlight, no descent, no pointer, no ping):
+    // the snow drifts at a few pixels a second and the sparks fade slowly,
+    // so every other frame (30 fps) reads the same and costs half.
+    const still =
+      lightU.uAmt.value <= 0.004 &&
+      Math.abs(vel) < 0.02 &&
+      now - movedAt > 800 &&
+      time - snowU.uSonar.value.z > 6
+    frame++
+    if (still && frame % 2) return
     render()
     adapt(dt)
   }
@@ -855,26 +917,113 @@ function createOcean(ctx, canvas) {
     lastY = window.scrollY
     dirty = true
   }
-  const onResize = () => resize(false)
+  let resizeRaf = 0
+  const onResize = () => {
+    cancelAnimationFrame(resizeRaf)
+    resizeRaf = requestAnimationFrame(() => resize(false))
+  }
   document.addEventListener('visibilitychange', onVis)
   window.addEventListener('resize', onResize)
 
-  canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false)
+  /* ---------------------------------------------------- build, off init */
+  // 1. the context and the renderer; 2. the shaders, compiled in parallel
+  //    where the browser can (KHR_parallel_shader_compile); 3. one warm-up
+  //    frame (buffer uploads, the light target), still under the loader.
+  //    Each step in its own idle slot, so the intro never drops a frame.
+  function build() {
+    if (disposed) return
+    // Create the context ourselves so a missing WebGL2 never logs an error.
+    let gl = null
+    try {
+      gl = canvas.getContext('webgl2', {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+      })
+    } catch {
+      gl = null
+    }
+    if (!gl) {
+      startFallback()
+      return
+    }
+    renderer = new WebGLRenderer({ canvas, context: gl, antialias: false })
+    renderer.autoClear = false
+    renderer.setClearColor(0x000000, 1)
+    canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false)
+    resize(true)
+    idle(compile, 400)
+  }
 
-  resize(true)
-  update(1 / 60)
-  gsap.ticker.add(tick)
+  function compile() {
+    if (disposed) return
+    let pending
+    try {
+      // the light pass draws into its target: compile it for that target
+      renderer.setRenderTarget(lightRT)
+      const a = renderer.compileAsync(lightScene, camera)
+      renderer.setRenderTarget(null)
+      pending = Promise.all([a, renderer.compileAsync(scene, camera)])
+    } catch {
+      pending = Promise.resolve()
+    }
+    pending.catch(() => {}).then(() => idle(goLive, 300))
+  }
+
+  function goLive() {
+    if (disposed || live) return
+    update(1 / 60)
+    render(true)
+    live = true
+    dirty = true
+    last = performance.now()
+    lastY = window.scrollY
+    gsap.ticker.add(tick)
+    if (pendingRaise !== null) doRaise(pendingRaise)
+  }
+
+  // ---- no WebGL2: the opening screen keeps its light. ocean.css paints a
+  // soft Snell's window and a few still shafts on the (context-less) canvas;
+  // here it fades with the sunlight and recedes upward as you leave the
+  // surface, like the real one. Opacity and a transform only: no repaints.
+  function startFallback() {
+    document.documentElement.classList.add('no-webgl')
+    let lastO = ''
+    let lastT = ''
+    fbTick = () => {
+      const hScroll = smooth(0, 1, window.scrollY / stableVh)
+      const o = (Math.pow(clamp(depthState.sun), 1.15) * fx.intro * (1 - 0.5 * hScroll)).toFixed(3)
+      const t = `translate3d(0, ${Math.round(-0.2 * hScroll * H)}px, 0)`
+      if (o !== lastO) canvas.style.opacity = lastO = o
+      if (t !== lastT) canvas.style.transform = lastT = t
+    }
+    fbTick()
+    gsap.ticker.add(fbTick)
+    live = true
+    if (pendingRaise !== null) doRaise(pendingRaise)
+  }
+
+  idle(build, 500)
 
   return () => {
+    disposed = true
     gsap.ticker.remove(tick)
+    if (fbTick) gsap.ticker.remove(fbTick)
+    cancelAnimationFrame(resizeRaf)
     offSonar?.()
+    offCover?.()
+    offDepth?.()
     offFlood?.()
     floodObs?.disconnect()
     window.removeEventListener('resize', onResize)
     document.removeEventListener('visibilitychange', onVis)
     window.removeEventListener('pointermove', onMove)
     document.documentElement.removeEventListener('pointerleave', onLeave)
-    renderer.dispose()
+    renderer?.dispose()
     lightRT.dispose()
   }
 }

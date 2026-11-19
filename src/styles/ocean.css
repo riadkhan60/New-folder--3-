@@ -7,3 +7,42 @@
 #ocean {
   mix-blend-mode: screen;
 }
+
+/* No WebGL2: the same light, painted once by CSS on the context-less
+   canvas — the sky through Snell's window, the glow of the water toward
+   the sun, and a few still shafts — fading down the screen like the real
+   pass. ocean.js fades it with the sunlight (opacity) and lifts it as you
+   leave the surface (transform): compositor work only, never a repaint. */
+html.no-webgl #ocean {
+  opacity: 0;
+  background:
+    /* the sky through the surface: a bright, slightly flattened bowl */
+    radial-gradient(ellipse 27vmax 12vmax at 48% 7%, rgb(232 253 255 / 0.78), rgb(205 248 255 / 0.5) 36%, rgb(160 232 246 / 0.16) 66%, transparent 80%),
+    radial-gradient(ellipse 46vmax 24vmax at 48% 4%, rgb(150 232 245 / 0.26), transparent 72%),
+    /* the water glows toward the sun */
+    radial-gradient(ellipse 90vmax 70vmax at 46% -10%, rgb(62 190 214 / 0.24), transparent 70%),
+    /* still shafts, converging above the window */
+    conic-gradient(
+      from 146deg at 45% -26%,
+      transparent 0deg,
+      rgb(200 246 255 / 0.2) 3deg,
+      transparent 7deg,
+      transparent 11deg,
+      rgb(200 246 255 / 0.13) 13.5deg,
+      transparent 16deg,
+      rgb(200 246 255 / 0.24) 19.5deg,
+      transparent 24deg,
+      transparent 29deg,
+      rgb(200 246 255 / 0.14) 31.5deg,
+      transparent 34deg,
+      rgb(200 246 255 / 0.2) 38deg,
+      transparent 42.5deg,
+      transparent 47deg,
+      rgb(200 246 255 / 0.12) 50.5deg,
+      transparent 55deg,
+      transparent 360deg
+    );
+  -webkit-mask-image: linear-gradient(to bottom, #000 12%, rgb(0 0 0 / 0.6) 48%, transparent 92%);
+  mask-image: linear-gradient(to bottom, #000 12%, rgb(0 0 0 / 0.6) 48%, transparent 92%);
+  will-change: opacity, transform;
+}

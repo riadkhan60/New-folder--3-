@@ -247,9 +247,17 @@ function createScene(ctx, root) {
   // how far a sonar return carries on screen: a wider pool than the lamps',
   // and gone well before the edges of the view (x = scene-space px)
   const sonarFall = (X, z, x) => {
-    const dx = X / (mobile ? 1.5 : 2.4)
-    const dz = (z - z0) / (mobile ? 2.6 : 3)
-    const edge = 1 - smooth(0.4, 0.84, Math.abs(x - cx) / (W / 2))
+    const dx = X / (mobile ? 1.5 : 2.2)
+    const dz = (z - z0) / (mobile ? 2.4 : 2.7)
+    const edge = 1 - smooth(0.36, 0.8, Math.abs(x - cx) / (W / 2))
+    return Math.exp(-(dx * dx + dz * dz) * 0.5) * edge
+  }
+  // the front itself is only bright enough to see in and just beyond the
+  // lamps' pool: it never draws a horizon-wide arc
+  const frontFall = (X, z, x) => {
+    const dx = X / (mobile ? 1.35 : 1.9)
+    const dz = (z - z0) / (mobile ? 1.9 : 2.2)
+    const edge = 1 - smooth(0.28, 0.66, Math.abs(x - cx) / (W / 2))
     return Math.exp(-(dx * dx + dz * dz) * 0.5) * edge
   }
   const heightAt = (X, z) => fbm(X * 0.55 + 40, z * 0.55 + 9) * 0.9 + vnoise(X * 2.6, z * 2.6) * 0.12
@@ -502,10 +510,14 @@ function createScene(ctx, root) {
     g.globalCompositeOperation = 'source-over'
 
     // the sonar layers: the sediment, and the walls' contours
+    if (hi) hi.width = hi.height = 0
     hi = document.createElement('canvas')
     hi.width = W
     hi.height = H
     hi.getContext('2d').drawImage(glow, 0, top, W, rows)
+    // the shading buffers are spent: free them now rather than at the next GC
+    lit.width = lit.height = glow.width = glow.height = 0
+    if (walls) walls.width = walls.height = 0
     walls = document.createElement('canvas')
     walls.width = W
     walls.height = Math.ceil(horizon + 4)
@@ -610,17 +622,6 @@ function createScene(ctx, root) {
     const z = K / (y - horizon)
     return { X: (x - cx) / (f / z), z }
   }
-  // a circle of radius R metres on the sediment, in perspective
-  function circle(g, X0, Z0, R, ccw = false) {
-    const N = 96
-    for (let i = 0; i <= N; i++) {
-      const th = ((ccw ? N - i : i) / N) * Math.PI * 2
-      const [x, y] = proj(X0 + R * Math.cos(th), Z0 + R * Math.sin(th))
-      i ? g.lineTo(x, y) : g.moveTo(x, y)
-    }
-    g.closePath()
-  }
-
   // origin: a floor point {X, z}, or null for the pool under Vesper's lamps
   // a ring lives under two seconds: sound crosses this floor in milliseconds,
   // the screen only needs long enough to see it go
@@ -638,6 +639,7 @@ function createScene(ctx, root) {
       user,
       seen: new Set(),
       still: reduced,
+      seed: Math.random() * 97,
     })
     start()
   }
@@ -762,20 +764,30 @@ function createScene(ctx, root) {
   }
 
   // the front of a sonar ring: one hairline, its light falling off with the
-  // return (sonarFall), drawn in short segments so it never closes into a rim
+  // lamps' pool (frontFall) and broken up by the silt it crosses, drawn in
+  // short segments so it never closes into a rim
   const FRONT_N = 120
   const fp = new Float32Array((FRONT_N + 1) * 3)
+  // which part of a ring is seen: the far side and its flanks. The near side
+  // runs in under Vesper, out of the view, so a ring reads as a wave going
+  // away across the floor and never closes into a disc
+  const TH0 = -0.34
+  const TH1 = Math.PI + 0.34
+  const fwd = (th) => smooth(-0.3, 0.62, Math.sin(th))
   function wavefront(g, R, rad, a) {
     const peak = Math.min(0.5, 0.46 * a)
     if (peak < 0.01) return
     for (let i = 0; i <= FRONT_N; i++) {
-      const th = (i / FRONT_N) * Math.PI * 2
+      const th = TH0 + ((TH1 - TH0) * i) / FRONT_N
       const X = R.X + rad * Math.cos(th)
       const z = R.z + rad * Math.sin(th)
       const [x, y] = proj(X, z)
       fp[i * 3] = x
       fp[i * 3 + 1] = y
-      fp[i * 3 + 2] = z > 0.6 ? sonarFall(X, z, x) : 0
+      // the return is speckled: brighter where it crosses clumped silt
+      const n = vnoise(i * 0.5 + R.seed, rad * 0.6)
+      const grain = 0.12 + 0.88 * n * n
+      fp[i * 3 + 2] = z > 0.6 ? frontFall(X, z, x) * fwd(th) * grain : 0
     }
     g.globalAlpha = 1
     g.lineWidth = mobile ? 1 : 1.25
@@ -790,6 +802,43 @@ function createScene(ctx, root) {
       g.lineTo(fp[i * 3 + 3], fp[i * 3 + 4])
       g.stroke()
     }
+  }
+
+  // one piece of the answering band: an annular sector of the sediment,
+  // drawn from the sonar layer through a clip, copying only its bounding box
+  const BAND_STEPS = 3
+  const SECTORS = 10
+  function sector(g, R, r0, r1, ta, tb, alpha) {
+    const N = 6
+    let x0 = 1e9
+    let y0 = 1e9
+    let x1 = -1e9
+    let y1 = -1e9
+    g.save()
+    g.beginPath()
+    for (let k = 0; k <= 2 * N + 1; k++) {
+      const outer = k <= N
+      const i = outer ? k : 2 * N + 1 - k
+      const th = ta + ((tb - ta) * i) / N
+      const r = outer ? r1 : r0
+      const [x, y] = proj(R.X + r * Math.cos(th), R.z + r * Math.sin(th))
+      k ? g.lineTo(x, y) : g.moveTo(x, y)
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+    g.closePath()
+    x0 = Math.max(0, Math.floor(x0) - 1)
+    y0 = Math.max(0, Math.floor(y0) - 1)
+    x1 = Math.min(W, Math.ceil(x1) + 1)
+    y1 = Math.min(H, Math.ceil(y1) + 1)
+    if (x1 > x0 && y1 > y0) {
+      g.clip()
+      g.globalAlpha = clamp(alpha)
+      g.drawImage(hi, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0)
+    }
+    g.restore()
   }
 
   function drawFx(dt) {
@@ -865,21 +914,20 @@ function createScene(ctx, root) {
       const a = (R.still ? Math.sin(Math.PI * k) : Math.pow(1 - k, 1.15) * smooth(0, 0.04, k)) * R.strength
       g.globalCompositeOperation = 'lighter'
       // the sediment answers in a band behind the front (≤ 6% of the radius),
-      // brightest at the front and fading behind it
+      // brightest at the front and fading behind it, on the far side only
       if (R.reveal && hi && rad > 0.12) {
         const band = Math.max(0.05, rad * 0.06)
-        const STEPS = 4
-        for (let s = 0; s < STEPS; s++) {
-          const r1 = rad - (band * s) / STEPS
-          const r0 = rad - (band * (s + 1)) / STEPS
-          g.save()
-          g.beginPath()
-          circle(g, R.X, R.z, r1)
-          if (r0 > 0.02) circle(g, R.X, R.z, r0, true)
-          g.clip()
-          g.globalAlpha = clamp(a * 0.85 * Math.pow(1 - s / STEPS, 1.6))
-          g.drawImage(hi, 0, 0, W, H)
-          g.restore()
+        for (let s = 0; s < BAND_STEPS; s++) {
+          const r1 = rad - (band * s) / BAND_STEPS
+          const r0 = Math.max(0.02, rad - (band * (s + 1)) / BAND_STEPS)
+          const as = a * 0.85 * Math.pow(1 - s / BAND_STEPS, 1.6)
+          for (let m = 0; m < SECTORS; m++) {
+            const ta = TH0 + ((TH1 - TH0) * m) / SECTORS
+            const tb = TH0 + ((TH1 - TH0) * (m + 1)) / SECTORS
+            const al = as * fwd((ta + tb) / 2)
+            if (al < 0.01) continue
+            sector(g, R, r0, r1, ta, tb, al)
+          }
         }
       }
       wavefront(g, R, rad, a)
@@ -968,6 +1016,8 @@ function createScene(ctx, root) {
     job = null
     if (!built) return
     built = false
+    if (hi) hi.width = hi.height = 0
+    if (walls) walls.width = walls.height = 0
     hi = null
     walls = null
     rings.length = 0

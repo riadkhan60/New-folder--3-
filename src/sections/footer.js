@@ -3,15 +3,18 @@
  *
  * At the floor the wordmark sits under full pressure (Anybody wdth 50, heavy),
  * like every display line this deep. "Return to the surface" is the bookend of
- * the dive: the wordmark decompresses (wdth 50 → 150, heavy → light) as the
- * sub leaves the floor, a stream of bubbles rises past the depth ruler (lit
- * red in the hadal zone, by bioluminescence higher up, then by sunlight), the
- * page climbs back through every layer while the HUD counts up, and the
- * surface arrives with a short wash of sunlight. Focus then moves to the nav
- * wordmark so the keyboard is where the eyes are. If the visitor takes over
- * the scroll mid-ascent, everything tidies itself away.
+ * the dive: the page's content dissolves behind a veil of water (only colour,
+ * light and the counting HUD stay sharp), the wordmark decompresses (wdth
+ * 50 → 150, heavy → light) as the sub leaves the floor, a stream of bubbles
+ * rises past the depth ruler (lit red in the hadal zone, by bioluminescence
+ * higher up, then by sunlight) while the page climbs back through every
+ * layer, and the surface arrives with a wash of sunlight and one line. Focus
+ * then moves to the nav wordmark so the keyboard is where the eyes are. If the
+ * visitor takes over the scroll mid-ascent, everything tidies itself away.
  *
- * Reduced motion: a plain jump to the top, then the focus move. Emits nothing.
+ * Reduced motion: a plain jump to the top, the line over the still veil, then
+ * the focus move.
+ * The bubble canvas only holds a backing store during the ascent. Emits nothing.
  */
 import '../styles/footer.css'
 
@@ -31,7 +34,15 @@ export function init(ctx) {
   const word = root.querySelector('.foot__word-type')
   const canvas = root.querySelector('[data-foot-bubbles]')
   const flash = root.querySelector('[data-foot-surfaced]')
+  const veil = root.querySelector('[data-foot-veil]')
+  const line = root.querySelector('[data-foot-surfaced-line]')
   if (!btn) return
+  const LINE = 'Back at the surface, with 10,935\u00a0m of water under you.'
+
+  // the ascent's layers sit at the top level of the page, above all of its
+  // content: inside the footer, the veil's backdrop filter and the sunlight's
+  // screen blend could only see the footer itself
+  ;[veil, canvas, flash, line].forEach((el) => el && document.body.appendChild(el))
 
   // the wordmark's pressure: 0 = the floor, 1 = the surface
   const P = { k: 0 }
@@ -53,12 +64,53 @@ export function init(ctx) {
       top.focus({ preventScroll: true })
     }
   }
-  const tidy = () => {
+  // the veil: the content behind it dissolves into water and light
+  const veilTo = (on, duration = on ? 0.45 : 0.8) => {
+    if (!veil) return
+    gsap.killTweensOf(veil)
+    gsap.to(veil, on
+      ? { autoAlpha: 1, duration, ease: 'power2.out' }
+      : { autoAlpha: 0, duration, ease: 'power2.inOut' })
+  }
+  // one line at the surface, also announced (the line is a status region)
+  let lineT = 0
+  const showLine = (delay) => {
+    if (!line) return
+    clearTimeout(lineT)
+    gsap.killTweensOf(line)
+    line.textContent = LINE
+    gsap.fromTo(line, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.7, ease: 'power2.out', delay })
+  }
+  const hideLine = (duration = 0.9) => {
+    if (!line) return
+    gsap.killTweensOf(line)
+    gsap.to(line, {
+      autoAlpha: 0,
+      duration,
+      ease: 'power1.inOut',
+      onComplete: () => (lineT = setTimeout(() => (line.textContent = ''), 400)),
+    })
+  }
+
+  // at the surface the page stays dissolved for a moment, under the light and
+  // the line, then resolves; any scroll, wheel, touch or key resolves it at once
+  let settling = false
+  let settleCall = null
+  const settle = (fast = false) => {
+    if (!settling) return
+    settling = false
+    settleCall?.kill()
+    veilTo(false, fast ? 0.35 : 1.1)
+    hideLine(fast ? 0.3 : 0.9)
+  }
+
+  const tidy = (keepVeil = false) => {
     clearTimeout(safety)
     rising = false
     btn.classList.remove('is-rising')
     html.classList.remove('foot-is-ascending')
     bubbles.stop()
+    if (!keepVeil) veilTo(false)
     // back under pressure for the next time the visitor reaches the floor
     gsap.killTweensOf(P)
     P.k = 0
@@ -66,33 +118,45 @@ export function init(ctx) {
   }
   const surfaced = () => {
     if (!rising) return
-    tidy()
+    tidy(true)
     if (flash) {
+      gsap.killTweensOf(flash)
       gsap.fromTo(
         flash,
         { opacity: 0 },
         {
           keyframes: [
-            { opacity: 1, duration: 0.5, ease: 'power2.out' },
-            { opacity: 0, duration: 1.6, ease: 'power1.inOut' },
+            { opacity: 1, duration: 0.35, ease: 'power3.out' },
+            { opacity: 0, duration: 2.4, ease: 'power1.inOut' },
           ],
         },
       )
     }
+    showLine(0.3)
+    settling = true
+    settleCall = gsap.delayedCall(2.4, () => settle())
     focusTop()
   }
 
   btn.addEventListener('click', () => {
     if (rising) return
     if (!ctx.lenis) {
+      // reduced motion: a plain jump, then the same still moment at the top
       ctx.scrollTo(0)
       window.scrollTo(0, 0)
+      if (veil) gsap.set(veil, { autoAlpha: 1 })
+      showLine(0.05)
+      settling = true
+      settleCall?.kill()
+      settleCall = gsap.delayedCall(2.8, () => settle())
       focusTop()
       return
     }
+    settle(true)
     rising = true
     btn.classList.add('is-rising')
     html.classList.add('foot-is-ascending')
+    veilTo(true)
     gsap.to(P, { k: 1, duration: 1.5, ease: 'power2.inOut', onUpdate: applyWord })
     bubbles.start()
     gsap.delayedCall(0.3, () => {
@@ -102,12 +166,17 @@ export function init(ctx) {
     // if the visitor takes over the scroll mid-ascent, just tidy up
     safety = setTimeout(tidy, 7600)
   })
-  // a wheel or touch during the ascent hands the scroll back to the visitor
+  // a wheel or touch during the ascent hands the scroll back to the visitor;
+  // after it, any input resolves the page at once
   const takeOver = () => {
     if (rising && window.scrollY > 40) tidy()
+    else settle(true)
   }
   window.addEventListener('wheel', takeOver, { passive: true })
   window.addEventListener('touchstart', takeOver, { passive: true })
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Shift' && e.key !== 'Tab') settle(true)
+  })
 }
 
 /* --------------------------------------------------------------- bubbles */
@@ -206,11 +275,18 @@ function createBubbles(ctx, canvas) {
     },
     stop() {
       on = false
-      // the last bubbles finish rising, then the canvas rests
+      // the last bubbles finish rising, then the canvas rests and hands its
+      // backing store back
       setTimeout(() => {
         if (on) return
         canvas.classList.remove('is-on')
         list.length = 0
+        setTimeout(() => {
+          if (on) return
+          if (raf) cancelAnimationFrame(raf)
+          raf = 0
+          canvas.width = canvas.height = 0
+        }, 900)
       }, 1600)
     },
   }
