@@ -1063,3 +1063,8 @@
 #zones.is-static .zones__window::after {
   opacity: 0.8;
 }
+
+/* The liquid window edges and light bleeds may reach past the section on
+   narrow layouts; they must never widen the page. (clip, unlike hidden,
+   keeps sticky children and the pinned pass working.) */
+#zones { overflow-x: clip; }
