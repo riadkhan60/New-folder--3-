@@ -1483,8 +1483,18 @@ export function init(ctx) {
     const offset = (i) => panels[i].el.offsetLeft - panels[0].el.offsetLeft
     function sync() {
       raf = 0
-      const step = offset(1) || 1
-      const pos = clamp(list.scrollLeft / step, 0, panels.length - 1)
+      // each layer's resting scroll (the last one can only reach the end)
+      const max = list.scrollWidth - list.clientWidth
+      const x = list.scrollLeft
+      let pos = panels.length - 1
+      for (let i = 0; i < panels.length - 1; i++) {
+        const a = Math.min(offset(i), max)
+        const b = Math.min(offset(i + 1), max)
+        if (x <= b) {
+          pos = i + (b > a ? clamp((x - a) / (b - a)) : 1)
+          break
+        }
+      }
       ladder?.style.setProperty('--pos', pos.toFixed(3))
       const i = Math.round(pos)
       if (i !== active) {

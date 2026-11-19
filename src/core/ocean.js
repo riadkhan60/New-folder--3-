@@ -963,11 +963,15 @@ function createOcean(ctx, canvas) {
     if (disposed) return
     let pending
     try {
+      // Parallel compile only where the driver supports it; otherwise
+      // compileAsync just warns and compiles synchronously anyway.
+      const parallel = renderer.extensions.has('KHR_parallel_shader_compile')
+      const comp = (sc) => (parallel ? renderer.compileAsync(sc, camera) : (renderer.compile(sc, camera), Promise.resolve()))
       // the light pass draws into its target: compile it for that target
       renderer.setRenderTarget(lightRT)
-      const a = renderer.compileAsync(lightScene, camera)
+      const a = comp(lightScene)
       renderer.setRenderTarget(null)
-      pending = Promise.all([a, renderer.compileAsync(scene, camera)])
+      pending = Promise.all([a, comp(scene)])
     } catch {
       pending = Promise.resolve()
     }

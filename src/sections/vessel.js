@@ -2173,7 +2173,8 @@ export function init(ctx) {
       { rootMargin: '150% 0px' },
     )
     near.observe(root)
-    ctx.ready.then(() => setTimeout(() => idle(build, 4000), ctx.skipIntro ? 1200 : 2600))
+    // (after the real intro, give the hero's own entrance time to play)
+    ctx.ready.then(() => setTimeout(() => idle(build, 3000), ctx.skipIntro ? 300 : 2600))
   }
 
   /* ---- scroll */
