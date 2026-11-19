@@ -74,7 +74,9 @@ export function createPalette({ gsap, lenis = null, emit }) {
   function measure() {
     docH = document.documentElement.scrollHeight
     const sy = window.scrollY
-    geo = [...document.querySelectorAll('[data-field]')]
+    // Only page sections define fields; fixed UI (nav, cursor, dialogs) may
+    // borrow [data-field] for its colours without becoming a section.
+    geo = [...document.querySelectorAll('section[data-field], footer[data-field]')]
       .filter((el) => !el.parentElement?.closest('[data-field]')) // top-level fields only
       .map((el) => {
         const p = el.parentElement
