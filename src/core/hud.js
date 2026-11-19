@@ -28,6 +28,11 @@
  * the scroll positions where depth.js reaches each depth, so the spacing
  * honestly shows where the page lingers. Zone boundaries are buttons that
  * scroll there. Rebuilt on ScrollTrigger refresh / resize / body resize.
+ * The stretch already dived is lit by the light that exists at each depth
+ * (sunlight, then living light, then the red lamps from 6,000 m), and the
+ * needle leaves a short luminous trail that grows with the speed of travel.
+ * Odometer wheels blur along their travel while they roll, each by its own
+ * speed.
  */
 import '../styles/hud.css'
 
@@ -93,7 +98,7 @@ export function init(ctx) {
     col.className = `hud__col hud__col--${i}`
     col.innerHTML = `<span class="hud__strip">${strip}</span>`
     digitsEl.appendChild(col)
-    cols[i] = { el: col, strip: col.firstChild, pos: -1, lead: null }
+    cols[i] = { el: col, strip: col.firstChild, pos: -1, lead: null, mb: 0 }
     if (i === 3) {
       comma = document.createElement('span')
       comma.className = 'hud__comma'
@@ -109,6 +114,16 @@ export function init(ctx) {
     const t = clamp((f - 0.22) / 0.56)
     return t * t * (3 - 2 * t)
   }
+  // motion blur along the wheel's travel, by how far it turned this frame
+  // (quantised, so the style only changes when a wheel speeds up or slows)
+  function blurWheel(c, d) {
+    if (reduced) return
+    const mb = d > 0.9 ? 3 : d > 0.4 ? 2 : d > 0.1 ? 1 : 0
+    if (mb !== c.mb) {
+      c.mb = mb
+      c.el.style.setProperty('--mb', mb)
+    }
+  }
   function renderOdometer(v) {
     const val = Math.max(0, v)
     const whole = Math.floor(val)
@@ -119,9 +134,12 @@ export function init(ctx) {
       const pos = (Math.floor(whole / p) % 10) + (whole % p === p - 1 ? fd : 0)
       const c = cols[i]
       if (Math.abs(pos - c.pos) > 0.0015) {
+        let d = c.pos < 0 ? 0 : Math.abs(pos - c.pos)
+        if (d > 5) d = 10 - d // it wrapped 9 → 0
         c.pos = pos
         c.strip.style.transform = `translate3d(0, ${(-pos * 1.06).toFixed(4)}em, 0)`
-      }
+        blurWheel(c, d)
+      } else blurWheel(c, 0)
       const lead = i > 0 && val < p - 0.5
       if (lead !== c.lead) {
         c.lead = lead
@@ -579,6 +597,7 @@ export function init(ctx) {
   const marksEl = $('.hud__marks')
   const needle = $('.hud__needle')
   const fill = $('.hud__fill')
+  const trail = $('.hud__trail')
   let rulerH = 0
   let map = null // { yFor(d), maxScroll }
   let maxP = 1 // where the needle stops: the 10,935 m tick
@@ -648,6 +667,12 @@ export function init(ctx) {
     svg.setAttribute('viewBox', `0 0 ${W} ${rulerH}`)
     svg.innerHTML = lines.join('')
 
+    // where each light gives way to the next along the lit track
+    const pc = (d) => `${((py(d) / rulerH) * 100).toFixed(2)}%`
+    fill.style.setProperty('--rp-sun', pc(1000))
+    fill.style.setProperty('--rp-red0', pc(5800))
+    fill.style.setProperty('--rp-red1', pc(6400))
+
     let prev = -99
     markBtns.forEach((b, i) => {
       const y = py(MARKS[i].d)
@@ -700,6 +725,11 @@ export function init(ctx) {
   let fastT = 0
   let a11yT = 0
   let a11yTrail = 0
+  // the needle's trail: as long as it is fast, eased so it grows and fades
+  const trailTo = reduced || !trail ? null : gsap.quickTo(trail, 'scaleY', { duration: 0.5, ease: 'power3.out' })
+  let trailUp = false
+  let trailT = 0
+  let trailAt = 0
 
   function updateScroll(force = false) {
     const s = D.get()
@@ -715,9 +745,25 @@ export function init(ctx) {
     if (rulerH && map) {
       const p = clamp(y / map.maxScroll, 0, maxP)
       if (Math.abs(p - lastProgress) > 0.0002 || force) {
+        const dpx = lastProgress < 0 || force ? 0 : (p - lastProgress) * rulerH
         lastProgress = p
         needle.style.transform = `translate3d(0, ${(p * rulerH).toFixed(1)}px, 0)`
-        fill.style.transform = `scaleY(${p.toFixed(4)})`
+        fill.style.clipPath = `inset(0 -6px ${((1 - p) * 100).toFixed(3)}% -6px)`
+        if (trailTo && dpx) {
+          const up = dpx < 0
+          if (up !== trailUp) {
+            trailUp = up
+            needle.classList.toggle('is-up', up)
+          }
+          // speed in px per 60 fps frame, so the trail is the same length
+          // at any frame rate
+          const now = performance.now()
+          const frames = clamp((now - trailAt) / 16.7, 0.5, 4)
+          trailAt = now
+          trailTo(clamp(Math.abs(dpx) / frames / 3.2, 0, 1))
+          clearTimeout(trailT)
+          trailT = setTimeout(() => trailTo(0), 80)
+        }
       }
     }
   }

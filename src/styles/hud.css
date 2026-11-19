@@ -9,12 +9,15 @@
    it docks at the top in the nav's place while the nav is away
    (.is-topdock / .is-nav-away). Accent: photophore
    blue-green, shifting to the red observation lamps as --hadal rises (set
-   as --hud-accent by hud.js).
+   as --hud-accent by hud.js). --hud-light is the light that exists at the
+   current depth (sunlight fading into the accent): it tints the chip's
+   glass from inside, the halo of the figures and the lit ruler.
    ========================================================================== */
 
 .hud {
   --hud-accent: var(--c-photophore);
   --hud-glow: color-mix(in srgb, var(--hud-accent) 65%, transparent);
+  --hud-light: color-mix(in oklab, var(--hud-accent), var(--c-snell) calc(var(--sun) * 100%));
   --hud-wdth: 120;
   --hud-wght: 280;
   /* secondary text: brighter where sunlit water is brighter, so it keeps
@@ -69,17 +72,21 @@
   transition: opacity 0.6s var(--ease-out);
 }
 
-/* the chip's glass: invisible while the full instrument is out */
+/* the chip's glass: invisible while the full instrument is out. Lit from
+   inside by the light of this depth, with a fine specular rim. */
 .hud__glass {
   position: absolute;
   inset: 0;
   z-index: -1;
   border-radius: 999px;
-  border: 1px solid var(--c-line);
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  background:
+    radial-gradient(70% 150% at 50% 150%, color-mix(in srgb, var(--hud-light) 21%, transparent), transparent 72%),
+    linear-gradient(to bottom, rgb(234 246 244 / 0.055), rgb(234 246 244 / 0) 55%),
+    color-mix(in srgb, var(--bg) 74%, transparent);
   box-shadow:
-    inset 0 1px 0 rgb(234 246 244 / 0.07),
-    0 0 22px -8px var(--hud-glow);
+    inset 0 -8px 16px -12px color-mix(in srgb, var(--hud-light) 45%, transparent),
+    0 0 22px -8px var(--hud-glow),
+    0 12px 32px -20px color-mix(in srgb, var(--hud-light) 50%, transparent);
   -webkit-backdrop-filter: blur(12px) saturate(1.2);
   backdrop-filter: blur(12px) saturate(1.2);
   opacity: 0;
@@ -88,6 +95,42 @@
     opacity 0.35s var(--ease-out),
     transform 0.8s var(--ease-out);
   pointer-events: none;
+}
+
+/* the rim: brightest where the light catches the top of the glass */
+.hud__glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    to bottom,
+    rgb(234 246 244 / 0.3),
+    rgb(234 246 244 / 0.1) 38%,
+    rgb(234 246 244 / 0.07) 62%,
+    color-mix(in srgb, var(--hud-light) 32%, transparent)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+/* a specular glint along the top edge */
+.hud__glass::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 16%;
+  right: 16%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0),
+    rgb(255 255 255 / 0.5) 32%,
+    rgb(255 255 255 / 0.62) 50%,
+    rgb(255 255 255 / 0.5) 68%,
+    rgb(255 255 255 / 0)
+  );
 }
 
 /* ---------------------------------------------------------------- zone */
@@ -170,7 +213,14 @@
 .hud__strip {
   display: block;
   will-change: transform;
+  /* a breath of the light around the figures; while a wheel rolls, its
+     digits smear along the travel (--mb 0–3, set per wheel by hud.js) */
+  text-shadow:
+    0 0 0.38em color-mix(in srgb, var(--hud-light) 22%, transparent),
+    0 calc(var(--mb, 0) * 0.055em) calc(var(--mb, 0) * 0.035em) color-mix(in srgb, currentColor calc(var(--mb, 0) * 15%), transparent),
+    0 calc(var(--mb, 0) * -0.055em) calc(var(--mb, 0) * 0.035em) color-mix(in srgb, currentColor calc(var(--mb, 0) * 15%), transparent);
 }
+.hud__col.is-lead .hud__strip { text-shadow: none; }
 .hud__strip > span {
   display: block;
   height: 1.06em;
@@ -238,7 +288,7 @@
 .hud__band-fill {
   position: absolute;
   inset: 0;
-  background: var(--hud-accent);
+  background: linear-gradient(to right, color-mix(in srgb, var(--hud-accent) 12%, transparent), var(--hud-accent));
   box-shadow: 0 0 8px var(--hud-glow);
   transform-origin: left center;
   transform: scaleX(0);
@@ -379,12 +429,22 @@
 /* the reading keeps a steady width within a layer, so the glass doesn't
    twitch as figures gain or lose a digit */
 .hud.is-compact .hud__read {
+  position: relative;
   order: 2;
   display: flex;
   align-items: center;
   height: 1.1rem;
   padding-left: 0.7rem;
-  border-left: 1px solid var(--c-line);
+}
+/* a hairline etched in the glass, fading at its ends */
+.hud.is-compact .hud__read::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -0.3rem;
+  bottom: -0.3rem;
+  width: 1px;
+  background: linear-gradient(to bottom, rgb(234 246 244 / 0), rgb(234 246 244 / 0.3) 50%, rgb(234 246 244 / 0));
 }
 .hud.is-compact .hud__read[data-kind='light'] .hud__read-swap { min-width: 4.9rem; }
 .hud.is-compact .hud__read[data-kind='temperature'] .hud__read-swap { min-width: 3.4rem; }
@@ -472,13 +532,23 @@
   width: 1px;
   background: var(--c-line);
 }
+/* the stretch already dived, lit by the light that exists at each depth:
+   sunlight, then living light, then the red lamps (stops set by hud.js) */
 .hud__fill {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, transparent, var(--hud-accent));
-  opacity: 0.7;
-  transform-origin: top center;
-  transform: scaleY(0);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--c-snell) 30%, transparent),
+    color-mix(in srgb, var(--c-snell) 75%, var(--c-photophore)) calc(var(--rp-sun, 30%) * 0.4),
+    var(--c-photophore) var(--rp-sun, 30%),
+    color-mix(in srgb, var(--c-photophore) 80%, var(--c-photophore-2)) var(--rp-red0, 60%),
+    var(--c-redlight) var(--rp-red1, 66%),
+    var(--c-redlight)
+  );
+  box-shadow: 0 0 5px rgb(108 248 232 / 0.25);
+  opacity: 0.62;
+  clip-path: inset(0 -6px 100% -6px);
 }
 
 .hud__needle {
@@ -503,6 +573,47 @@
     0 0 4px var(--hud-accent),
     0 0 10px var(--hud-accent),
     0 0 22px var(--hud-glow);
+}
+/* a lens ring around the point of light */
+.hud__needle-dot::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--hud-accent) 38%, transparent);
+}
+/* the luminous trail it leaves along the track, longer the faster it goes */
+.hud__trail {
+  position: absolute;
+  right: 7.5px;
+  bottom: 0;
+  width: 2px;
+  height: 150px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--hud-accent) 55%, white),
+    var(--hud-accent) 14%,
+    color-mix(in srgb, var(--hud-accent) 40%, transparent) 42%,
+    color-mix(in srgb, var(--hud-accent) 0%, transparent)
+  );
+  box-shadow: 0 0 9px 1px color-mix(in srgb, var(--hud-accent) 50%, transparent);
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  will-change: transform;
+  pointer-events: none;
+}
+.hud__needle.is-up .hud__trail {
+  bottom: auto;
+  top: 1px;
+  transform-origin: 50% 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--hud-accent) 55%, white),
+    var(--hud-accent) 14%,
+    color-mix(in srgb, var(--hud-accent) 40%, transparent) 42%,
+    color-mix(in srgb, var(--hud-accent) 0%, transparent)
+  );
 }
 
 .hud__marks { position: absolute; inset: 0; }
@@ -531,7 +642,12 @@
 }
 .hud__mark:hover,
 .hud__mark:focus-visible { color: var(--c-ink); }
-.hud__mark.is-current { color: color-mix(in srgb, var(--hud-accent), var(--c-ink) calc(var(--sun) * 45%)); }
+.hud__mark.is-current {
+  color: color-mix(in srgb, var(--hud-accent), var(--c-ink) calc(var(--sun) * 45%));
+  text-shadow:
+    0 0 8px rgb(3 24 44 / calc(0.7 * var(--sun))),
+    0 0 10px color-mix(in srgb, var(--hud-accent) 45%, transparent);
+}
 .hud__mark.is-crowded .hud__mark-num { opacity: 0; }
 /* at the floor the footer's small print owns the corner: the scale keeps
    its ticks and needle, the figures step back (they return on hover) */

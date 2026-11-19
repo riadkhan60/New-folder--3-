@@ -22,11 +22,20 @@
  *
  * The section opens with the switch to red lamps. When the dive crosses
  * 6,000 m going down, Vesper's lamp head (22 LEDs) flickers white, goes dark
- * for a beat, and comes back red, LED by LED, while a wash of red light
+ * for a beat, and comes back red, LED by LED, while a soft disc of red light
  * blooms across the water from it. Going back up it quietly returns to white.
  *
+ * Light: the tether is a lit cable (stacked strokes: a soft bloom, the halo,
+ * the cable and a hot filament). While the log is on screen a pulse of light
+ * runs down the lit cable every few seconds and lands on the signal, which
+ * answers with a ping (one rAF loop, transform/opacity only, stopped when the
+ * log leaves the screen). The day the signal is on throws a faint pool of
+ * lamp light on the page; the numerals are lit from above (CSS); sketches
+ * glow in red light while they draw, and their lamp-coloured marks keep a
+ * soft glow. On Day 6, the lamps light the trench floor while Vesper is on it.
+ *
  * Reduced motion: the tether is drawn, every day is lit, the lamps are red,
- * nothing moves.
+ * nothing moves (no pulses, no wash, no floor light).
  */
 import '../styles/expedition.css'
 
@@ -155,6 +164,7 @@ export function init(ctx) {
   const lampSvg = lamps?.querySelector('.exp__lamp-svg')
   const lampGlow = lamps?.querySelector('.exp__lamp-glow')
   const wash = root.querySelector('.exp__wash')
+  const washLight = wash?.querySelector('.exp__wash-light')
   const leds = []
   if (lampSvg) {
     el('circle', { class: 'exp__lamp-housing', cx: 40, cy: 40, r: 38 }, lampSvg)
@@ -172,10 +182,13 @@ export function init(ctx) {
     const r = lamps.querySelector('.exp__lamp').getBoundingClientRect()
     wash.style.setProperty('--wx', `${(r.left + r.width / 2).toFixed(0)}px`)
     wash.style.setProperty('--wy', `${(r.top + r.height / 2).toFixed(0)}px`)
-    gsap.killTweensOf(wash)
+    gsap.killTweensOf([wash, washLight])
+    // a soft disc of red light grows from the lamp inside a clipped, fixed
+    // layer: no box edges, and nothing can widen the page
     gsap
       .timeline()
-      .fromTo(wash, { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, /* ≤ 1: a fixed, scaled box must never widen the page */ duration: 0.8, ease: 'power2.out' })
+      .fromTo(wash, { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 0)
+      .fromTo(washLight, { scale: 0.18 }, { scale: 1, duration: 1.6, ease: 'expo.out' }, 0)
       .to(wash, { opacity: 0, duration: 2.2, ease: 'power2.inOut' }, 0.75)
   }
   function setLamps(red, show) {
@@ -187,7 +200,7 @@ export function init(ctx) {
       lamps.classList.remove('is-red')
       gsap.set([...leds, lampGlow], { clearProps: 'opacity' })
       if (wash) {
-        gsap.killTweensOf(wash)
+        gsap.killTweensOf([wash, washLight])
         gsap.set(wash, { opacity: 0 })
       }
       return
@@ -386,9 +399,10 @@ export function init(ctx) {
       /* not rendered yet: the next build measures again */
     }
 
-    // Stacked strokes make an additive glow without a filter: a wide soft
-    // bloom, the halo, the lit cable, and a hot filament down its centre.
-    const layers = ['bloom', 'halo', 'mid', 'core', 'fil']
+    // Stacked strokes make an additive glow without a filter: two faint,
+    // wide strokes (stepped so the falloff reads as soft), the halo, the
+    // lit cable, and a hot filament down its centre.
+    const layers = ['bloom', 'glow', 'halo', 'mid', 'core', 'fil']
     const mk = (d, cls, plunge) =>
       layers.map((k) => {
         const p = el('path', { class: `exp__c-lit exp__c-lit--${k} ${cls}`, d }, svg)
@@ -398,7 +412,7 @@ export function init(ctx) {
     const segA = mk(dA, 'exp__c-track')
     const segP = mk(dP, 'exp__c-plunge', true)
     const segB = mk(dB, 'exp__c-track')
-    const lut = sample(segP[3])
+    const lut = sample(segP[4])
 
     // readout size, measured once with its widest text
     let readW = 110

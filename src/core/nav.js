@@ -15,6 +15,10 @@
  * - ≤ 1099 px: a menu button opens a full-screen menu whose links are set at
  *   the pressure of their own depth. Focus-trapped, Esc closes, Lenis paused.
  * - Listens for `intro:landed` (from core/loader) to reveal its wordmark.
+ * - "Reserve a dive" is a capsule of lit glass: a lamp rests low inside it;
+ *   on a fine pointer the light gathers under the pointer and the bar's
+ *   button leans a few pixels towards it. The menu is a depth chart: each
+ *   row is tinted with the water of its own depth.
  */
 import '../styles/nav.css'
 
@@ -53,9 +57,13 @@ export function init(ctx) {
 
   /* --------------------------------- pressure: menu links set at depth */
   menuLinks.forEach((a) => {
-    const c = ctx.depth.compression(parseFloat(a.dataset.depth) || 0)
+    const d = parseFloat(a.dataset.depth) || 0
+    const c = ctx.depth.compression(d)
     a.style.setProperty('--wdth', c.wdth)
     a.style.setProperty('--wght', c.wght)
+    // a bathymetric chart: each row tinted with the water at its depth
+    const water = ctx.depth.colorAt?.(d)
+    if (water) a.parentElement.style.setProperty('--row-water', water.css)
   })
 
   /* ------------------------------------------------------- anchors */
@@ -101,6 +109,7 @@ export function init(ctx) {
     indT = setTimeout(() => placeIndicator(), 0)
   }
   let indT = 0
+  const tail = indicator.querySelector('.nav__indicator-tail')
   function placeIndicator(immediate = false) {
     const link = links.find((l) => l.dataset.section === active)
     if (!link || !list.offsetParent) {
@@ -108,6 +117,17 @@ export function init(ctx) {
       return
     }
     const x = link.offsetLeft + link.offsetWidth / 2
+    // the photophore swims to its new link and leaves a short wake of light
+    const dx = x - (gsap.getProperty(indicator, 'x') || 0)
+    if (tail && !immediate && !reduced && Math.abs(dx) > 8 && gsap.getProperty(indicator, 'opacity') > 0.5) {
+      tail.dataset.side = dx > 0 ? 'left' : 'right'
+      gsap.killTweensOf(tail)
+      gsap
+        .timeline()
+        .set(tail, { width: Math.min(150, Math.abs(dx) * 0.62), scaleX: 0, opacity: 1 })
+        .to(tail, { scaleX: 1, duration: 0.18, ease: 'power2.out' })
+        .to(tail, { scaleX: 0, opacity: 0.3, duration: 1.05, ease: 'expo.out' })
+    }
     const vars = { x, opacity: 1, duration: immediate || reduced ? 0 : 0.9, ease: 'expo.out', overwrite: 'auto' }
     gsap.to(indicator, vars)
   }
@@ -204,6 +224,60 @@ export function init(ctx) {
   }
   nav.addEventListener('focusin', () => setHidden(false))
 
+  /* ------------------------------------------- the reserve lamps */
+  // A light rests low inside the glass. On a fine pointer it gathers under
+  // the pointer (eased, so it moves like light in water) and the bar's
+  // button leans towards it; it settles back when the pointer leaves.
+  const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  const follow = fine && !reduced && !ctx.isTouch
+  const clampN = (v, a, b) => Math.min(b, Math.max(a, v))
+  nav.querySelectorAll('.nav__cta, .nav__menu-cta').forEach((btn) => {
+    if (!follow) return
+    const label = btn.querySelector('.nav__cta-label')
+    const magnetic = btn.classList.contains('nav__cta')
+    const L = { x: 50, y: 135 }
+    const paint = () => {
+      btn.style.setProperty('--lx', `${L.x.toFixed(1)}%`)
+      btn.style.setProperty('--ly', `${L.y.toFixed(1)}%`)
+    }
+    const qx = gsap.quickTo(L, 'x', { duration: 0.6, ease: 'power3.out', onUpdate: paint })
+    const qy = gsap.quickTo(L, 'y', { duration: 0.6, ease: 'power3.out', onUpdate: paint })
+    const mx = magnetic ? gsap.quickTo(btn, 'x', { duration: 0.9, ease: 'expo.out' }) : null
+    const my = magnetic ? gsap.quickTo(btn, 'y', { duration: 0.9, ease: 'expo.out' }) : null
+    const lx = magnetic && label ? gsap.quickTo(label, 'x', { duration: 0.9, ease: 'expo.out' }) : null
+    // the button's resting frame, measured on entry (it moves under the pointer)
+    let box = null
+    btn.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return
+      const r = btn.getBoundingClientRect()
+      const tx = magnetic ? gsap.getProperty(btn, 'x') || 0 : 0
+      const ty = magnetic ? gsap.getProperty(btn, 'y') || 0 : 0
+      box = { left: r.left - tx, top: r.top - ty, width: r.width, height: r.height }
+    })
+    btn.addEventListener('pointermove', (e) => {
+      if (!box) return
+      const px = (e.clientX - box.left) / box.width
+      const py = (e.clientY - box.top) / box.height
+      qx(clampN(px, -0.1, 1.1) * 100)
+      qy(clampN(py, -0.2, 1.2) * 100)
+      if (magnetic) {
+        const dx = (px - 0.5) * box.width
+        const dy = (py - 0.5) * box.height
+        mx(clampN(dx * 0.18, -7, 7))
+        my(clampN(dy * 0.28, -4, 4))
+        lx?.(clampN(dx * 0.06, -2.5, 2.5))
+      }
+    })
+    btn.addEventListener('pointerleave', () => {
+      box = null
+      qx(50)
+      qy(135)
+      mx?.(0)
+      my?.(0)
+      lx?.(0)
+    })
+  })
+
   /* ------------------------------------------------------- sound */
   // The button shows what is actually playing. A remembered "on" stays
   // silent until the visitor's first gesture (core/audio), so the button
@@ -298,7 +372,8 @@ export function init(ctx) {
         .timeline({ defaults: { ease: 'expo.out' } })
         .fromTo(menu.querySelector('.nav__menu-water'), { clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0% 0)', duration: 0.9, ease: 'expo.inOut' }, 0)
         .fromTo(menu.querySelector('.nav__menu-intro'), { opacity: 0 }, { opacity: 1, duration: 0.8 }, 0.35)
-        .fromTo(rows, { '--rule': 0 }, { '--rule': 1, duration: 1 }, 0.3)
+        // the chart's layer tints and contours come in from the top down
+        .fromTo(rows, { '--rule': 0, '--tint': 0 }, { '--rule': 1, '--tint': 1, duration: 1.1, stagger: 0.06 }, 0.3)
         // the names arrive wide and light, and the pressure of their depth
         // squeezes them into shape
         .fromTo(

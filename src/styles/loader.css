@@ -209,10 +209,31 @@ html.is-ready .loader:not(.is-exiting),
 .loader__progress span {
   position: absolute;
   inset: 0;
-  background: var(--c-photophore);
+  background: linear-gradient(to right, rgb(108 248 232 / 0.35), var(--c-photophore));
   box-shadow: 0 0 10px rgb(108 248 232 / 0.8);
   transform-origin: left center;
   transform: scaleX(0);
+}
+/* a bead of light riding the tip of the line (loader.js sets --p) */
+.loader__progress-head {
+  position: absolute;
+  inset: 0;
+  transform: translateX(calc((var(--p, 0) - 1) * 100%));
+  pointer-events: none;
+}
+.loader__progress-head::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: -2.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f4fffd;
+  box-shadow:
+    0 0 4px var(--c-photophore),
+    0 0 12px rgb(108 248 232 / 0.75),
+    0 0 28px rgb(58 168 255 / 0.35);
 }
 
 /* ----------------------------------------------------- water + bubbles */
@@ -251,10 +272,13 @@ html.is-ready .loader:not(.is-exiting),
 .loader__ch { display: inline-block; }
 
 /* The same name seen through the water: clipped by loader.js to the
-   region below the waterline. Cooler, lit from inside, gently refracted. */
+   region below the waterline. Tinted by the water, lit from inside, gently
+   refracted, with a caustic net of light playing over it (the filter). */
 .loader__mark--wet { clip-path: inset(100% 0 0 0); }
 .loader__mark--wet .loader__word {
-  color: var(--c-snell);
+  /* sunlight-white sunk into the water (plain rgb: loader.js tweens it back
+     to the nav's ink as the name surfaces) */
+  color: rgb(172 231 242);
   filter: url(#loader-refract);
   text-shadow:
     0 0 2px rgb(217 251 255 / 0.55),

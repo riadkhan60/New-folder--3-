@@ -9,8 +9,10 @@
  *         unclips the black panel and reveals the hero); the wordmark is
  *         squeezed by the pressure (Anybody wdth 150 → 112, wght 200 → 520)
  *  2.6 s  the waterline swallows the name: below the line it is seen
- *         through the water (a drifting refraction, a cooler light) and the
- *         letters let go of a breath of bubbles
+ *         through the water (a drifting refraction, a cooler light, and the
+ *         caustic net the moving surface throws across the letters) and the
+ *         letters let go of a breath of bubbles. Under the line, light shafts
+ *         lean down into the water and glints ride the meniscus
  *  2.8 s  the wordmark rises through the water into the nav and becomes
  *         the nav brand, the refraction settling as it arrives
  *  3.0 s  hand-over: init() resolves, main.js marks the page ready
@@ -71,6 +73,7 @@ export async function init(ctx, { fontsReady, pageReady } = {}) {
   const countVal = q('.loader__count-val')
   const countLabel = q('.loader__count-label span')
   const progress = q('.loader__progress span')
+  const track = progress.parentElement
   const bottom = q('.loader__bottom')
 
   // The name seen through the water: a second copy, clipped to the region
@@ -178,7 +181,10 @@ export async function init(ctx, { fontsReady, pageReady } = {}) {
       ease: 'none',
       onUpdate() {
         countVal.textContent = Math.max(0, T.release - clock.t).toFixed(2)
-        progress.style.transform = `scaleX(${clamp(clock.t / T.release)})`
+        const p = clamp(clock.t / T.release)
+        progress.style.transform = `scaleX(${p})`
+        // a bead of light rides the tip of the line
+        track.style.setProperty('--p', p.toFixed(4))
       },
     },
     0,
@@ -220,8 +226,10 @@ export async function init(ctx, { fontsReady, pageReady } = {}) {
   )
   // pressure arrives as the waterline crosses the wordmark
   tl.to(words, { '--lw': 112, '--lg': 520, '--ls': -0.012, duration: 0.6, ease: 'power2.inOut' }, T.flood + 0.02)
-  // the refraction swells in as the line reaches the name
+  // the refraction swells in as the line reaches the name, and the caustic
+  // net lights across the letters
   tl.to(refract, { scale: 15, duration: 0.5, ease: 'power2.out' }, T.flood + 0.45)
+  tl.to(refract, { caustic: 1, duration: 0.7, ease: 'power2.out' }, T.flood + 0.4)
   tl.to(root, { '--loader-bloom': 0, duration: 0.6, ease: 'power1.out' }, T.flood)
 
   // 8. hand over to the page
@@ -262,8 +270,11 @@ export async function init(ctx, { fontsReady, pageReady } = {}) {
     const dx = b.left + b.width / 2 - (a.left + a.width / 2)
     const dy = b.top + b.height / 2 - (a.top + a.height / 2)
     const dur = 1.0 / Math.max(1, tl.timeScale() * 0.6)
-    // the water calms around it on the way up, so it lands crisp
+    // the water calms around it on the way up, so it lands crisp: the
+    // caustics fade and the cool underwater tint clears to the nav's ink
     gsap.to(refract, { scale: 0, duration: dur * 0.85, ease: 'power2.inOut', delay: dur * 0.15 })
+    gsap.to(refract, { caustic: 0, duration: dur * 0.7, ease: 'power2.in' })
+    gsap.to(wetWord, { color: '#eaf6f4', duration: dur * 0.9, ease: 'power2.inOut' })
     gsap.to(words, {
       x: dx,
       y: dy,
@@ -329,6 +340,24 @@ function createWater(canvas, panel, dpr, marks = {}) {
     }
   }
 
+  // light under the surface: shafts leaning down from the waterline (fanned
+  // like the hero's sun rays), and glints riding the crest of the meniscus
+  const SHAFTS = Array.from({ length: 7 }, (_, k) => ({
+    x: (k + 0.15 + Math.random() * 0.7) / 7,
+    v: (Math.random() - 0.5) * 0.012,
+    w: 22 + Math.random() * 64,
+    l: 0.5 + Math.random() * 0.55,
+    a: 0.55 + Math.random() * 0.45,
+    p: Math.random() * 6.28,
+  }))
+  const GLINTS = Array.from({ length: 11 }, () => ({
+    x: Math.random(),
+    v: (Math.random() - 0.5) * 0.06,
+    f: 2.5 + Math.random() * 4.5,
+    p: Math.random() * 6.28,
+    len: 2.4 + Math.random() * 3.6,
+  }))
+
   const bubbles = Array.from({ length: 72 }, () => ({
     x: Math.random(),
     y: 0,
@@ -387,16 +416,21 @@ function createWater(canvas, panel, dpr, marks = {}) {
 
     // 2. the water body just under the line: light caught in the surface
     g.clearRect(0, 0, W, H)
-    const traceWave = () => {
+    const traceWave = (dy = 0) => {
       g.beginPath()
-      g.moveTo(0, ys[0])
+      g.moveTo(0, ys[0] + dy)
       for (let i = 1; i <= N; i++) {
         const x0 = (W * (i - 1)) / N
         const x1 = (W * i) / N
         const xm = (x0 + x1) / 2
-        g.quadraticCurveTo(x0, ys[i - 1], xm, (ys[i - 1] + ys[i]) / 2)
+        g.quadraticCurveTo(x0, ys[i - 1] + dy, xm, (ys[i - 1] + ys[i]) / 2 + dy)
       }
-      g.lineTo(W, ys[N])
+      g.lineTo(W, ys[N] + dy)
+    }
+    const yAt = (x) => {
+      const u = clamp(x / W) * N
+      const i = Math.min(N - 1, Math.floor(u))
+      return ys[i] + (ys[i + 1] - ys[i]) * (u - i)
     }
     traceWave()
     g.lineTo(W, H)
@@ -409,6 +443,49 @@ function createWater(canvas, panel, dpr, marks = {}) {
     grad.addColorStop(1, 'rgba(14,111,134,0)')
     g.fillStyle = grad
     g.fill()
+
+    // 2b. shafts of light leaning down from the surface, fanned from the
+    //     middle like the sun rays the hero is about to show
+    g.globalCompositeOperation = 'lighter'
+    const reach = Math.max(240, H * 0.62)
+    for (const sh of SHAFTS) {
+      const x = (((sh.x + t * sh.v) % 1) + 1) % 1 * W
+      const y0 = yAt(x) + 2
+      const len = reach * sh.l
+      const lean = (x / W - 0.5) * len * 0.55
+      const w = sh.w * (0.82 + 0.18 * Math.sin(t * 1.6 + sh.p))
+      const a = sh.a * (0.75 + 0.25 * Math.sin(t * 2.1 + sh.p * 2))
+      const sg = g.createLinearGradient(0, y0, 0, y0 + len)
+      sg.addColorStop(0, `rgba(217,251,255,${(0.13 * a).toFixed(3)})`)
+      sg.addColorStop(0.35, `rgba(160,245,240,${(0.05 * a).toFixed(3)})`)
+      sg.addColorStop(1, 'rgba(108,248,232,0)')
+      g.fillStyle = sg
+      g.beginPath()
+      g.moveTo(x - w * 0.5, y0)
+      g.lineTo(x + w * 0.5, y0)
+      g.lineTo(x + w * 1.4 + lean, y0 + len)
+      g.lineTo(x - w * 1.4 + lean, y0 + len)
+      g.closePath()
+      g.fill()
+    }
+    // the caustic shimmer just under the line: broken threads of light,
+    // each drifting at its own pace
+    g.lineWidth = 1
+    for (let r = 0; r < 3; r++) {
+      g.beginPath()
+      for (let i = 0; i <= N; i++) {
+        const x = (W * i) / N
+        const y = ys[i] + 7 + r * 11 + Math.sin(x * 0.019 + t * (2.2 + r * 0.7) + r * 2.1) * (2.5 + r * 1.6)
+        if (i) g.lineTo(x, y)
+        else g.moveTo(x, y)
+      }
+      g.setLineDash([10 + r * 6, 16 + r * 9, 3 + r * 2, 22 + r * 7])
+      g.lineDashOffset = -t * (38 + r * 21)
+      g.strokeStyle = `rgba(190,252,246,${(0.2 - r * 0.05).toFixed(3)})`
+      g.stroke()
+    }
+    g.setLineDash([])
+    g.globalCompositeOperation = 'source-over'
 
     // 3. bubbles rising behind the front (only drawn under water)
     const ft = t
@@ -460,6 +537,31 @@ function createWater(canvas, panel, dpr, marks = {}) {
     g.strokeStyle = 'rgba(108,248,232,0.22)'
     g.lineWidth = 7
     g.stroke()
+    // the underside of the surface, a fainter second line just below
+    traceWave(4.5)
+    g.strokeStyle = 'rgba(217,251,255,0.2)'
+    g.lineWidth = 0.8
+    g.stroke()
+
+    // 5. glints of light riding the crest
+    g.globalCompositeOperation = 'lighter'
+    for (const gl of GLINTS) {
+      const a = Math.max(0, Math.sin(t * gl.f + gl.p)) ** 2
+      if (a < 0.04) continue
+      const x = (((gl.x + t * gl.v) % 1) + 1) % 1 * W
+      const y = yAt(x)
+      g.save()
+      g.translate(x, y)
+      g.scale(gl.len, 1)
+      const rg = g.createRadialGradient(0, 0, 0, 0, 0, 5)
+      rg.addColorStop(0, `rgba(255,255,255,${(0.95 * a).toFixed(3)})`)
+      rg.addColorStop(0.35, `rgba(200,255,250,${(0.4 * a).toFixed(3)})`)
+      rg.addColorStop(1, 'rgba(108,248,232,0)')
+      g.fillStyle = rg
+      g.fillRect(-5, -5, 10, 10)
+      g.restore()
+    }
+    g.globalCompositeOperation = 'source-over'
 
     if (running) raf = requestAnimationFrame(frame)
   }
@@ -504,10 +606,15 @@ function createWater(canvas, panel, dpr, marks = {}) {
 function createRefraction(gsap, filter) {
   const disp = filter?.querySelector('feDisplacementMap')
   const off = filter?.querySelector('feOffset')
+  const field = filter?.querySelector('.loader__caustic-field')
+  const flow = filter?.querySelector('.loader__caustic-flow')
+  const net = filter?.querySelector('.loader__caustic-net')
   let t0 = 0
   let lastS = -1
+  let lastC = -1
   const r = {
     scale: 0,
+    caustic: 0,
     start() {
       if (!disp) return
       t0 = performance.now()
@@ -526,6 +633,22 @@ function createRefraction(gsap, filter) {
     if (Math.abs(s - lastS) > 0.05) {
       lastS = s
       disp.setAttribute('scale', s.toFixed(2))
+    }
+    // the caustic net: it drifts against the refraction and slowly reshapes
+    // as the surface above it moves
+    const c = clamp(r.caustic)
+    if (net && (c > 0.005 || lastC > 0.005)) {
+      flow.setAttribute('dx', (-t * 44).toFixed(1))
+      flow.setAttribute('dy', (t * 16 + Math.sin(t * 1.7) * 5).toFixed(1))
+      field.setAttribute(
+        'baseFrequency',
+        `${(0.012 + Math.sin(t * 1.3) * 0.0012).toFixed(5)} ${(0.021 + Math.cos(t * 0.9) * 0.0016).toFixed(5)}`,
+      )
+      if (Math.abs(c - lastC) > 0.01 || (c === 0 && lastC !== 0)) {
+        lastC = c
+        // alpha = c · (k − m·R): light only in the creases of the field
+        net.setAttribute('values', `0 0 0 0 0.93  0 0 0 0 1  0 0 0 0 1  ${(-12 * c).toFixed(3)} 0 0 0 ${(1.6 * c).toFixed(3)}`)
+      }
     }
   }
   return r

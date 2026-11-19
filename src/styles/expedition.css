@@ -45,15 +45,26 @@
   position: fixed;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  background:
-    radial-gradient(circle at var(--wx, 70%) var(--wy, 70%),
-      rgb(255 59 47 / 0.34) 0,
-      rgb(255 59 47 / 0.14) 26%,
-      rgb(255 59 47 / 0.04) 52%,
-      transparent 78%);
-  transform-origin: var(--wx, 70%) var(--wy, 70%);
+}
+/* a soft disc of lamp light, centred on the lamp head, that fades to
+   nothing at its own edge (so no box edge ever shows while it grows) */
+.exp__wash-light {
+  position: absolute;
+  left: var(--wx, 70%);
+  top: var(--wy, 70%);
+  width: 220vmax;
+  height: 220vmax;
+  margin: -110vmax 0 0 -110vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side,
+    rgb(255 59 47 / 0.34) 0,
+    rgb(255 59 47 / 0.15) 14%,
+    rgb(255 59 47 / 0.06) 34%,
+    rgb(255 59 47 / 0.02) 58%,
+    transparent);
 }
 
 /* ---------------------------------------------------------------- header */
@@ -192,8 +203,9 @@
 /* strokes stacked make an additive glow without a filter: a wide, faint
    bloom of lamp light in the water, the halo, the lit cable, and a hot
    filament down its centre */
-.exp__cable .exp__c-lit--bloom { stroke-width: 28; opacity: 0.045; }
-.exp__cable .exp__c-lit--halo { stroke-width: 10; opacity: 0.11; }
+.exp__cable .exp__c-lit--bloom { stroke-width: 30; opacity: 0.018; }
+.exp__cable .exp__c-lit--glow { stroke-width: 18; opacity: 0.026; }
+.exp__cable .exp__c-lit--halo { stroke-width: 9; opacity: 0.09; }
 .exp__cable .exp__c-lit--mid { stroke-width: 3.5; opacity: 0.4; }
 .exp__cable .exp__c-lit--core { stroke-width: 2; opacity: 1; }
 .exp__cable .exp__c-lit--fil { stroke-width: 0.8; opacity: 0.85; }

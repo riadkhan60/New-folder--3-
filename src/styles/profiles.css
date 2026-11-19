@@ -13,6 +13,10 @@
   --pf-hadal: var(--c-redlight);
   --pf-accent: color-mix(in oklab, var(--c-redlight) calc(var(--hadal) * 100%), var(--c-photophore));
   --pf-sel: var(--pf-hadal);
+  /* the hot filament at the centre of each lit line: its colour, nearly white */
+  --pf-hot-twilight: color-mix(in oklab, var(--pf-twilight) 45%, #f2fffd);
+  --pf-hot-abyss: color-mix(in oklab, var(--pf-abyss) 45%, #f2f8ff);
+  --pf-hot-hadal: color-mix(in oklab, var(--pf-hadal) 45%, #fff6f2);
   position: relative;
 }
 #dives.profiles[data-sel='twilight'] { --pf-sel: var(--pf-twilight); }
@@ -145,14 +149,65 @@
 }
 .pf__svg .pf__line,
 .pf__svg .pf__halo,
+.pf__svg .pf__bloom,
+.pf__svg .pf__glow,
+.pf__svg .pf__fil,
+.pf__svg .pf__wake,
+.pf__svg .pf__sweep,
 .pf__svg .pf__focus,
 .pf__svg .pf__hit {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* A lit line is four strokes: a wide, faint bloom in the water, a halo, the
+   line, and a hot filament down its centre. While the lines draw they all
+   burn; once one is chosen the others step back to a plain line. */
 .pf__svg .pf__line { stroke-width: 1.5; transition: stroke-width 0.5s var(--ease-out); }
-.pf__svg .pf__halo { stroke-width: 9; opacity: 0; transition: opacity 0.6s var(--ease-out); }
+.pf__svg .pf__halo { stroke-width: 9; opacity: 0.1; transition: opacity 0.6s var(--ease-out); }
+.pf__svg .pf__bloom { stroke-width: 30; opacity: 0.014; transition: opacity 0.8s var(--ease-out); pointer-events: none; }
+.pf__svg .pf__glow { stroke-width: 18; opacity: 0.022; transition: opacity 0.8s var(--ease-out); pointer-events: none; }
+.pf__svg .pf__fil { stroke-width: 0.75; opacity: 0.6; transition: opacity 0.6s var(--ease-out); pointer-events: none; }
+.pf__svg .pf__halo, .pf__svg .pf__line { pointer-events: none; }
+.pf__svg.has-sel .pf__curve .pf__halo,
+.pf__svg.has-sel .pf__curve .pf__bloom,
+.pf__svg.has-sel .pf__curve .pf__glow,
+.pf__svg.has-sel .pf__curve .pf__fil { opacity: 0; }
+.pf__svg.has-sel .pf__curve.is-sel .pf__halo { opacity: 0.18; }
+.pf__svg.has-sel .pf__curve.is-sel .pf__bloom { opacity: 0.02; }
+.pf__svg.has-sel .pf__curve.is-sel .pf__glow { opacity: 0.03; }
+.pf__svg.has-sel .pf__curve.is-sel .pf__fil { opacity: 0.85; }
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__bloom,
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__glow { stroke: var(--c); }
+.pf__svg .pf__curve[data-id='twilight'] { --hot: var(--pf-hot-twilight); }
+.pf__svg .pf__curve[data-id='abyss'] { --hot: var(--pf-hot-abyss); }
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__fil,
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__wake--core,
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__sweep--core { stroke: var(--hot); }
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__wake,
+.pf__svg .pf__curve:not([data-id='hadal']) .pf__sweep--wide { stroke: var(--c); }
+
+/* the wake of light behind the sub: three dashes ending at the sub */
+.pf__svg .pf__wake { opacity: 0; pointer-events: none; transition: opacity 0.5s var(--ease-out); }
+.pf__svg .pf__wake--wide { stroke-width: 9; }
+.pf__svg .pf__wake--mid { stroke-width: 3.5; }
+.pf__svg .pf__wake--core { stroke-width: 1.6; }
+.pf__svg.has-wake .pf__curve.is-sel .pf__wake--wide { opacity: 0.14; }
+.pf__svg.has-wake .pf__curve.is-sel .pf__wake--mid { opacity: 0.4; }
+.pf__svg.has-wake .pf__curve.is-sel .pf__wake--core { opacity: 0.95; }
+/* the run of light along a line when it is chosen */
+.pf__svg .pf__sweep { opacity: 0; pointer-events: none; }
+.pf__svg .pf__sweep--wide { stroke-width: 12; stroke-opacity: 0.42; }
+.pf__svg .pf__sweep--core { stroke-width: 2.6; }
+
+/* the point of light that draws each line */
+.pf__svg .pf__tip { opacity: 0; pointer-events: none; transition: opacity 0.35s var(--ease-out); }
+.pf__svg .pf__tip.is-on { opacity: 1; }
+.pf__svg .pf__tip-core { fill: #fff; }
+.pf__svg .pf__curve[data-id='twilight'] .pf__tip-glow,
+.pf__svg .pf__curve[data-id='hadal'] .pf__tip-glow { fill: url(#pf-glow-twilight); }
+.pf__svg .pf__curve[data-id='abyss'] .pf__tip-glow { fill: url(#pf-glow-abyss); }
+.pf__svg .pf__curve[data-id='hadal'] .pf__tip.is-red .pf__tip-glow { fill: url(#pf-glow-red); }
 .pf__svg .pf__hit { stroke: transparent; stroke-width: 26; pointer-events: stroke; }
 .pf__svg .pf__focus {
   stroke: var(--c-ink);
@@ -198,12 +253,12 @@
 .pf__svg.has-sel .pf__curve.is-sel .pf__line { opacity: 1; }
 .pf__svg.has-sel .pf__curve.is-sel .pf__tag-name { fill: var(--c-ink); }
 .pf__svg .pf__curve.is-sel .pf__line { stroke-width: 2.25; }
-.pf__svg .pf__curve.is-sel .pf__halo { opacity: 0.2; }
 .pf__svg .pf__curve.is-sel.is-drawn .pf__area { opacity: 1; }
 .pf__svg .pf__curve:focus-visible .pf__focus { opacity: 0.85; }
 /* hover is a preview only: the line lights, nothing is chosen */
 .pf__svg.has-sel .pf__curve.is-peek .pf__line { opacity: 0.95; stroke-width: 2; }
-.pf__svg .pf__curve.is-peek:not(.is-sel) .pf__halo { opacity: 0.12; }
+.pf__svg.has-sel .pf__curve.is-peek:not(.is-sel) .pf__halo { opacity: 0.12; }
+.pf__svg.has-sel .pf__curve.is-peek:not(.is-sel) .pf__fil { opacity: 0.5; }
 .pf__svg .pf__curve.is-peek .pf__tag-name { fill: var(--c-ink); }
 /* a label that the moving readout passes over steps back */
 .pf__svg .pf__tag text { transition: opacity 0.3s var(--ease-out); }
@@ -254,8 +309,13 @@
 }
 .pf__svg .pf__scan.is-on { opacity: 1; }
 .pf__svg .pf__sub-body { fill: var(--c-ink); }
+.pf__svg .pf__sub-fin { fill: color-mix(in srgb, var(--c-ink) 70%, transparent); }
 .pf__svg .pf__sub-port { fill: #05070c; }
 .pf__svg .pf__sub-glow { fill: url(#pf-sub-glow); }
+.pf__svg .pf__sub-beam { fill: url(#pf-beam-white); }
+.pf__svg .pf__sub-lamp { fill: #fff; }
+.pf__svg .pf__sub.is-red .pf__sub-beam { fill: url(#pf-beam-red); }
+.pf__svg .pf__sub.is-red .pf__sub-lamp { fill: color-mix(in oklab, var(--pf-hadal) 55%, #fff); }
 .pf__svg .pf__sub-read {
   fill: var(--c-ink);
   font-family: var(--font-display);
@@ -431,12 +491,15 @@
    headline at this depth, but plain ink, no lamp glow (10,935 m stays the
    finale's number) */
 .pf__price-n {
+  /* 1 → 0 as the figure arrives (profiles.js): wide and light, squeezed
+     narrow and heavy by the pressure */
+  --pf-sq: 0;
   font-family: var(--font-display);
   font-size: clamp(3rem, 4.6vw, 4.6rem);
-  font-stretch: calc((var(--wdth) + 6) * 1%);
-  font-weight: min(var(--wght), 740);
+  font-stretch: calc((var(--wdth) + 6 + var(--pf-sq) * 44) * 1%);
+  font-weight: calc(min(var(--wght), 740) - var(--pf-sq) * 420);
   line-height: 0.86;
-  letter-spacing: calc((70 - var(--wdth)) * 0.0012em);
+  letter-spacing: calc((70 - var(--wdth)) * 0.0012em + var(--pf-sq) * 0.03em);
   font-variant-numeric: tabular-nums lining-nums;
   white-space: nowrap;
   color: var(--c-ink);

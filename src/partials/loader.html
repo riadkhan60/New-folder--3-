@@ -82,18 +82,28 @@
         </div>
       </div>
 
-      <div class="loader__progress"><span></span></div>
+      <div class="loader__progress"><span></span><i class="loader__progress-head"></i></div>
     </div>
   </div>
 
   <canvas class="loader__water"></canvas>
 
-  <!-- the wordmark seen through the water: a slow drifting refraction -->
+  <!-- the wordmark seen through the water: a slow drifting refraction, and
+       the caustic net of light the moving surface throws across the letters
+       (the creases of a turbulence field are where the light gathers) -->
   <svg class="loader__defs" width="0" height="0" focusable="false">
-    <filter id="loader-refract" x="-60%" y="-40%" width="220%" height="180%" color-interpolation-filters="sRGB">
+    <filter id="loader-refract" x="-12%" y="-45%" width="124%" height="190%" color-interpolation-filters="sRGB">
       <feTurbulence type="fractalNoise" baseFrequency="0.0032 0.017" numOctaves="1" seed="7" result="noise" />
       <feOffset in="noise" dx="0" dy="0" result="drift" />
-      <feDisplacementMap in="SourceGraphic" in2="drift" scale="0" xChannelSelector="R" yChannelSelector="G" />
+      <feDisplacementMap in="SourceGraphic" in2="drift" scale="0" xChannelSelector="R" yChannelSelector="G" result="bent" />
+      <feTurbulence class="loader__caustic-field" type="turbulence" baseFrequency="0.012 0.021" numOctaves="1" seed="11" result="field" />
+      <feOffset class="loader__caustic-flow" in="field" dx="0" dy="0" result="flow" />
+      <feColorMatrix class="loader__caustic-net" in="flow" type="matrix" values="0 0 0 0 0.93  0 0 0 0 1  0 0 0 0 1  0 0 0 0 0" result="net" />
+      <feComposite in="net" in2="bent" operator="in" result="caught" />
+      <feMerge>
+        <feMergeNode in="bent" />
+        <feMergeNode in="caught" />
+      </feMerge>
     </filter>
   </svg>
 

@@ -19,7 +19,16 @@
  * committed profile (`select-profile`) and scrolls to #reserve. Only a commit
  * is announced, through a short visually hidden status line.
  *
- * Reduced motion: curves fully drawn, water filled, no sticky stage, no sub.
+ * Light: every line is lit (stacked strokes: a soft bloom, a halo, the line
+ * and a hot filament) and is drawn by a point of light at its tip. The sub
+ * throws a lamp beam (white above 6,000 m, red below) and leaves a wake of
+ * light along the line behind it; the water behind it has a soft leading
+ * edge. A chosen line answers with a run of light from the surface to its
+ * end, and the price arrives under pressure: wide and light, squeezed narrow
+ * and heavy (font axes only).
+ *
+ * Reduced motion: curves fully drawn, water filled, no sticky stage, no sub,
+ * no tips, wake, sweep or squeeze.
  */
 import '../styles/profiles.css'
 
@@ -246,7 +255,7 @@ export function init(ctx) {
   function squeeze(delay = 0) {
     if (reduced || !F.price) return
     squeezeTw?.kill()
-    squeezeTw = gsap.fromTo(F.price, { '--pf-sq': 1 }, { '--pf-sq': 0, duration: 1.5, delay, ease: 'expo.out' })
+    squeezeTw = gsap.fromTo(F.price, { '--pf-sq': 1 }, { '--pf-sq': 0, duration: 1.4, delay, ease: 'power2.out' })
   }
   function renderPanel(p, animate) {
     panel.dataset.profile = p.id
@@ -341,8 +350,9 @@ export function init(ctx) {
     }
     // Vesper's lamp beam: white above 6,000 m, red below
     for (const [id, c] of [['white', 'var(--c-ink)'], ['red', 'var(--pf-hadal)']]) {
-      const bg = el('linearGradient', { id: `pf-beam-${id}`, x1: 0, y1: 0, x2: 1, y2: 0.7 }, defs)
-      el('stop', { offset: 0, style: `stop-color:${c};stop-opacity:0.55` }, bg)
+      const bg = el('radialGradient', { id: `pf-beam-${id}`, gradientUnits: 'userSpaceOnUse', cx: 8.5, cy: 2.6, r: 40 }, defs)
+      el('stop', { offset: 0, style: `stop-color:${c};stop-opacity:0.42` }, bg)
+      el('stop', { offset: 0.3, style: `stop-color:${c};stop-opacity:0.16` }, bg)
       el('stop', { offset: 1, style: `stop-color:${c};stop-opacity:0` }, bg)
     }
     // the water column itself, in the colours depth.js paints the page with
@@ -422,8 +432,10 @@ export function init(ctx) {
       const area = el('g', { class: 'pf__area', mask: 'url(#pf-ride-mask)' }, g)
       el('path', { d: `${d} Z`, fill: 'url(#pf-water)' }, area)
       el('path', { d: `${d} Z`, fill: 'url(#pf-lamp)' }, area)
-      // Luminous line: a wide bloom, the halo, the line, a hot filament.
+      // Luminous line: two faint wide strokes (a stepped, soft falloff),
+      // the halo, the line, a hot filament.
       const bloom = el('path', { class: 'pf__bloom', d }, g)
+      const glow = el('path', { class: 'pf__glow', d }, g)
       const halo = el('path', { class: 'pf__halo', d }, g)
       const line = el('path', { class: 'pf__line', d }, g)
       const fil = el('path', { class: 'pf__fil', d }, g)
@@ -432,7 +444,7 @@ export function init(ctx) {
       const wake = ['wide', 'mid', 'core'].map((k) => el('path', { class: `pf__wake pf__wake--${k}`, d }, g))
       const sweepP = ['wide', 'core'].map((k) => el('path', { class: `pf__sweep pf__sweep--${k}`, d }, g))
       if (p.id === 'hadal') {
-        for (const q of [bloom, halo, line, wake[0], wake[1], sweepP[0]]) q.style.stroke = 'url(#pf-hadal-grad)'
+        for (const q of [bloom, glow, halo, line, wake[0], wake[1], sweepP[0]]) q.style.stroke = 'url(#pf-hadal-grad)'
         for (const q of [fil, wake[2], sweepP[1]]) q.style.stroke = 'url(#pf-hadal-hot)'
       }
       el('path', { class: 'pf__focus', d }, g)
@@ -452,7 +464,7 @@ export function init(ctx) {
       const td = el('tspan', { class: 'pf__tag-depth', dx: 8 }, tn)
       td.textContent = `${fmt(p.depth)} m`
 
-      curves[p.id] = { id: p.id, g, line, halo, bloom, fil, wake, sweepP, tip, area, tag, tn, lut: null, p, pins: [] }
+      curves[p.id] = { id: p.id, g, line, halo, bloom, glow, fil, wake, sweepP, tip, area, tag, tn, lut: null, p, pins: [] }
     }
     for (const c of Object.values(curves)) {
       c.lut = sampleX(c.line)
@@ -492,7 +504,7 @@ export function init(ctx) {
     el('circle', { class: 'pf__sub-glow', r: 30 }, subG)
     // Vesper side on, nose to the right (time runs right): her lamps throw
     // a cone of light ahead and down, white above 6,000 m and red below
-    el('path', { class: 'pf__sub-beam', d: 'M8.5 2.6 L46 10 Q47 25 34 38 Z' }, subG)
+    el('path', { class: 'pf__sub-beam', d: 'M8.5 2.6 L48 9 Q50 27 33 42 Z' }, subG)
     el('path', { class: 'pf__sub-fin', d: 'M-9.5 -1.4 L-14.5 -5 Q-15.3 0 -14.5 5 L-9.5 1.4 Z' }, subG)
     el('path', { class: 'pf__sub-body', d: 'M-10 0 C-10 -3.6 -7.4 -5 -3 -5 L3.5 -5 C8.4 -5 10.6 -2.6 10.6 0.2 C10.6 3.2 8 4.8 3.2 4.8 L-3 4.8 C-7.4 4.8 -10 3.6 -10 0 Z' }, subG)
     el('rect', { class: 'pf__sub-body', x: -5.2, y: -8, width: 6.2, height: 3.6, rx: 1.4 }, subG)
@@ -581,8 +593,8 @@ export function init(ctx) {
       duration: 1.5,
       ease: 'power2.inOut',
       onUpdate: () => {
-        dashTo(c.sweepP[0], o.s, 120, total)
-        dashTo(c.sweepP[1], o.s, 46, total)
+        dashTo(c.sweepP[0], o.s, 150, total)
+        dashTo(c.sweepP[1], o.s, 64, total)
       },
     })
   }
@@ -652,7 +664,7 @@ export function init(ctx) {
     for (const p of PROFILES) {
       const c = curves[p.id]
       const [a, b] = WINDOWS[p.id]
-      tl.fromTo([c.bloom, c.halo, c.line, c.fil], { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: b - a, ease: DRAW_EASE }, a)
+      tl.fromTo([c.bloom, c.glow, c.halo, c.line, c.fil], { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: b - a, ease: DRAW_EASE }, a)
       tl.fromTo(c.tag, { opacity: 0 }, { opacity: 1, duration: 0.04 }, b - 0.03)
     }
     tl.to({}, { duration: 0.03 }, 0.97) // the stage holds for the ride
@@ -842,6 +854,19 @@ export function init(ctx) {
 
   build()
   syncDim()
+
+  // the first time the price comes into view, it arrives under pressure
+  if (!reduced && F.price && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(
+      (es) => {
+        if (!es.some((e) => e.isIntersecting)) return
+        io.disconnect()
+        squeeze(0.1)
+      },
+      { threshold: 0.9 },
+    )
+    io.observe(F.price)
+  }
 
   // A new chart size only changes what is drawn inside the figure: rebuilding
   // our own timeline is enough (its new ScrollTrigger measures itself), and

@@ -2,6 +2,8 @@
    core/nav — wordmark, anchors, sound toggle, "Reserve a dive".
    Hides on the way down, returns on the way up. Its accent follows the
    available light: photophore blue-green, red observation lamps from 6,000 m.
+   "Reserve a dive" is a capsule of lit glass with a lamp inside it; the
+   menu is a bathymetric chart whose rows answer like sonar returns.
    ========================================================================== */
 
 .nav {
@@ -34,6 +36,15 @@
   pointer-events: none;
 }
 .nav.is-scrolled .nav__scrim { opacity: 1; }
+/* what passes under the bar is softened by the water, not printed through it */
+@media (min-width: 768px) {
+  .nav__scrim {
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 92%);
+    mask-image: linear-gradient(to bottom, #000 40%, transparent 92%);
+  }
+}
 .nav.is-open .nav__scrim { opacity: 0; }
 
 /* At the surface the sun sits right behind the bar: a breath of deeper
@@ -111,6 +122,15 @@
     0 0 12px var(--nav-accent),
     0 0 26px color-mix(in srgb, var(--nav-accent) 55%, transparent);
   animation: nav-breathe 4.8s var(--ease-drift) infinite;
+  transition: box-shadow 0.8s var(--ease-out);
+}
+.nav__brand:hover .nav__tittle,
+.nav__brand:focus-visible .nav__tittle {
+  box-shadow:
+    0 0 2px #fff,
+    0 0 7px var(--nav-accent),
+    0 0 18px var(--nav-accent),
+    0 0 40px color-mix(in srgb, var(--nav-accent) 60%, transparent);
 }
 @keyframes nav-breathe {
   0%, 100% { opacity: 0.72; scale: 0.92; }
@@ -155,12 +175,31 @@
 .nav__ch > span + span {
   transform: translateY(105%);
   color: var(--c-ink);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--nav-accent) 70%, transparent);
+  /* no light while it waits below: its glow would bleed into the glyph's
+     clip box and print a faint rectangle behind the word */
+  text-shadow: none;
 }
 .nav__link:hover .nav__ch > span:first-child,
 .nav__link:focus-visible .nav__ch > span:first-child { transform: translateY(-105%); }
 .nav__link:hover .nav__ch > span + span,
-.nav__link:focus-visible .nav__ch > span + span { transform: none; }
+.nav__link:focus-visible .nav__ch > span + span {
+  transform: none;
+  /* each glyph arrives lit and cools in turn: light running along the word */
+  animation: nav-glint 1.3s var(--ease-out) calc(0.08s + var(--i) * 42ms) both;
+}
+@keyframes nav-glint {
+  0% {
+    color: #fff;
+    text-shadow:
+      0 0 1px #fff,
+      0 0 8px var(--nav-accent),
+      0 0 22px color-mix(in srgb, var(--nav-accent) 80%, transparent);
+  }
+  100% {
+    color: var(--c-ink);
+    text-shadow: 0 0 14px color-mix(in srgb, var(--nav-accent) 55%, transparent);
+  }
+}
 
 /* active section: a single photophore that swims between the links */
 .nav__indicator {
@@ -177,6 +216,28 @@
     0 0 14px color-mix(in srgb, var(--nav-accent) 60%, transparent);
   opacity: 0;
   pointer-events: none;
+}
+/* the wake it leaves as it swims from one link to the next */
+.nav__indicator-tail {
+  position: absolute;
+  top: 50%;
+  width: 0;
+  height: 1px;
+  margin-top: -0.5px;
+  border-radius: 1px;
+  transform: scaleX(0);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--nav-accent) 70%, transparent);
+  pointer-events: none;
+}
+.nav__indicator-tail[data-side='left'] {
+  right: 50%;
+  transform-origin: right center;
+  background: linear-gradient(to left, var(--nav-accent), color-mix(in srgb, var(--nav-accent) 0%, transparent));
+}
+.nav__indicator-tail[data-side='right'] {
+  left: 50%;
+  transform-origin: left center;
+  background: linear-gradient(to right, var(--nav-accent), color-mix(in srgb, var(--nav-accent) 0%, transparent));
 }
 
 /* ------------------------------------------------------------- actions */
@@ -256,6 +317,79 @@
   padding: 0.85em 1.35em;
 }
 
+/* ------------------------------------------ reserve: a capsule of lit glass */
+/* A lamp rests low inside the glass; under a fine pointer it gathers where
+   the pointer is (nav.js eases --lx / --ly), and the rim catches it. */
+.nav__cta,
+.nav__menu-cta {
+  --lx: 50%;
+  --ly: 135%;
+  --lamp: 0;
+}
+@media (hover: hover) {
+  .nav__cta:hover,
+  .nav__menu-cta:hover { --lamp: 1; }
+}
+.nav__cta:focus-visible,
+.nav__menu-cta:focus-visible { --lamp: 1; }
+.nav__cta-label {
+  position: relative;
+  display: inline-block;
+}
+.nav__lamp {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(20px 15px at var(--lx) var(--ly), rgb(255 255 255 / 0.3), transparent),
+    radial-gradient(
+      88px 54px at var(--lx) var(--ly),
+      color-mix(in srgb, var(--btn-c) 50%, transparent),
+      color-mix(in srgb, var(--btn-c) 15%, transparent) 55%,
+      transparent
+    );
+  opacity: calc(0.42 + 0.58 * var(--lamp));
+  transition: opacity 0.8s var(--ease-out);
+}
+/* the curve of the glass: a faint sheen on its upper half */
+.nav__cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgb(234 246 244 / 0.09), rgb(234 246 244 / 0) 58%);
+  pointer-events: none;
+}
+/* the rim: a specular glint along the top edge, the lamp's colour below */
+.nav__cta::after,
+.nav__menu-cta::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background:
+    radial-gradient(64px 20px at var(--lx) 0%, rgb(255 255 255 / 0.85), transparent),
+    radial-gradient(70px 22px at var(--lx) 100%, color-mix(in srgb, var(--btn-c) 70%, white), transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: calc(0.32 + 0.68 * var(--lamp));
+  transition: opacity 0.8s var(--ease-out);
+  pointer-events: none;
+}
+/* the solid button in the menu: the lamp is a brightening in the glass */
+.nav__menu-cta .nav__lamp {
+  background: radial-gradient(120px 64px at var(--lx) var(--ly), rgb(255 255 255 / 0.42), transparent);
+  opacity: calc(0.3 + 0.7 * var(--lamp));
+}
+.nav__menu-cta::after {
+  background: radial-gradient(80px 22px at var(--lx) 0%, rgb(255 255 255 / 0.95), transparent);
+}
+
 /* menu button: hidden on wide screens */
 .nav__menu-btn {
   display: none;
@@ -329,7 +463,16 @@
   display: grid;
   border-top: 1px solid var(--c-line);
 }
-.nav__menu-list li { position: relative; }
+.nav__menu-list li {
+  position: relative;
+  /* a bathymetric chart: each layer tinted with the water at its depth */
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--row-water, transparent) calc(var(--tint, 1) * 92%), transparent),
+    color-mix(in srgb, var(--row-water, transparent) calc(var(--tint, 1) * 40%), transparent) 62%,
+    transparent
+  );
+}
 .nav__menu-list li::after {
   content: '';
   position: absolute;
@@ -340,6 +483,8 @@
   transform-origin: left center;
 }
 .nav__menu-link {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -348,6 +493,63 @@
   color: var(--c-ink);
   border-radius: 2px;
 }
+.nav__menu-link:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--nav-accent) 80%, transparent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* a sonar return: a trace sweeps the row, bright at its leading edge */
+.nav__menu-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+      90deg,
+      transparent 22%,
+      color-mix(in srgb, var(--nav-accent) 10%, transparent) 44%,
+      color-mix(in srgb, var(--nav-accent) 26%, transparent) 49.6%,
+      transparent 50%
+    )
+    no-repeat;
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.nav__menu-link:hover::before,
+.nav__menu-link:focus-visible::before {
+  animation: nav-sonar 1.3s cubic-bezier(0.3, 0.1, 0.3, 1) both;
+}
+@keyframes nav-sonar {
+  0% { background-position: 100% 0; opacity: 1; }
+  72% { opacity: 1; }
+  100% { background-position: 0% 0; opacity: 0; }
+}
+/* … and leaves the row's contour lit */
+.nav__menu-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--nav-accent) 85%, white),
+    color-mix(in srgb, var(--nav-accent) 45%, transparent) 55%,
+    transparent
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--nav-accent) 45%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 1s var(--ease-out), opacity 0.6s var(--ease-out);
+  pointer-events: none;
+}
+.nav__menu-link:hover::after,
+.nav__menu-link:focus-visible::after,
+.nav__menu-link[aria-current]::after { transform: none; }
+.nav__menu-link[aria-current]:not(:hover, :focus-visible)::after { opacity: 0.5; }
 .nav__menu-name {
   font-family: var(--font-display);
   font-size: clamp(2.35rem, 11vw, 5rem);
@@ -358,6 +560,7 @@
   transition: color 0.4s var(--ease-out), text-shadow 0.4s var(--ease-out);
 }
 .nav__menu-depth {
+  position: relative;
   flex: none;
   font-family: var(--font-display);
   font-stretch: 100%;
@@ -372,6 +575,53 @@
   text-shadow: 0 0 24px color-mix(in srgb, var(--nav-accent) 55%, transparent);
 }
 .nav__menu-link[aria-current] .nav__menu-depth { color: var(--nav-accent); }
+.nav__menu-link:hover .nav__menu-depth,
+.nav__menu-link:focus-visible .nav__menu-depth { color: var(--c-ink); }
+/* the echo: a point of light beside the depth, and its ring spreading */
+.nav__menu-depth::before,
+.nav__menu-depth::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.nav__menu-depth::before {
+  right: calc(100% + 0.75rem);
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  background: var(--nav-accent);
+  box-shadow:
+    0 0 6px var(--nav-accent),
+    0 0 14px color-mix(in srgb, var(--nav-accent) 60%, transparent);
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.5s var(--ease-out), transform 0.8s var(--ease-out);
+}
+.nav__menu-depth::after {
+  right: calc(100% + 0.75rem - 14.5px);
+  width: 34px;
+  height: 34px;
+  margin-top: -17px;
+  border: 1px solid var(--nav-accent);
+  opacity: 0;
+  transform: scale(0.15);
+}
+.nav__menu-link:hover .nav__menu-depth::before,
+.nav__menu-link:focus-visible .nav__menu-depth::before,
+.nav__menu-link[aria-current] .nav__menu-depth::before {
+  opacity: 1;
+  transform: none;
+}
+.nav__menu-link:hover .nav__menu-depth::after,
+.nav__menu-link:focus-visible .nav__menu-depth::after {
+  animation: nav-echo 1.4s var(--ease-out) 0.55s both;
+}
+@keyframes nav-echo {
+  0% { opacity: 0.9; transform: scale(0.15); }
+  100% { opacity: 0; transform: scale(1); }
+}
 
 .nav__menu-foot {
   display: grid;
