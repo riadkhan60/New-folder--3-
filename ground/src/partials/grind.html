@@ -1,3 +1,133 @@
-<section id="grind" class="grind" data-field="paper" aria-label="Grind ultramarine">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.5">[grind: paper]</div>
+<section id="grind" class="grind" data-field="paper" aria-labelledby="grind-title">
+  <div class="wrap">
+    <header class="grid grind__head">
+      <h2 id="grind-title" class="t-h2 grind__title">Grind your own <em class="t-italic">ultramarine</em>.</h2>
+      <p class="t-lead grind__lead">
+        Lapis lazuli is mostly lazurite, the blue, with white calcite and gold pyrite running through it.
+        Take the glass muller and grind the stone in circles.
+      </p>
+    </header>
+
+    <div class="grid grind__lab">
+      <div class="grind__stage">
+        <div
+          class="grind__slab"
+          tabindex="0"
+          role="application"
+          aria-roledescription="grinding slab"
+          aria-label="Glass slab with a heap of crushed lapis lazuli and a glass muller"
+          aria-describedby="grind-keys grind-status"
+          data-cursor="drag"
+        >
+          <canvas class="grind__canvas" aria-hidden="true"></canvas>
+          <svg class="grind__hint" aria-hidden="true" focusable="false">
+            <path class="grind__hint-arc" d="" />
+            <path class="grind__hint-head" d="" />
+          </svg>
+          <p class="grind__hint-label t-caption" aria-hidden="true">Drag the muller in circles</p>
+          <p class="grind__mini t-num" aria-hidden="true">
+            <span class="grind__mini-chip"></span><span data-grind-mini>120</span> µm<span class="grind__mini-note"></span>
+          </p>
+          <p class="grind__keys t-caption" id="grind-keys">Arrow keys move the muller. Hold Space to grind in circles.</p>
+        </div>
+        <p class="grind__cap t-caption">
+          Crushed lapis lazuli from Sar-e-Sang, Badakhshan, on a ground-glass slab, with a glass muller.
+        </p>
+      </div>
+
+      <div class="grind__panel">
+        <div class="grind__readout">
+          <p class="t-label grind__label" id="grind-size-label">Particle size</p>
+          <p class="grind__size t-num" aria-labelledby="grind-size-label">
+            <span class="grind__num" data-grind-num>120</span><span class="grind__unit">µm</span>
+          </p>
+        </div>
+
+        <div
+          class="grind__ruler"
+          role="img"
+          aria-label="Particle size scale from 120 down to 5 micrometres. The deepest blue lies between about 34 and 18 micrometres. Finer than that, the blue turns paler and greyer."
+        >
+          <div class="grind__sweet"><span>Stop here: the deepest blue</span></div>
+          <canvas class="grind__bar" aria-hidden="true"></canvas>
+          <span class="grind__marker" aria-hidden="true"></span>
+          <ol class="grind__ticks t-num" aria-hidden="true">
+            <li data-d="120">120</li>
+            <li data-d="50">50</li>
+            <li data-d="20">20</li>
+            <li data-d="10">10</li>
+            <li data-d="5">5 µm</li>
+          </ol>
+        </div>
+
+        <p class="grind__status" id="grind-status" role="status" aria-live="polite">
+          Still grit, too coarse to paint. Grind it in circles.
+        </p>
+
+        <div class="grind__swatches">
+          <figure class="grind__swatch">
+            <canvas class="grind__stroke" data-stroke="ground" aria-hidden="true"></canvas>
+            <figcaption>
+              <span class="grind__swatch-name">As ground</span>
+              <span class="t-caption">A greyish blue: the calcite and pyrite are still in it.</span>
+            </figcaption>
+          </figure>
+          <figure class="grind__swatch">
+            <canvas class="grind__stroke" data-stroke="washed" aria-hidden="true"></canvas>
+            <figcaption>
+              <span class="grind__swatch-name">Washed out</span>
+              <span class="t-caption">The lazurite alone, the way Cennini describes.</span>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="grind__controls">
+          <button type="button" class="btn grind__hold">Hold to grind</button>
+          <button type="button" class="btn grind__step" hidden>Grind a little more</button>
+          <button type="button" class="btn btn--ghost grind__reset">Start again</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grind__method">
+      <div class="grind__method-head">
+        <h3 class="t-h3">Grinding alone gives a greyish blue.</h3>
+        <p class="t-body">
+          Around 1400 the Tuscan painter Cennino Cennini described how to get the blue out of the stone, and leave
+          everything else behind.
+        </p>
+      </div>
+      <ol class="grind__steps">
+        <li class="grind__stepitem">
+          <span class="grind__n t-num" aria-hidden="true">1</span>
+          <p class="grind__step-title">Grind</p>
+          <p class="grind__step-text">Grind the lapis to a powder on the slab, as you just did.</p>
+        </li>
+        <li class="grind__stepitem">
+          <span class="grind__n t-num" aria-hidden="true">2</span>
+          <p class="grind__step-title">Knead</p>
+          <p class="grind__step-text">Knead the powdered stone into a dough of wax, resin and oil, and let it rest.</p>
+        </li>
+        <li class="grind__stepitem">
+          <span class="grind__n t-num" aria-hidden="true">3</span>
+          <p class="grind__step-title">Wash out</p>
+          <p class="grind__step-text">
+            Knead the dough in lye. The blue washes out and sinks to the bottom of the bowl; the calcite, pyrite and
+            other impurities stay in the dough.
+          </p>
+        </li>
+      </ol>
+      <div class="grind__grades">
+        <p class="t-body grind__grades-text">
+          The first washings give the finest blue. Later ones are paler, down to the last: a pale grey-blue called
+          ultramarine ash.
+        </p>
+        <ul class="grind__chips">
+          <li><canvas class="grind__chip" data-grade="0" aria-hidden="true"></canvas><span class="t-caption">First washing</span></li>
+          <li><canvas class="grind__chip" data-grade="1" aria-hidden="true"></canvas><span class="t-caption">Later washings</span></li>
+          <li><canvas class="grind__chip" data-grade="2" aria-hidden="true"></canvas><span class="t-caption">Ultramarine ash</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
 </section>

@@ -1,0 +1,481 @@
+/* ==========================================================================
+   GRIND — the grinding lab. Paper field; a ground-glass slab, a heap of
+   lapis, a glass muller. Readouts set like a colourman's test card.
+   ========================================================================== */
+
+#grind {
+  --grind-pad: 44px;
+  position: relative;
+  padding-block: var(--s-9) var(--s-9);
+  overflow-x: clip;
+}
+
+/* ---------------------------------------------------------------- head */
+.grind__head {
+  align-items: end;
+  row-gap: var(--s-5);
+}
+.grind__title {
+  grid-column: 1 / span 8;
+  max-width: 13em;
+}
+.grind__title em { font-style: italic; }
+.grind__lead {
+  grid-column: 9 / span 4;
+  padding-bottom: 0.4em;
+}
+
+/* ----------------------------------------------------------------- lab */
+.grind__lab {
+  margin-top: var(--s-8);
+  align-items: start;
+  row-gap: var(--s-6);
+}
+.grind__stage {
+  grid-column: 1 / span 8;
+  min-width: 0;
+}
+.grind__slab {
+  position: relative;
+  height: clamp(460px, 76vh, 720px);
+  border-radius: 14px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: grab;
+}
+#grind.is-grabbing .grind__slab { cursor: grabbing; }
+.grind__slab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+/* the canvas overhangs the glass so its shadow and caustics have room */
+.grind__canvas,
+.grind__hint {
+  position: absolute;
+  left: calc(var(--grind-pad) * -1);
+  top: calc(var(--grind-pad) * -1);
+  width: calc(100% + var(--grind-pad) * 2);
+  height: calc(100% + var(--grind-pad) * 2);
+  max-width: none;
+}
+
+/* the first-visit hint: an arc drawn around the heap */
+.grind__hint {
+  pointer-events: none;
+  overflow: visible;
+}
+.grind__hint path {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.grind__hint-label {
+  position: absolute;
+  margin: 0;
+  transform: translate(-100%, -100%);
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(1rem, 1.25vw, 1.2rem);
+  line-height: 1.2;
+  color: var(--ink-2);
+  pointer-events: none;
+  opacity: 0;
+}
+.grind__hint-label[data-place='gap'] { transform: translate(-50%, -50%); }
+.grind__hint-label[data-place='below'] { transform: translate(-50%, 0); }
+#grind.is-reduced.has-hint .grind__hint path,
+#grind.is-reduced.has-hint .grind__hint-label { opacity: 1; }
+
+.grind__keys {
+  position: absolute;
+  left: clamp(22px, 3vw, 36px);
+  bottom: clamp(26px, 3.4vw, 44px);
+  margin: 0;
+  padding: 0.35em 0.7em;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--field);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out);
+  pointer-events: none;
+}
+.grind__slab:focus-visible .grind__keys {
+  opacity: 1;
+  transform: none;
+}
+
+/* phones: a compact readout on the glass, so the number stays in view */
+.grind__mini {
+  display: none;
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  margin: 0;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.4em 0.7em 0.4em 0.45em;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--field);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+}
+.grind__mini-chip {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 1px;
+  background: #1e3a9e;
+  box-shadow: inset 0 0 0 1px rgb(243 242 238 / 0.35);
+}
+.grind__mini-note:not(:empty) {
+  margin-left: 0.2em;
+  padding-left: 0.6em;
+  border-left: 1px solid rgb(243 242 238 / 0.35);
+}
+#grind[data-stage='sweet'] .grind__mini-note { font-style: italic; font-family: var(--font-display); font-size: 1.08em; }
+
+.grind__cap {
+  margin-top: var(--s-3);
+  padding-left: clamp(10px, 1.6vw, 22px);
+  max-width: 60ch;
+}
+
+/* --------------------------------------------------------------- panel */
+.grind__panel {
+  grid-column: 9 / span 4;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding-top: clamp(8px, 1.4vw, 22px);
+}
+.grind__label { margin-bottom: var(--s-2); }
+.grind__size {
+  display: flex;
+  align-items: baseline;
+  gap: 0.12em;
+  margin: 0;
+  font-family: var(--font-text);
+  font-weight: 200;
+  font-size: clamp(4.2rem, 7.2vw, 7.4rem);
+  line-height: 0.82;
+  letter-spacing: -0.055em;
+  color: var(--ink);
+}
+.grind__num { display: inline-block; }
+.grind__unit {
+  font-family: var(--font-text);
+  font-weight: 400;
+  font-size: 0.24em;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
+
+/* the colour ruler: size on a log scale, painted with the blue it gives */
+.grind__ruler {
+  position: relative;
+  padding-top: 2.1rem;
+  padding-bottom: 1.7rem;
+}
+.grind__bar {
+  display: block;
+  width: 100%;
+  height: 12px;
+}
+.grind__sweet {
+  position: absolute;
+  top: 0;
+  left: calc(var(--a, 0.4) * 100%);
+  width: calc((var(--b, 0.6) - var(--a, 0.4)) * 100%);
+  height: calc(2.1rem + 12px + 5px);
+  pointer-events: none;
+}
+.grind__sweet::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 1.45rem;
+  bottom: 0;
+  border: 1px solid var(--ink-3);
+  border-bottom: 0;
+  transition: border-color 0.6s var(--ease-out);
+}
+.grind__sweet span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  font-size: var(--fs-micro);
+  line-height: 1.2;
+  color: var(--ink-3);
+  transition: color 0.6s var(--ease-out);
+}
+#grind[data-stage='sweet'] .grind__sweet span { color: var(--ink); }
+#grind[data-stage='sweet'] .grind__sweet::before { border-color: var(--ink); }
+#grind.is-hit .grind__sweet span { animation: grind-hit 1.6s var(--ease-out); }
+
+.grind__marker {
+  position: absolute;
+  left: 0;
+  top: calc(2.1rem - 7px);
+  width: 2px;
+  height: calc(12px + 14px);
+  margin-left: -1px;
+  background: var(--ink);
+  will-change: transform;
+}
+.grind__marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.grind__ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.2rem;
+  margin: 0;
+}
+.grind__ticks li {
+  position: absolute;
+  top: 0;
+  left: calc(var(--p, 0) * 100%);
+  transform: translateX(-50%);
+  font-size: var(--fs-micro);
+  line-height: 1.2;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.grind__ticks li:first-child { transform: none; }
+.grind__ticks li:last-child { transform: translateX(-100%); }
+
+.grind__status {
+  min-height: 2.6em;
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(1.25rem, 1.55vw, 1.5rem);
+  line-height: 1.22;
+  color: var(--ink);
+  text-wrap: balance;
+}
+#grind[data-stage='sweet'] .grind__status { font-style: italic; }
+#grind[data-stage='pale'] .grind__status,
+#grind[data-stage='finest'] .grind__status { color: var(--ink-2); }
+
+/* drawdowns: two strokes on the card */
+.grind__swatches {
+  display: grid;
+  gap: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+.grind__swatch { margin: 0; }
+.grind__stroke {
+  display: block;
+  width: 100%;
+  height: 64px;
+}
+.grind__swatch figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.6em;
+  margin-top: 0.15rem;
+}
+.grind__swatch-name {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.grind__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding-top: var(--s-2);
+}
+.grind__hold {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.grind__step[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+.grind__hold.is-active {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+/* -------------------------------------------------------------- method */
+.grind__method {
+  margin-top: var(--s-9);
+  padding-top: var(--s-6);
+  border-top: 1px solid var(--line);
+  row-gap: var(--s-7);
+}
+.grind__method-head {
+  grid-column: 1 / span 4;
+  display: grid;
+  gap: var(--s-4);
+  align-content: start;
+}
+.grind__method-head .t-h3 { max-width: 11em; }
+.grind__steps {
+  grid-column: 5 / span 8;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+  margin: 0;
+}
+.grind__stepitem {
+  display: grid;
+  align-content: start;
+  gap: var(--s-2);
+}
+.grind__n {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--fs-h3);
+  line-height: 1;
+  color: var(--ink-3);
+}
+.grind__step-title {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(1.3rem, 1.6vw, 1.6rem);
+  line-height: 1.15;
+  color: var(--ink);
+}
+.grind__step-text {
+  font-size: var(--fs-body);
+  line-height: 1.58;
+  color: var(--ink-2);
+  max-width: 34ch;
+}
+.grind__grades {
+  grid-column: 5 / span 8;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: var(--gap);
+  align-items: start;
+}
+.grind__grades-text { max-width: 36ch; }
+.grind__chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  margin: 0;
+}
+.grind__chips li {
+  display: grid;
+  gap: var(--s-1);
+}
+.grind__chip {
+  display: block;
+  width: 100%;
+  height: 54px;
+}
+
+@keyframes grind-hit {
+  0% { opacity: 0.2; }
+  40% { opacity: 1; }
+  60% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+/* ------------------------------------------------------------- tablet */
+@media (max-width: 1100px) {
+  .grind__title { grid-column: 1 / span 12; }
+  .grind__lead { grid-column: 1 / span 9; }
+  .grind__stage { grid-column: 1 / span 7; }
+  .grind__panel { grid-column: 8 / span 5; }
+  .grind__method-head { grid-column: 1 / span 12; }
+  .grind__steps,
+  .grind__grades { grid-column: 1 / span 12; }
+}
+
+/* ----------------------------------------------------- portrait tablet */
+@media (min-width: 768px) and (max-width: 960px) {
+  .grind__stage,
+  .grind__panel { grid-column: 1 / -1; }
+  .grind__slab { height: clamp(420px, 58vh, 640px); }
+  .grind__panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'read swatch'
+      'ruler swatch'
+      'status controls';
+    column-gap: var(--s-7);
+    row-gap: var(--s-4);
+    align-items: start;
+  }
+  .grind__readout { grid-area: read; }
+  .grind__ruler { grid-area: ruler; }
+  .grind__status { grid-area: status; }
+  .grind__swatches { grid-area: swatch; }
+  .grind__controls { grid-area: controls; align-self: end; }
+}
+
+/* -------------------------------------------------------------- phone */
+@media (max-width: 767px) {
+  #grind { --grind-pad: 18px; padding-block: var(--s-9) var(--s-8); }
+  .grind__head,
+  .grind__lab,
+  .grind__method { grid-template-columns: minmax(0, 1fr); }
+  .grind__title,
+  .grind__lead,
+  .grind__stage,
+  .grind__panel,
+  .grind__method-head,
+  .grind__steps,
+  .grind__grades { grid-column: 1 / -1; }
+  .grind__lab { margin-top: var(--s-6); }
+  .grind__slab {
+    height: auto;
+    aspect-ratio: 1 / 1.08;
+    max-height: 72svh;
+    margin-inline: calc(var(--rail) * -1 + 8px);
+    border-radius: 12px;
+  }
+  .grind__cap { padding-left: 0; }
+  .grind__panel { padding-top: 0; gap: var(--s-4); }
+  .grind__size { font-size: clamp(3.8rem, 20vw, 5.2rem); }
+  .grind__status { min-height: 0; }
+  .grind__controls .btn { flex: 1 1 auto; }
+  .grind__steps { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+  .grind__stepitem {
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+    column-gap: var(--s-3);
+  }
+  .grind__n { grid-row: span 2; }
+  .grind__grades { grid-template-columns: minmax(0, 1fr); }
+  .grind__chip { height: 44px; }
+  .grind__keys { display: none; }
+  .grind__mini { display: inline-flex; }
+}

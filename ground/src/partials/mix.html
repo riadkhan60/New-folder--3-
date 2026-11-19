@@ -1,3 +1,74 @@
-<section id="mix" class="mix" data-field="paper" aria-label="Mix two pigments">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.5">[mix: paper]</div>
+<section id="mix" class="mix" data-field="paper" aria-labelledby="mix-title">
+  <div class="wrap">
+    <header class="mix__head grid">
+      <h2 id="mix-title" class="t-h2 mix__title">Paint mixes differently from light.</h2>
+      <div class="mix__intro">
+        <p class="t-lead mix__lead">A screen mixes two colours by averaging their light. Paint works the other way round: each pigment absorbs part of the light, and you see only what both of them leave behind.</p>
+        <p class="t-caption mix__method">The paint here is mixed with Kubelka–Munk theory, which models how a layer of paint absorbs and scatters light.</p>
+      </div>
+    </header>
+
+    <div class="mix__lab">
+      <div class="mix__presets">
+        <p class="mix__presets-label t-label" id="mix-presets-label">Start with a classic pair</p>
+        <ul class="mix__preset-list" aria-labelledby="mix-presets-label">
+          <li><button type="button" class="mix__preset" data-a="ultramarine" data-b="yellow-ochre" data-r="50" aria-pressed="true"><span class="mix__preset-dots" aria-hidden="true"><i style="--pig:#1e3a9e"></i><i style="--pig:#c8922e"></i></span>Ultramarine and yellow ochre</button></li>
+          <li><button type="button" class="mix__preset" data-a="carmine" data-b="ultramarine" data-r="50" aria-pressed="false"><span class="mix__preset-dots" aria-hidden="true"><i style="--pig:#a3123a"></i><i style="--pig:#1e3a9e"></i></span>Carmine and ultramarine</button></li>
+          <li><button type="button" class="mix__preset" data-a="egyptian-blue" data-b="lead-white" data-r="40" aria-pressed="false"><span class="mix__preset-dots" aria-hidden="true"><i style="--pig:#1f6aa8"></i><i style="--pig:#eeebe3"></i></span>Egyptian blue and lead white</button></li>
+          <li><button type="button" class="mix__preset" data-a="indigo" data-b="orpiment" data-r="50" aria-pressed="false"><span class="mix__preset-dots" aria-hidden="true"><i style="--pig:#27306b"></i><i style="--pig:#f0b22b"></i></span>Indigo and orpiment</button></li>
+          <li><button type="button" class="mix__preset" data-a="tyrian-purple" data-b="lead-white" data-r="45" aria-pressed="false"><span class="mix__preset-dots" aria-hidden="true"><i style="--pig:#6a1e55"></i><i style="--pig:#eeebe3"></i></span>Tyrian purple and lead white</button></li>
+        </ul>
+      </div>
+
+      <div class="mix__well">
+        <canvas class="mix__well-canvas" aria-hidden="true"></canvas>
+        <p class="mix__tag mix__tag--a" aria-hidden="true"><span class="mix__tag-name">Ultramarine</span><span class="mix__tag-pc t-num">50%</span></p>
+        <p class="mix__tag mix__tag--b" aria-hidden="true"><span class="mix__tag-name">Yellow ochre</span><span class="mix__tag-pc t-num">50%</span></p>
+      </div>
+
+      <div class="mix__result">
+        <div class="mix__res mix__res--paint">
+          <p class="mix__res-label t-label">Mixed as paint</p>
+          <div class="mix__res-chip mix__res-chip--paint"><canvas aria-hidden="true"></canvas></div>
+          <p class="mix__res-hex t-num" data-out="paint-hex">#567542</p>
+          <p class="mix__res-desc" data-out="paint-desc">A muted green</p>
+        </div>
+        <div class="mix__res mix__res--light">
+          <p class="mix__res-label t-label">Averaged like light</p>
+          <div class="mix__res-chip mix__res-chip--light" aria-hidden="true"></div>
+          <p class="mix__res-hex t-num" data-out="light-hex">#736666</p>
+          <p class="mix__res-desc" data-out="light-desc">A mauve grey</p>
+        </div>
+        <p class="mix__verdict" data-out="verdict">Paint makes a green. The screen gives grey.</p>
+        <p class="visually-hidden" id="mix-status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="mix__ratio">
+        <div class="mix__ratio-head">
+          <label class="t-label" for="mix-ratio">Ratio</label>
+          <output class="mix__ratio-out t-num" for="mix-ratio" data-out="ratio">Half and half</output>
+        </div>
+        <div class="mix__strips">
+          <span class="mix__strip-label t-caption" aria-hidden="true">Paint</span>
+          <canvas class="mix__strip mix__strip--paint" aria-hidden="true"></canvas>
+          <span class="mix__strip-label t-caption" aria-hidden="true">Light</span>
+          <canvas class="mix__strip mix__strip--light" aria-hidden="true"></canvas>
+          <span class="mix__marker" aria-hidden="true"></span>
+          <input type="range" id="mix-ratio" class="mix__range" min="0" max="100" step="1" value="50" aria-valuetext="Half ultramarine, half yellow ochre" />
+        </div>
+        <div class="mix__ends t-caption" aria-hidden="true"><span data-out="end-a">All ultramarine</span><span data-out="end-b">All yellow ochre</span></div>
+      </div>
+
+      <div class="mix__picks">
+        <fieldset class="mix__pick" data-slot="a">
+          <legend class="mix__legend"><span class="t-label">First pigment</span> <span class="mix__legend-name" data-out="name-a">Ultramarine</span></legend>
+          <div class="mix__pans"></div>
+        </fieldset>
+        <fieldset class="mix__pick" data-slot="b">
+          <legend class="mix__legend"><span class="t-label">Second pigment</span> <span class="mix__legend-name" data-out="name-b">Yellow ochre</span></legend>
+          <div class="mix__pans"></div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
 </section>

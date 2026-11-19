@@ -1,0 +1,194 @@
+/* ==========================================================================
+   FOOTER — the last field: bone black. Small print, and the wordmark set in
+   loose pigment that the cursor can stir. Scoped under #footer.
+   ========================================================================== */
+
+#footer {
+  position: relative;
+  z-index: var(--z-content);
+  color: var(--ink);
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  overflow: clip; /* the giant italic's font box must not lengthen the page */
+}
+#footer .footer__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  padding-top: var(--s-9);
+  padding-bottom: 0;
+}
+
+/* ------------------------------------------------------------- top row */
+#footer .footer__top {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gap);
+  row-gap: var(--s-7);
+  align-items: start;
+}
+#footer .footer__brand { grid-column: 1 / span 5; }
+#footer .footer__nav { grid-column: 7 / span 3; }
+#footer .footer__back { grid-column: 10 / span 3; justify-self: end; }
+
+#footer .footer__line {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(2rem, 3.6vw, 3.6rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  max-width: 12ch;
+  text-wrap: balance;
+}
+#footer .footer__address {
+  margin-top: var(--s-6);
+  font-style: normal;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+#footer .footer__est {
+  margin-top: var(--s-3);
+  font-size: var(--fs-small);
+  color: var(--ink-3);
+}
+
+#footer .footer__links {
+  display: grid;
+  gap: 0.1rem;
+}
+#footer .footer__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  font-size: clamp(1.15rem, 1.5vw, 1.45rem);
+  line-height: 1.2;
+  color: var(--ink-2);
+  transition: color 0.45s var(--ease-out);
+}
+#footer .footer__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.45rem;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.6s var(--ease-out);
+}
+#footer .footer__link:hover { color: var(--ink); }
+#footer .footer__link:hover::after { transform: scaleX(1); transform-origin: left; }
+
+/* "Back to paper": a drop of clean water, ready to lift the black */
+#footer .footer__paper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 48px;
+  padding: 0.5rem 0;
+  font-size: clamp(1.05rem, 1.3vw, 1.25rem);
+  font-weight: 500;
+  color: var(--ink);
+}
+#footer .footer__paper-drop {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 0 rgb(243 242 238 / 0.25);
+  transition: transform 0.7s var(--ease-out), box-shadow 0.7s var(--ease-out);
+}
+#footer .footer__paper:hover .footer__paper-drop,
+#footer .footer__paper:focus-visible .footer__paper-drop {
+  transform: scale(2.4);
+  box-shadow: 0 0 0 6px rgb(243 242 238 / 0.08);
+}
+#footer .footer__paper-label {
+  position: relative;
+  transition: transform 0.7s var(--ease-out);
+}
+#footer .footer__paper:hover .footer__paper-label { transform: translateX(10px); }
+
+/* ------------------------------------------------------------- wordmark */
+#footer .footer__mark {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-weight: 400;
+  font-size: calc(min(100vw - var(--rail) * 2, var(--maxw)) / 3.2);
+  margin-left: -0.045em;
+  line-height: 0.82;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  white-space: nowrap;
+  user-select: text;
+}
+#footer .footer__word {
+  display: inline-block;
+  padding-right: 0.06em; /* room for the italic overhang */
+  transition: color 0.6s var(--ease-out);
+}
+#footer .footer__grains {
+  position: absolute;
+  left: -2%;
+  width: 104%;
+  top: -46%;
+  height: 146%;
+  max-width: none;
+  pointer-events: none;
+}
+#footer .footer__mark.is-powder .footer__word { color: transparent; }
+#footer .footer__probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
+
+/* ------------------------------------------------------------- base row */
+#footer .footer__base {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+#footer .footer__disclaimer {
+  max-width: 64ch;
+  font-size: var(--fs-small);
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+#footer .footer__copy {
+  font-size: var(--fs-small);
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: lining-nums;
+}
+
+#footer :focus-visible { outline-color: var(--ink); }
+
+/* ------------------------------------------------------------- phones */
+@media (max-width: 767px) {
+  #footer .footer__inner { padding-top: var(--s-9); gap: var(--s-6); }
+  #footer .footer__top { row-gap: var(--s-6); }
+  #footer .footer__brand { grid-column: 1 / -1; }
+  #footer .footer__nav { grid-column: 1 / -1; }
+  #footer .footer__links { display: flex; flex-wrap: wrap; column-gap: var(--s-5); row-gap: 0; }
+  #footer .footer__link { font-size: 1.1rem; min-height: 44px; }
+  #footer .footer__back { grid-column: 1 / -1; justify-self: start; margin-top: calc(var(--s-4) * -1); }
+  #footer .footer__address { margin-top: var(--s-4); }
+  #footer .footer__base { flex-direction: column; gap: var(--s-3); }
+}

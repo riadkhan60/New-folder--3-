@@ -1,3 +1,36 @@
-<footer id="footer" class="footer" data-field="bone-black">
-  <div class="wrap" style="padding-block:4rem;opacity:.6">[footer]</div>
+<footer id="footer" class="footer" data-field="bone-black" aria-labelledby="footer-title">
+  <div class="wrap footer__inner">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <p class="footer__line">Pigments, ground by hand.</p>
+        <address class="footer__address">Ground<br />14 Clerkenwell Close<br />London EC1</address>
+        <p class="footer__est">Est. 2011</p>
+      </div>
+      <nav class="footer__nav" aria-label="Footer">
+        <ul class="footer__links">
+          <li><a class="footer__link" href="#chapters">Colours</a></li>
+          <li><a class="footer__link" href="#library">Library</a></li>
+          <li><a class="footer__link" href="#grind">Grind</a></li>
+          <li><a class="footer__link" href="#mix">Mix</a></li>
+          <li><a class="footer__link" href="#shop">Shop</a></li>
+        </ul>
+      </nav>
+      <div class="footer__back">
+        <button type="button" class="footer__paper" data-back-to-paper>
+          <span class="footer__paper-drop" aria-hidden="true"></span>
+          <span class="footer__paper-label">Back to paper</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="footer__base">
+      <p class="footer__disclaimer">Ground is a design concept. The company, its workshop and its prices are fictional. The history and chemistry are real.</p>
+      <p class="footer__copy">© 2026 Ground</p>
+    </div>
+
+    <h2 id="footer-title" class="footer__mark">
+      <span class="footer__word">Ground</span>
+      <canvas class="footer__grains" aria-hidden="true"></canvas>
+    </h2>
+  </div>
 </footer>
