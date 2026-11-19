@@ -281,7 +281,7 @@ function createScene(ctx, root) {
     const te = trackEnd()
     const desk = [
       { id: 'amphipods', name: 'Amphipods', X: 2.7, z: 4.1 },
-      { id: 'xeno', name: 'Xenophyophore', X: -3.6, z: 7.2, left: true },
+      { id: 'xeno', name: 'Xenophyophore', X: -3.6, z: 7.2 }, // label to the right: the HUD chip lives bottom-left
       { id: 'cucumber', name: 'Sea cucumber', X: trackX(te), z: te },
     ]
     // on a phone the labels are the log: keep them clear of one another
