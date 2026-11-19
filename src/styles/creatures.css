@@ -198,6 +198,11 @@
 #life.is-float .creatures__specimen:focus-within {
   transition-duration: 0.3s;
 }
+/* when another label opens, the one that is leaving gets out of its way
+   quickly instead of fading out underneath it */
+#life.is-float .creatures__specimens.has-on .creatures__specimen:not(.is-on):not(:focus-within) {
+  transition-duration: 0.25s;
+}
 /* a pool of darkness behind the open label, so its text never sits on a
    glowing cloud or a lit body */
 #life.is-float .creatures__specimen::before {
@@ -213,6 +218,11 @@
   display: block;
   text-align: left;
   padding: 0;
+}
+@media (pointer: coarse) {
+  .creatures__name {
+    min-height: 44px;
+  }
 }
 #life.is-float .creatures__name {
   pointer-events: none;
@@ -253,6 +263,7 @@
   color: color-mix(in srgb, var(--glow) 80%, var(--c-ink));
 }
 .creatures__range {
+  display: block;
   color: var(--c-ink-3);
   white-space: nowrap;
 }
@@ -302,6 +313,7 @@
 }
 #life.is-float .creatures__log {
   position: absolute;
+  opacity: var(--log-a, 1);
   left: auto;
   right: calc(var(--rail) + var(--instrument) + 0.5rem);
   bottom: clamp(18px, 3.4vh, 36px);
@@ -375,6 +387,15 @@
   color: rgb(234 246 244 / 0.6);
   text-wrap: pretty;
 }
+/* touch: until the first tap, the note is the hint, breathing slowly */
+@keyframes creatures-hint {
+  0%, 100% { opacity: 0.62; }
+  50% { opacity: 1; }
+}
+#life.is-float .creatures__note.is-tap {
+  color: var(--c-ink-2);
+  animation: creatures-hint 3.2s var(--ease-in-out) infinite;
+}
 #life:not(.is-float) .creatures__note {
   max-width: 52ch;
   font-size: var(--fs-body);
@@ -439,7 +460,13 @@
     top: -3rem;
     bottom: -7rem;
     z-index: -1;
-    background: linear-gradient(to bottom, rgb(0 0 0 / 0), rgb(0 0 0 / 0.8) 45%);
+    background: linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 0),
+      rgb(0 0 0 / calc(0.8 * var(--dark, 1))) 45%,
+      rgb(0 0 0 / calc(0.8 * var(--dark, 1))) 70%,
+      rgb(0 0 0 / 0) 100%
+    );
   }
   /* the open label is docked as a caption; found tags live in the log */
   #life.is-float .creatures__specimen,

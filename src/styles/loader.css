@@ -249,6 +249,25 @@ html.is-ready .loader:not(.is-exiting),
   will-change: transform;
 }
 .loader__ch { display: inline-block; }
+
+/* The same name seen through the water: clipped by loader.js to the
+   region below the waterline. Cooler, lit from inside, gently refracted. */
+.loader__mark--wet { clip-path: inset(100% 0 0 0); }
+.loader__mark--wet .loader__word {
+  color: var(--c-snell);
+  filter: url(#loader-refract);
+  text-shadow:
+    0 0 2px rgb(217 251 255 / 0.55),
+    0 0 18px rgb(108 248 232 / 0.5),
+    0 0 46px rgb(58 168 255 / 0.28);
+}
+.loader__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 .loader__i { position: relative; }
 
 /* The tittle of the i is a single living plankton cell. */

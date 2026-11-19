@@ -44,15 +44,15 @@ import '../styles/finale.css'
 const PROFILES = {
   twilight: {
     name: 'Twilight',
-    info: 'A 5-hour dive to 1,000 m on a 3-day trip. $48,000 per guest, 40 seats a season.',
+    info: 'A 5-hour dive to 1,000 m on a 3-day trip. $48,000 per guest, 40 seats per season.',
   },
   abyss: {
     name: 'Abyss',
-    info: 'A 9-hour dive to the abyssal plain at 5,500 m on a 6-day trip. $195,000 per guest, 18 seats a season.',
+    info: 'A 9-hour dive to the abyssal plain at 5,500 m on a 6-day trip. $195,000 per guest, 18 seats per season.',
   },
   hadal: {
     name: 'Hadal',
-    info: 'A 12-hour dive to the floor of the Challenger Deep on a 9-day trip. $750,000 per guest, 6 seats a season.',
+    info: 'A 12-hour dive to the floor of the Challenger Deep on a 9-day trip. $750,000 per guest, 6 seats per season.',
   },
 }
 const INFO_DEFAULT = 'Prices are per guest, for the whole trip.'
@@ -244,6 +244,14 @@ function createScene(ctx, root) {
     const skirt = Math.exp(-((dx * dx) / 5 + (dz * dz) / 6) * 0.5) * 0.1
     return core + skirt
   }
+  // how far a sonar return carries on screen: a wider pool than the lamps',
+  // and gone well before the edges of the view (x = scene-space px)
+  const sonarFall = (X, z, x) => {
+    const dx = X / (mobile ? 1.5 : 2.4)
+    const dz = (z - z0) / (mobile ? 2.6 : 3)
+    const edge = 1 - smooth(0.4, 0.84, Math.abs(x - cx) / (W / 2))
+    return Math.exp(-(dx * dx + dz * dz) * 0.5) * edge
+  }
   const heightAt = (X, z) => fbm(X * 0.55 + 40, z * 0.55 + 9) * 0.9 + vnoise(X * 2.6, z * 2.6) * 0.12
   // a sea cucumber has ploughed a track through the pool; it is still at the far end of it
   const trackX = (z) => 1.25 * Math.sin(z * 0.42 + 0.6) - 0.5 + 0.18 * Math.sin(z * 1.7)
@@ -375,8 +383,9 @@ function createScene(ctx, root) {
           d1[k + 2] = col[2]
           d1[k + 3] = 255
 
-          // what a sonar ring shows: the same sediment, evenly lit, fading with range
-          const b2 = (0.55 * shade * Math.exp(-Math.max(0, z - 2) * 0.05) + 0.08) * far
+          // what a sonar ring shows: the same sediment, evenly lit, fading with
+          // range and into the dark well before the edges of the view
+          const b2 = (0.55 * shade + 0.08) * far * sonarFall(X, z, i + 0.5)
           d2[k] = 255
           d2[k + 1] = 70 + 120 * clamp(b2 - 0.5)
           d2[k + 2] = 52 + 100 * clamp(b2 - 0.5)
@@ -613,15 +622,17 @@ function createScene(ctx, root) {
   }
 
   // origin: a floor point {X, z}, or null for the pool under Vesper's lamps
-  function ring(origin = null, { strength = 1, reveal = true, dur = 5.2, user = false } = {}) {
+  // a ring lives under two seconds: sound crosses this floor in milliseconds,
+  // the screen only needs long enough to see it go
+  function ring(origin = null, { strength = 1, reveal = true, dur = 1.8, user = false } = {}) {
     if (!built) return
     const o = origin || { X: 0, z: z0 }
     rings.push({
       X: o.X,
       z: o.z,
       t: 0,
-      dur: reduced ? 2.2 : dur,
-      maxR: 13,
+      dur: Math.min(dur, 1.9),
+      maxR: 12,
       strength,
       reveal,
       user,
@@ -750,6 +761,37 @@ function createScene(ctx, root) {
     g.globalAlpha = 1
   }
 
+  // the front of a sonar ring: one hairline, its light falling off with the
+  // return (sonarFall), drawn in short segments so it never closes into a rim
+  const FRONT_N = 120
+  const fp = new Float32Array((FRONT_N + 1) * 3)
+  function wavefront(g, R, rad, a) {
+    const peak = Math.min(0.5, 0.46 * a)
+    if (peak < 0.01) return
+    for (let i = 0; i <= FRONT_N; i++) {
+      const th = (i / FRONT_N) * Math.PI * 2
+      const X = R.X + rad * Math.cos(th)
+      const z = R.z + rad * Math.sin(th)
+      const [x, y] = proj(X, z)
+      fp[i * 3] = x
+      fp[i * 3 + 1] = y
+      fp[i * 3 + 2] = z > 0.6 ? sonarFall(X, z, x) : 0
+    }
+    g.globalAlpha = 1
+    g.lineWidth = mobile ? 1 : 1.25
+    // butt caps: round ones would overlap at every joint and bead the line
+    g.lineCap = 'butt'
+    for (let i = 0; i < FRONT_N; i++) {
+      const al = peak * 0.5 * (fp[i * 3 + 2] + fp[i * 3 + 5])
+      if (al < 0.008) continue
+      g.strokeStyle = `rgba(255,112,92,${al.toFixed(3)})`
+      g.beginPath()
+      g.moveTo(fp[i * 3], fp[i * 3 + 1])
+      g.lineTo(fp[i * 3 + 3], fp[i * 3 + 4])
+      g.stroke()
+    }
+  }
+
   function drawFx(dt) {
     const g = fx
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -806,7 +848,10 @@ function createScene(ctx, root) {
       }
     }
 
-    // sonar: rings run out across the sediment, in perspective
+    // sonar: a wavefront runs out across the sediment, in perspective. Only
+    // the front and a thin band behind it show: the silt answers as the front
+    // passes and goes dark again, and all of it dissolves into the black well
+    // before the edges of the view
     for (let i = rings.length - 1; i >= 0; i--) {
       const R = rings[i]
       R.t += dt
@@ -815,46 +860,34 @@ function createScene(ctx, root) {
         rings.splice(i, 1)
         continue
       }
-      const e = R.still ? 0.62 : 1 - Math.pow(1 - k, 2.2)
+      const e = R.still ? 0.5 : 1 - Math.pow(1 - k, 2)
       const rad = 0.15 + e * R.maxR
-      const a = Math.pow(1 - k, 1.3) * R.strength
+      const a = (R.still ? Math.sin(Math.PI * k) : Math.pow(1 - k, 1.15) * smooth(0, 0.04, k)) * R.strength
       g.globalCompositeOperation = 'lighter'
-      g.globalAlpha = 1
-      g.lineWidth = 1.2
-      g.strokeStyle = `rgba(255,86,66,${(a * 0.8).toFixed(3)})`
-      g.beginPath()
-      circle(g, R.X, R.z, rad)
-      g.stroke()
-      if (!R.still && rad > 0.6) {
-        g.strokeStyle = `rgba(255,86,66,${(a * 0.24).toFixed(3)})`
-        g.beginPath()
-        circle(g, R.X, R.z, rad * 0.9)
-        g.stroke()
-      }
-      // the sediment answers where the ring passes
-      if (R.reveal && hi) {
-        const bands = [
-          [0, 0.18, 0.95],
-          [0.18, 0.6, 0.45],
-          [0.6, 1.7, 0.16],
-        ]
-        for (const [w0, w1, ba] of bands) {
-          const r0 = Math.max(0, rad - w1)
-          const r1 = Math.max(0, rad - w0)
-          if (r1 <= 0) continue
+      // the sediment answers in a band behind the front (≤ 6% of the radius),
+      // brightest at the front and fading behind it
+      if (R.reveal && hi && rad > 0.12) {
+        const band = Math.max(0.05, rad * 0.06)
+        const STEPS = 4
+        for (let s = 0; s < STEPS; s++) {
+          const r1 = rad - (band * s) / STEPS
+          const r0 = rad - (band * (s + 1)) / STEPS
           g.save()
           g.beginPath()
           circle(g, R.X, R.z, r1)
           if (r0 > 0.02) circle(g, R.X, R.z, r0, true)
           g.clip()
-          g.globalAlpha = clamp(a * ba)
+          g.globalAlpha = clamp(a * 0.85 * Math.pow(1 - s / STEPS, 1.6))
           g.drawImage(hi, 0, 0, W, H)
           g.restore()
         }
-        // far out, the echo comes back off the trench walls
-        const wb = smooth(4.5, 7, rad) * (1 - smooth(9, 12.5, rad))
-        if (walls && wb > 0.01) {
-          g.globalAlpha = clamp(a * wb * 0.9)
+      }
+      wavefront(g, R, rad, a)
+      // far out, the echo comes back off the trench walls
+      if (R.reveal && walls) {
+        const wb = smooth(4.5, 7, rad) * (1 - smooth(9, 12, rad))
+        if (wb > 0.01) {
+          g.globalAlpha = clamp(a * wb * 0.7)
           g.drawImage(walls, 0, 0)
         }
       }
@@ -886,7 +919,7 @@ function createScene(ctx, root) {
     last = now
     if (arrived && !reduced && now > nextPing) {
       nextPing = now + 7500 + Math.random() * 2500
-      ring(null, { strength: 0.6, dur: 6 })
+      ring(null, { strength: 0.6 })
     }
     drawFx(dt)
     const busy = !reduced || rings.length > 0 || contacts.some((c) => c.lit > 0.01)
@@ -928,10 +961,27 @@ function createScene(ctx, root) {
     if (!job) beginPaint()
     sync ? stepPaint(Infinity) : pump()
   }
+  // far from the screen, hand the memory back: the two full-size canvases and
+  // the sonar layers are rebuilt (time-sliced, from idle time) on the way back
+  function release() {
+    stop()
+    job = null
+    if (!built) return
+    built = false
+    hi = null
+    walls = null
+    rings.length = 0
+    silt.length = 0
+    floorC.width = floorC.height = 0
+    fxC.width = fxC.height = 0
+  }
   const idle = window.requestIdleCallback?.bind(window) || ((fn) => setTimeout(fn, 60))
+  let near = false
   const io = new IntersectionObserver(
     ([e]) => {
-      if (e.isIntersecting && !built) idle(() => build(), { timeout: 400 })
+      near = e.isIntersecting
+      if (near && !built) idle(() => near && build(), { timeout: 400 })
+      else if (!near) release()
     },
     { rootMargin: '150% 0px' },
   )
@@ -961,7 +1011,8 @@ function createScene(ctx, root) {
   })
 
   return {
-    build,
+    // async builds wait until the stage is near the screen (the observer runs them)
+    build: (sync = false) => (sync || near) && build(sync),
     start,
     ring,
     unproject,
@@ -977,7 +1028,7 @@ function createScene(ctx, root) {
     touchdown(strength = 1) {
       build(true)
       spawnSilt(strength)
-      ring(null, { strength: 1.15, dur: 5.6 })
+      ring(null, { strength: 1.15 })
       arrived = true
       approach = 1
       nextPing = performance.now() + 8000
@@ -1010,7 +1061,6 @@ function arrival(ctx, root, scene) {
 
   if (ctx.reducedMotion) {
     root.style.setProperty('--fin-floor', 1)
-    scene.build()
     scene.setArrived(false)
     return api
   }
@@ -1085,7 +1135,8 @@ function arrival(ctx, root, scene) {
     if (landed) return
     landed = true
     api.landed = true
-    scene.build(instant)
+    // time-sliced: the floor is only needed once it is near the screen
+    scene.build()
     tl.invalidate()
     if (instant) {
       // already on the floor (e.g. after the dive from the chart): no replay off-screen
@@ -1148,10 +1199,10 @@ function sonar(ctx, root, scene) {
       if (countEl) countEl.textContent = 'listening for echoes'
       logEl.classList.remove('is-done')
     }
-    scene.ring(origin, { strength: 1.1, dur: 5.4, user: true })
+    scene.ring(origin, { strength: 1.1, user: true })
     ctx.emit('sonar', { ...client, strength: 1 })
     clearTimeout(doneT)
-    doneT = setTimeout(summarise, ctx.reducedMotion ? 300 : 2600)
+    doneT = setTimeout(summarise, ctx.reducedMotion ? 300 : 2000)
   }
   function summarise() {
     if (!logEl) return

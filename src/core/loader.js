@@ -8,8 +8,16 @@
  *  2.1 s  the water floods in from below (a wavy, glowing waterline that
  *         unclips the black panel and reveals the hero); the wordmark is
  *         squeezed by the pressure (Anybody wdth 150 → 112, wght 200 → 520)
- *  2.9 s  hand-over: init() resolves, main.js marks the page ready
- *  3.0 s  the wordmark flies into the nav and becomes the nav brand
+ *  2.6 s  the waterline swallows the name: below the line it is seen
+ *         through the water (a drifting refraction, a cooler light) and the
+ *         letters let go of a breath of bubbles
+ *  2.8 s  the wordmark rises through the water into the nav and becomes
+ *         the nav brand, the refraction settling as it arrives
+ *  3.0 s  hand-over: init() resolves, main.js marks the page ready
+ *
+ * The page's modules initialise while this plays. The release waits for
+ * `pageReady` (every module's init() done): if the page is not ready at
+ * T − 0.3 s the countdown holds, like a launch hold, and resumes when it is.
  *
  * Any click, key press, wheel or touch fast-forwards. Emits `intro:landed` on the bus when
  * the wordmark reaches the nav (nav.js reveals its own brand then).
@@ -28,10 +36,13 @@ const T = {
   flood: 2.1,
   floodDur: 1.2,
   handover: 3.0,
-  fly: 2.68, // the wordmark rides the flood up as the waterline reaches it
+  fly: 2.8, // once the water has closed over it, the wordmark rises into the nav
+  hold: 1.7, // last moment to wait for the page before the release
 }
 
-export async function init(ctx, { fontsReady } = {}) {
+export async function init(ctx, { fontsReady, pageReady } = {}) {
+  let pageIsReady = !pageReady
+  pageReady?.then(() => (pageIsReady = true))
   const root = document.querySelector('.loader')
   // Fonts set the wordmark. Ask for the two faces straight away, but never
   // hold the dark for long on a slow font CDN: a soft bloom (CSS) breathes
@@ -61,14 +72,26 @@ export async function init(ctx, { fontsReady } = {}) {
   const countLabel = q('.loader__count-label span')
   const progress = q('.loader__progress span')
   const bottom = q('.loader__bottom')
-  const water = createWater(q('.loader__water'), panel, Math.min(ctx.dpr, 1.5))
+
+  // The name seen through the water: a second copy, clipped to the region
+  // below the waterline (the dry one keeps the region above it).
+  const wetMark = mark.cloneNode(true)
+  wetMark.classList.add('loader__mark--wet')
+  mark.after(wetMark)
+  const wetWord = wetMark.querySelector('.loader__word')
+  const words = [word, wetWord]
+  const allChars = [...chars, ...wetMark.querySelectorAll('.loader__ch')]
+  const tittles = [tittle, wetMark.querySelector('.loader__tittle')]
+  const refract = createRefraction(gsap, root.querySelector('#loader-refract'))
+
+  const water = createWater(q('.loader__water'), panel, Math.min(ctx.dpr, 1.5), { dry: mark, wet: wetMark })
 
   let resolveHandOver
   const handedOver = new Promise((r) => (resolveHandOver = r))
 
   /* ------------------------------------------------------ initial state */
-  gsap.set(chars, { opacity: 0, filter: 'blur(10px)' })
-  gsap.set(tittle, { scale: 0, opacity: 0 })
+  gsap.set(allChars, { opacity: 0, filter: 'blur(10px)' })
+  gsap.set(tittles, { scale: 0, opacity: 0 })
   gsap.set([top, countWrap, progress.parentElement], { opacity: 0 })
   checks.forEach((li) => {
     gsap.set(li.querySelector('.loader__label'), { clipPath: 'inset(0 100% 0 0)' })
@@ -85,18 +108,19 @@ export async function init(ctx, { fontsReady } = {}) {
 
   // 1. one cell of light in the dark (the bloom picks up from wherever the
   //    CSS pre-glow had got to while the fonts loaded)
-  tl.to(tittle, { scale: 1, opacity: 1, duration: 0.9, ease: 'expo.out' }, 0)
+  tl.to(tittles, { scale: 1, opacity: 1, duration: 0.9, ease: 'expo.out' }, 0)
   tl.fromTo(root, { '--loader-bloom': pre }, { '--loader-bloom': 1, duration: 1.4, ease: 'power2.out' }, 0)
 
   // 2. the wordmark gathers outward from the i
   tl.to(
-    chars,
+    allChars,
     {
       opacity: 1,
       filter: 'blur(0px)',
       duration: 1.0,
       ease: 'power2.out',
-      stagger: { each: 0.05, from: 4 },
+      // each copy gathers outward from its own i
+      stagger: (i) => Math.abs((i % chars.length) - 4) * 0.05,
     },
     T.chars,
   )
@@ -115,6 +139,34 @@ export async function init(ctx, { fontsReady } = {}) {
   }
   checks.slice(0, -1).forEach((li, i) => tick(li, T.check0 + i * T.checkStep))
   tick(checks[checks.length - 1], T.release - 0.26)
+
+  // 4b. a hold: the release never happens before the page behind it is
+  //     ready (modules initialise while the intro plays)
+  let holdT = 0
+  tl.call(
+    () => {
+      if (pageIsReady) return
+      tl.pause()
+      // only say so if the hold is long enough to notice
+      holdT = setTimeout(() => {
+        gsap.to(countLabel, { opacity: 0, duration: 0.2, onComplete: () => {
+          countLabel.textContent = 'Holding'
+          gsap.to(countLabel, { opacity: 1, duration: 0.4 })
+        } })
+      }, 400)
+      pageReady.then(() => {
+        clearTimeout(holdT)
+        if (countLabel.textContent !== 'Release in') {
+          gsap.killTweensOf(countLabel, 'opacity')
+          gsap.set(countLabel, { opacity: 1 })
+          countLabel.textContent = 'Release in'
+        }
+        tl.play()
+      })
+    },
+    null,
+    T.hold,
+  )
 
   // 5. the countdown is the timeline itself: it reads exactly the time left
   const clock = { t: 0 }
@@ -146,7 +198,7 @@ export async function init(ctx, { fontsReady } = {}) {
   )
   tl.to(bottom, { y: 5, duration: 0.07, ease: 'power1.in' }, 'release')
   tl.to(bottom, { y: 0, duration: 0.9, ease: 'expo.out' }, 'release+=0.07')
-  tl.to(tittle, { scale: 1.35, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1 }, 'release')
+  tl.to(tittles, { scale: 1.35, duration: 0.18, ease: 'power2.out', yoyo: true, repeat: 1 }, 'release')
 
   // 7. the flood
   tl.call(() => root.classList.add('is-exiting'), null, T.flood)
@@ -157,14 +209,19 @@ export async function init(ctx, { fontsReady } = {}) {
       level: 1,
       duration: T.floodDur,
       ease: 'power2.inOut',
-      onStart: () => water.start(),
+      onStart: () => {
+        water.start(word.getBoundingClientRect())
+        refract.start()
+      },
       onUpdate: () => water.set(flood.level),
       onComplete: () => water.finish(),
     },
     T.flood,
   )
   // pressure arrives as the waterline crosses the wordmark
-  tl.to(word, { '--lw': 112, '--lg': 520, '--ls': -0.012, duration: 0.6, ease: 'power2.inOut' }, T.flood + 0.02)
+  tl.to(words, { '--lw': 112, '--lg': 520, '--ls': -0.012, duration: 0.6, ease: 'power2.inOut' }, T.flood + 0.02)
+  // the refraction swells in as the line reaches the name
+  tl.to(refract, { scale: 15, duration: 0.5, ease: 'power2.out' }, T.flood + 0.45)
   tl.to(root, { '--loader-bloom': 0, duration: 0.6, ease: 'power1.out' }, T.flood)
 
   // 8. hand over to the page
@@ -197,27 +254,32 @@ export async function init(ctx, { fontsReady } = {}) {
     const b = target?.getBoundingClientRect()
     const visible = b && b.width > 0 && b.bottom > 0 && getComputedStyle(target).display !== 'none'
     if (!visible) {
-      gsap.to(mark, { opacity: 0, scale: 0.92, duration: 0.8, ease: 'power2.out', onComplete: finish })
+      gsap.to([mark, wetMark], { opacity: 0, scale: 0.92, duration: 0.8, ease: 'power2.out', onComplete: finish })
       return
     }
     const a = word.getBoundingClientRect()
     const s = b.width / a.width
     const dx = b.left + b.width / 2 - (a.left + a.width / 2)
     const dy = b.top + b.height / 2 - (a.top + a.height / 2)
-    gsap.to(word, {
+    const dur = 1.0 / Math.max(1, tl.timeScale() * 0.6)
+    // the water calms around it on the way up, so it lands crisp
+    gsap.to(refract, { scale: 0, duration: dur * 0.85, ease: 'power2.inOut', delay: dur * 0.15 })
+    gsap.to(words, {
       x: dx,
       y: dy,
       scale: s,
-      duration: 1.0 / Math.max(1, tl.timeScale() * 0.6),
+      duration: dur,
       ease: 'power3.inOut',
       onComplete() {
         ctx.emit('intro:landed', {})
-        gsap.to(word, { opacity: 0, duration: 0.25, ease: 'none', onComplete: finish })
+        gsap.to(words, { opacity: 0, duration: 0.25, ease: 'none', onComplete: finish })
       },
     })
   }
 
   function finish() {
+    clearTimeout(holdT)
+    refract.stop()
     water.destroy()
     root.classList.add('is-done')
     root.classList.remove('is-exiting', 'is-running')
@@ -234,7 +296,7 @@ export async function init(ctx, { fontsReady } = {}) {
    and clips the black panel to the region above the wave so the real page
    (the hero, already at the surface) shows through below it.
    ========================================================================== */
-function createWater(canvas, panel, dpr) {
+function createWater(canvas, panel, dpr, marks = {}) {
   const g = canvas.getContext('2d')
   let W = 0
   let H = 0
@@ -243,6 +305,29 @@ function createWater(canvas, panel, dpr) {
   let running = false
   let t0 = 0
   const N = 40
+
+  // The name lets go of a breath of bubbles where the waterline crosses it:
+  // one small burst per column of the wave, from inside the letters.
+  let wordBox = null
+  const swallowed = new Uint8Array(N + 1)
+  const breath = []
+  function exhale(i, t) {
+    const b = wordBox
+    const x0 = (W * (i - 0.5)) / N
+    const x1 = (W * (i + 0.5)) / N
+    const n = 3 + Math.floor(Math.random() * 2)
+    for (let k = 0; k < n; k++) {
+      const x = Math.max(b.left, Math.min(b.right, x0 + Math.random() * (x1 - x0)))
+      breath.push({
+        x,
+        y: b.top + b.height * (0.3 + Math.random() * 0.5),
+        r: 0.9 + Math.random() ** 2 * 3.2,
+        vy: 0.16 + Math.random() * 0.22, // fraction of the screen per second
+        wob: Math.random() * Math.PI * 2,
+        born: t + Math.random() * 0.12,
+      })
+    }
+  }
 
   const bubbles = Array.from({ length: 72 }, () => ({
     x: Math.random(),
@@ -280,10 +365,25 @@ function createWater(canvas, panel, dpr) {
     const ys = new Float32Array(N + 1)
     for (let i = 0; i <= N; i++) ys[i] = wave((W * i) / N, base, amp, t)
 
-    // 1. clip the black panel to the air above the waterline
-    let poly = `0px -2px, ${W}px -2px`
-    for (let i = N; i >= 0; i--) poly += `, ${((W * i) / N).toFixed(1)}px ${ys[i].toFixed(1)}px`
-    panel.style.clipPath = `polygon(${poly})`
+    // 1. clip the black panel (and the dry name) to the air above the
+    //    waterline, and the wet name to the water below it
+    let line = ''
+    for (let i = N; i >= 0; i--) line += `, ${((W * i) / N).toFixed(1)}px ${ys[i].toFixed(1)}px`
+    const air = `polygon(0px -2px, ${W}px -2px${line})`
+    panel.style.clipPath = air
+    if (marks.dry) marks.dry.style.clipPath = air
+    if (marks.wet) marks.wet.style.clipPath = `polygon(0px ${H + 2}px, ${W}px ${H + 2}px${line})`
+
+    if (wordBox) {
+      for (let i = 0; i <= N; i++) {
+        const x = (W * i) / N
+        if (swallowed[i] || x < wordBox.left - W / N || x > wordBox.right + W / N) continue
+        if (ys[i] < wordBox.top + wordBox.height * 0.82) {
+          swallowed[i] = 1
+          exhale(i, t)
+        }
+      }
+    }
 
     // 2. the water body just under the line: light caught in the surface
     g.clearRect(0, 0, W, H)
@@ -330,6 +430,21 @@ function createWater(canvas, panel, dpr) {
       g.fill()
       g.stroke()
     }
+    // … and the name's own breath, rising slower, from inside the letters
+    for (const b of breath) {
+      const life = t - b.born
+      if (life <= 0) continue
+      const y = b.y - life * b.vy * H
+      const x = b.x + Math.sin(life * 6 + b.wob) * 3
+      const i = Math.round((x / W) * N)
+      const surfaceY = ys[clamp(i, 0, N)]
+      if (y < surfaceY + 4) continue
+      g.globalAlpha = clamp(life * 6) * clamp((y - surfaceY) / 40) * 0.95
+      g.beginPath()
+      g.arc(x, y, b.r, 0, Math.PI * 2)
+      g.fill()
+      g.stroke()
+    }
     g.globalAlpha = 1
 
     // 4. the meniscus: a hairline of light with a soft glow under it
@@ -352,8 +467,9 @@ function createWater(canvas, panel, dpr) {
   const onResize = () => resize()
 
   return {
-    start() {
+    start(box) {
       if (running) return
+      if (box && box.width) wordBox = { left: box.left, right: box.right, top: box.top, height: box.height }
       resize()
       window.addEventListener('resize', onResize)
       running = true
@@ -369,6 +485,8 @@ function createWater(canvas, panel, dpr) {
       cancelAnimationFrame(raf)
       g.clearRect(0, 0, W, H)
       panel.style.clipPath = 'polygon(0 0, 100% 0, 100% 0, 0 0)'
+      if (marks.dry) marks.dry.style.clipPath = 'polygon(0 0, 100% 0, 100% 0, 0 0)'
+      if (marks.wet) marks.wet.style.clipPath = 'none'
     },
     destroy() {
       running = false
@@ -376,4 +494,39 @@ function createWater(canvas, panel, dpr) {
       window.removeEventListener('resize', onResize)
     },
   }
+}
+
+/* ==========================================================================
+   The refraction on the wet copy: an SVG displacement whose noise drifts
+   sideways, like light bent by a moving surface. Driven by the GSAP ticker
+   only while the name is in the water.
+   ========================================================================== */
+function createRefraction(gsap, filter) {
+  const disp = filter?.querySelector('feDisplacementMap')
+  const off = filter?.querySelector('feOffset')
+  let t0 = 0
+  let lastS = -1
+  const r = {
+    scale: 0,
+    start() {
+      if (!disp) return
+      t0 = performance.now()
+      gsap.ticker.add(tick)
+    },
+    stop() {
+      gsap.ticker.remove(tick)
+    },
+  }
+  function tick() {
+    const t = (performance.now() - t0) / 1000
+    // drift one way, with a slow swell in the vertical
+    off.setAttribute('dx', (t * 120).toFixed(1))
+    off.setAttribute('dy', (Math.sin(t * 2.2) * 6).toFixed(1))
+    const s = Math.max(0, r.scale)
+    if (Math.abs(s - lastS) > 0.05) {
+      lastS = s
+      disp.setAttribute('scale', s.toFixed(2))
+    }
+  }
+  return r
 }

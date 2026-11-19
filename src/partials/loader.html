@@ -38,7 +38,7 @@
         <p class="loader__where">Vesper is preparing to dive.</p>
         <p class="loader__coords">
           <span class="loader__coords-name">Above the Challenger Deep</span>
-          <span class="loader__coords-num">11°22′ N 142°35′ E</span>
+          <span class="loader__coords-num">11°22′ N, 142°35′ E</span>
         </p>
       </div>
 
@@ -54,7 +54,7 @@
             <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
             <span class="loader__label">Life support nominal</span>
             <span class="loader__leader"></span>
-            <span class="loader__value">O₂ 20.9 %</span>
+            <span class="loader__value">O₂ 20.9%</span>
           </li>
           <li class="loader__check">
             <svg class="loader__tick" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" /><path d="M5.4 9.3l2.4 2.4 4.9-5.2" /></svg>
@@ -87,6 +87,15 @@
   </div>
 
   <canvas class="loader__water"></canvas>
+
+  <!-- the wordmark seen through the water: a slow drifting refraction -->
+  <svg class="loader__defs" width="0" height="0" focusable="false">
+    <filter id="loader-refract" x="-60%" y="-40%" width="220%" height="180%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0032 0.017" numOctaves="1" seed="7" result="noise" />
+      <feOffset in="noise" dx="0" dy="0" result="drift" />
+      <feDisplacementMap in="SourceGraphic" in2="drift" scale="0" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
 
   <div class="loader__mark">
     <span class="loader__word"><span class="loader__ch">N</span><span class="loader__ch">o</span><span class="loader__ch">c</span><span class="loader__ch">t</span><span class="loader__ch loader__i">ı<span class="loader__tittle"></span></span><span class="loader__ch">l</span><span class="loader__ch">u</span><span class="loader__ch">c</span><span class="loader__ch">a</span></span>

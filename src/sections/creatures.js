@@ -2101,6 +2101,10 @@ export function init(ctx) {
   const logEl = section.querySelector('.creatures__log')
   const litEls = [...section.querySelectorAll('.creatures__lit')]
   const intro = section.querySelector('.creatures__intro')
+  const listEl = section.querySelector('.creatures__specimens')
+  // the scroll position the page is drawn at (Lenis's, when it runs): reading
+  // it never forces a layout, unlike getBoundingClientRect every frame
+  const scrollPos = () => (ctx.lenis ? ctx.lenis.scroll : window.scrollY)
 
   /* ------------------------------------------------------------ state */
   let W = 0
@@ -2127,6 +2131,19 @@ export function init(ctx) {
   let glowObs = []
   let logRect = null
   let introRect = null
+  // cached geometry (document offsets), re-measured when layout can change
+  let secTop = 0
+  let secH = 1
+  let stageLeft = 0
+  let near = false // within ~1.5 screens: the canvas is allocated
+  let introA = 1
+  let logA = 1
+  // touch: the lamp follows the descent from animal to animal (the tour)
+  let tourOrder = []
+  let tapped = false
+  let lastInputT = -1e9
+  let lastFindT = -1e9
+  let glideUntil = 0
 
   // pow: the lamp's own state (off, flickering on, on); on: what it gives
   // after the six-of-six dimming
@@ -2167,7 +2184,49 @@ export function init(ctx) {
   }
 
   /* ----------------------------------------------------------- layout */
+  function measureGeo() {
+    const r = section.getBoundingClientRect()
+    secTop = r.top + window.scrollY
+    secH = Math.max(1, r.height)
+    stageLeft = stage.getBoundingClientRect().left
+  }
+  // where the stage's top edge is on screen: sticky in the floating scene
+  function stageTop(sy = scrollPos()) {
+    const top = secTop - sy
+    return reduced ? top : Math.min(Math.max(top, 0), top + secH - H)
+  }
+  // The full-viewport canvas (and its offscreen buffers) exist only while
+  // the section is near the screen, so they cost nothing during the intro
+  // or anywhere else on the page.
+  function alloc() {
+    const w = near ? Math.round(W * dpr) : 0
+    const h = near ? Math.round(H * dpr) : 0
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w
+      canvas.height = h
+    }
+    if (!near) {
+      bodyC.width = bodyC.height = 0
+      selfC.width = selfC.height = 0
+      maskGrad = null
+    }
+  }
+  // The order the lamp visits the animals on touch: as each one rises
+  // through the middle of the screen.
+  function planTour() {
+    const yT = H * (mobile ? 0.42 : 0.45)
+    tourOrder = animals
+      .map((a) => {
+        const p0 = a.id === 'siphonophore' ? a.pts[Math.floor(a.pts.length * 0.35)] : null
+        const by = p0 ? p0.by : a.baseY
+        return { a, p: 0.5 - (yT - by) / (L.travel * H * a.z) }
+      })
+      .sort((u, v) => u.p - v.p)
+      .map((o) => o.a)
+  }
+
   function measure() {
+    measureGeo()
     const r = stage.getBoundingClientRect()
     // the canvas is the scene: the whole stage, or a still frame (static)
     W = Math.max(1, Math.round(canvas.clientWidth))
@@ -2175,8 +2234,7 @@ export function init(ctx) {
     mobile = W < 768
     L = mobile ? LAYOUTS.mobile : LAYOUTS.desktop
     dpr = Math.min(ctx.dpr || 1, 1.5)
-    canvas.width = Math.round(W * dpr)
-    canvas.height = Math.round(H * dpr)
+    alloc()
     unit = L.unit(W, H)
     for (const a of animals) {
       const cfg = { ...L.animals[a.id] }
@@ -2231,6 +2289,7 @@ export function init(ctx) {
     if (hud && hud.width) obstacles.push({ x: hud.left - pad, y: hud.top - pad, w: hud.width + pad * 2, h: hud.height + pad * 2 })
     seedSnow()
     maskGrad = null
+    planTour()
   }
 
   /* ----------------------------------------------------------- render */
@@ -2574,6 +2633,7 @@ export function init(ctx) {
   }
 
   function render(dt) {
+    if (!near) return
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
     g.globalCompositeOperation = 'source-over'
     g.globalAlpha = 1

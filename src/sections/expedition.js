@@ -10,12 +10,13 @@
  * profile turned on its side, time running down the page and depth running
  * across it (4 h down, up to 4 h on the floor, 4 h up). The shallow part of
  * that swing is blue-green, the deep part red, because that is where the
- * lamps change. A live depth figure rises into view and counts with the
- * signal, squeezed narrower and heavier as it goes deeper (the site's
- * pressure compression, in one number); it is plain ink with no lamp glow,
- * because the lit 10,935 m belongs to the finale. A small readout rides
- * beside the signal with the elapsed time (and the depth on the way up),
- * stepping round the phase captions so they never collide.
+ * lamps change. The dive clock rises into view and counts the twelve hours
+ * with the signal, squeezed narrower and heavier as Vesper goes deeper and
+ * released again on the way up (the site's pressure compression, in one
+ * figure). The big figure is time, not depth: the profile shape belongs to
+ * #dives and the 10,935 m figure to the finale. A small readout rides beside
+ * the signal with Vesper's depth ("on the floor" at the bottom), stepping
+ * round the phase captions so they never collide.
  *
  * The section opens with the switch to red lamps. When the dive crosses
  * 6,000 m going down, Vesper's lamp head (22 LEDs) flickers white, goes dark
@@ -30,6 +31,7 @@ import '../styles/expedition.css'
 const SVGNS = 'http://www.w3.org/2000/svg'
 const MAX = 10935
 const DIVE_HOURS = 12
+const FLOOR = 'on the floor'
 const RED_FROM = 6000
 const SWITCH_AT = 6005 // the lamp moment plays as the HUD reads past 6,000 m
 const LEDS = 22
@@ -106,14 +108,15 @@ function el(name, attrs = {}, parent) {
 export function init(ctx) {
   const root = document.getElementById('expedition')
   if (!root) return
-  const { gsap, ScrollTrigger } = ctx
+  const { gsap } = ctx
 
   const log = root.querySelector('[data-exp-log]')
   const svg = root.querySelector('.exp__cable')
   const days = [...root.querySelectorAll('.exp__day')]
   const plunge = root.querySelector('[data-exp-plunge]')
-  const deep = root.querySelector('[data-exp-deep]')
-  const deepN = root.querySelector('[data-exp-deep-n]')
+  const clock = root.querySelector('[data-exp-clock]')
+  const clockH = root.querySelector('[data-exp-clock-h]')
+  const clockM = root.querySelector('[data-exp-clock-m]')
   const phases = [...root.querySelectorAll('[data-exp-phase]')]
   const readout = root.querySelector('.exp__readout')
   if (!log || !svg || !days.length || !plunge) return
@@ -121,7 +124,7 @@ export function init(ctx) {
   const reduced = ctx.reducedMotion
   if (reduced) {
     root.classList.add('is-static')
-    deep?.classList.add('is-red') // the figure's final state: the floor
+    clock?.classList.add('is-red') // the whole dive, at its deepest
   }
 
   // Signal + readout live in the log's coordinate space.
@@ -131,7 +134,6 @@ export function init(ctx) {
   if (!reduced) log.appendChild(signal)
   if (readout) log.appendChild(readout)
   const readD = readout?.querySelector('.exp__readout-d')
-  const readT = readout?.querySelector('.exp__readout-t')
 
   /* ------------------------------------------- the red-light switch */
   const lamps = root.querySelector('[data-exp-lamps]')
@@ -313,10 +315,26 @@ export function init(ctx) {
     const label = (x, txt, cls = '', anchor = 'middle') => {
       const t = el('text', { class: `exp__c-label ${cls}`, x: x.toFixed(1), y: ty - 10, 'text-anchor': anchor }, svg)
       t.textContent = txt
+      return t
     }
-    label(T + 10, '0 m', '', 'start')
-    label(T + ((D - T) * RED_FROM) / MAX, '6,000 m, red lamps on', 'exp__c-label--red')
-    label(D, '10,935 m', '', 'end')
+    const xr = T + ((D - T) * RED_FROM) / MAX
+    const zero = label(T + 10, '0 m', '', 'start')
+    const redL = label(xr, '6,000 m, red lamps on', 'exp__c-label--red')
+    const end = label(D, '10,935 m', '', 'end')
+    // Narrow screens: if the red label would touch its neighbours, stack it
+    // ("red lamps on" over "6,000 m") so the scale stays readable.
+    try {
+      const rb = redL.getBBox()
+      const eb = end.getBBox()
+      const zb = zero.getBBox()
+      if (rb.x + rb.width + 10 > eb.x || rb.x - 10 < zb.x + zb.width) {
+        redL.textContent = ''
+        el('tspan', { x: xr.toFixed(1), dy: '-1.2em' }, redL).textContent = 'red lamps on'
+        el('tspan', { x: xr.toFixed(1), dy: '1.2em' }, redL).textContent = '6,000 m'
+      }
+    } catch {
+      /* not rendered yet: the next build measures again */
+    }
 
     const layers = ['halo', 'mid', 'core']
     const mk = (d, cls, stroke) =>
@@ -332,14 +350,13 @@ export function init(ctx) {
 
     // readout size, measured once with its widest text
     let readW = 110
-    if (readout && readD && readT) {
-      const was = [readD.textContent, readT.textContent]
-      readout.classList.remove('is-time')
-      readD.textContent = '10,935 m'
-      readT.textContent = '10 h 00 min'
-      readW = readout.offsetWidth || readW
-      ;[readD.textContent, readT.textContent] = was
-      readout.classList.toggle('is-time', readTime)
+    if (readout && readD) {
+      const was = readD.textContent
+      for (const t of ['10,930 m', FLOOR]) {
+        readD.textContent = t
+        readW = Math.max(readW, readout.offsetWidth || 0)
+      }
+      readD.textContent = was
     }
 
     G = { ...g, yA1, yB0, lut, segA, segP, segB, floorTop: pTop + h / 3, floorBot: pTop + (2 * h) / 3, readW }
@@ -356,10 +373,11 @@ export function init(ctx) {
   let diving = false
   let shallow = false
   let near = false
-  let deepRed = false
-  let lastDeepM = -1
+  let clockRed = false
+  let lastMins = -1
+  let lastWd = -1
   let readLeft = false
-  let readTime = false
+  let lastRead = ''
 
   function makeTimeline() {
     if (tl) {
@@ -390,7 +408,7 @@ export function init(ctx) {
 
   function paint(y) {
     if (!G) return
-    const { T, D, yA1, yB0, lut, nodes, pTop, h, floorTop, floorBot, W } = G
+    const { T, D, yA1, yB0, lut, nodes, pTop, h, floorTop, W } = G
 
     // the signal
     let x = T
@@ -430,30 +448,37 @@ export function init(ctx) {
     }
     const depthM = clamp((x - T) / (D - T)) * MAX
     const shownM = depthM > MAX - 12 ? MAX : Math.round(depthM / 10) * 10
+    const mins = Math.round(clamp((y - pTop) / h) * DIVE_HOURS * 60)
 
-    // the live depth figure: counts with the signal, squeezed by the depth
-    if (deep) {
-      // on screen from just before the dive until the signal leaves the floor
-      const isNear = y > pTop - h * 0.3 && y < floorBot + h * 0.04
+    // the dive clock: counts the twelve hours, squeezed by Vesper's depth
+    if (clock) {
+      // on screen from just before the dive; it comes to rest beside the
+      // floor and keeps counting as the signal climbs away from it
+      const isNear = y > pTop - h * 0.3
       if (isNear !== near) {
         near = isNear
         plunge.classList.toggle('is-near', isNear)
       }
-      if (shownM !== lastDeepM) {
-        lastDeepM = shownM
-        if (deepN) deepN.textContent = fmt(shownM)
+      if (mins !== lastMins) {
+        lastMins = mins
+        if (clockH) clockH.textContent = String(Math.floor(mins / 60))
+        if (clockM) clockM.textContent = String(mins % 60).padStart(2, '0')
+      }
+      const wd = Math.round(shownM / 50)
+      if (wd !== lastWd) {
+        lastWd = wd
         const e = Math.pow(shownM / MAX, 0.8)
-        deep.style.setProperty('--deep-wdth', (118 - 68 * e).toFixed(1))
-        deep.style.setProperty('--deep-wght', Math.round(300 + 480 * e))
+        clock.style.setProperty('--clk-wdth', (118 - 68 * e).toFixed(1))
+        clock.style.setProperty('--clk-wght', Math.round(300 + 480 * e))
         const red = shownM >= RED_FROM
-        if (red !== deepRed) {
-          deepRed = red
-          deep.classList.toggle('is-red', red)
+        if (red !== clockRed) {
+          clockRed = red
+          clock.classList.toggle('is-red', red)
         }
       }
     }
 
-    // readout beside the signal while it is on the swing
+    // Vesper's depth, riding beside the signal while it is on the swing
     const inDive = y > pTop - 2 && y < G.pBot + 2
     if (inDive !== diving) {
       diving = inDive
@@ -466,18 +491,11 @@ export function init(ctx) {
       signal.classList.toggle('is-shallow', isShallow)
     }
     if (inDive && readout) {
-      // while the big figure is on screen (down and on the floor) the
-      // readout only keeps time; on the way up it gives the depth too
-      const timeOnly = y < floorBot
-      if (timeOnly !== readTime) {
-        readTime = timeOnly
-        readout.classList.toggle('is-time', timeOnly)
-      }
       // keep the readout on the open side of the line (inside the swing on
       // phones), and step round the phase captions
       const rw = G.readW
-      const top = timeOnly ? y - 10 : y - 18
-      const rh = timeOnly ? 20 : 38
+      const top = y - 18
+      const rh = 38
       const side = (l, dy = 0) => (l ? { x: x - rw, y: top + dy, width: rw - 18, height: rh } : { x: x + 18, y: top + dy, width: rw - 18, height: rh })
       const collides = (b) => G.phaseBoxes.some((p) => hit(b, p))
       let left = x > W - 190 || (W < 560 && x > 150)
@@ -492,22 +510,25 @@ export function init(ctx) {
         readout.classList.toggle('is-left', left)
       }
       readout.style.transform = `translate3d(${x.toFixed(1)}px, ${(y + dy).toFixed(1)}px, 0)`
-      const mins = Math.round(clamp((y - pTop) / h) * DIVE_HOURS * 60)
-      readD.textContent = `${fmt(shownM)} m`
-      readT.textContent = `${Math.floor(mins / 60)} h ${String(mins % 60).padStart(2, '0')} min`
+      const txt = shownM >= MAX ? FLOOR : `${fmt(shownM)} m`
+      if (txt !== lastRead) {
+        lastRead = txt
+        readD.textContent = txt
+      }
     }
   }
 
   /* ---------------------------------------------------------- lifecycle */
   build()
 
+  // A layout change only moves things inside the log, so rebuilding our own
+  // timeline is enough: its new ScrollTrigger measures itself on creation,
+  // and ScrollTrigger's own resize refresh covers everything else. (No
+  // global refresh from here: one resize must not refresh the page twice.)
   let rT
   const rebuild = () => {
     clearTimeout(rT)
-    rT = setTimeout(() => {
-      build()
-      if (!reduced) ScrollTrigger.refresh()
-    }, 160)
+    rT = setTimeout(build, 160)
   }
   let lastW = log.clientWidth
   let lastH = log.offsetHeight

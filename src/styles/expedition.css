@@ -456,15 +456,16 @@
   --pl-mid: 45%;
   grid-column: 1 / -1;
   position: relative;
-  height: clamp(46rem, 125vh, 80rem);
+  height: clamp(40rem, 95vh, 64rem);
   margin-top: var(--s-8);
 }
 
-/* The live depth figure. It rises into view as the dive starts, stays with
-   the screen while the signal goes down, and comes to rest on the floor,
-   beside the deepest part of the line. Plain ink, no lamp glow: the lit
-   10,935 m belongs to the finale. */
-.exp__deep {
+/* The dive clock. It rises into view as the dive starts, stays with the
+   screen while the signal goes down, comes to rest beside the floor and
+   keeps counting to 12 h while the signal climbs away. Squeezed by Vesper's
+   depth, released on the way up. Time, not depth: the 10,935 m figure
+   belongs to the finale. Plain ink, no lamp glow. */
+.exp__clock {
   position: absolute;
   left: calc(var(--pl-track) + clamp(1.25rem, 4vw, 4rem));
   top: 0;
@@ -474,18 +475,18 @@
   justify-content: flex-end;
   pointer-events: none;
 }
-.exp__deep-in {
+.exp__clock-in {
   position: sticky;
   bottom: 15vh;
   bottom: 15svh;
   translate: 0 50%;
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(3.4rem, 10vw, 10.5rem);
-  font-stretch: calc(var(--deep-wdth, 50) * 1%);
-  font-weight: var(--deep-wght, 780);
+  font-size: clamp(3.4rem, 9vw, 9.5rem);
+  font-stretch: calc(var(--clk-wdth, 50) * 1%);
+  font-weight: var(--clk-wght, 780);
   line-height: 0.82;
-  letter-spacing: calc((70 - var(--deep-wdth, 50)) * 0.0014em);
+  letter-spacing: calc((70 - var(--clk-wdth, 50)) * 0.0014em);
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1, 'lnum' 1;
   white-space: nowrap;
@@ -497,13 +498,14 @@
   opacity: 0;
   transition: opacity 0.8s var(--ease-out);
 }
-.exp__deep.is-red .exp__deep-in {
+.exp__clock.is-red .exp__clock-in {
   background-image: linear-gradient(to bottom, color-mix(in oklab, var(--c-ink) 62%, var(--c-redlight)), rgb(255 59 47 / 0.1) 92%);
 }
-.exp__plunge.is-near .exp__deep-in { opacity: 1; }
-.exp__deep-u {
-  font-size: 0.4em;
+.exp__plunge.is-near .exp__clock-in { opacity: 1; }
+.exp__clock-u {
+  font-size: 0.36em;
   font-stretch: 100%;
+  font-weight: 460;
   letter-spacing: 0;
 }
 
@@ -534,7 +536,7 @@
   top: calc(83.333% + 0.9em);
 }
 
-/* elapsed time (and, on the way up, depth), riding next to the signal */
+/* Vesper's depth, riding next to the signal ("on the floor" at the bottom) */
 .exp__readout {
   position: absolute;
   left: 0;
@@ -558,9 +560,12 @@
   pointer-events: none;
   will-change: transform;
 }
-.exp__readout-t { color: var(--c-ink-2); }
-.exp__readout.is-time .exp__readout-d { display: none; }
-.exp__readout.is-time { margin-top: -0.6rem; }
+.exp__readout-t {
+  font-family: var(--font-text);
+  font-style: italic;
+  font-weight: 380;
+  color: var(--c-ink-3);
+}
 .exp__readout.is-on { opacity: 1; }
 .exp__readout.is-left {
   padding-left: 0;
@@ -584,7 +589,7 @@
 #expedition.is-static .exp__num-word { color: var(--c-ink-2); }
 #expedition.is-static .exp__phase { color: var(--c-ink); }
 #expedition.is-static .exp__sketch { opacity: 1; }
-#expedition.is-static .exp__deep-in { opacity: 1; position: relative; bottom: auto; }
+#expedition.is-static .exp__clock-in { opacity: 1; position: relative; bottom: auto; }
 
 /* ------------------------------------------------------------- tablet */
 @media (max-width: 1100px) {
@@ -638,11 +643,11 @@
   .exp__plunge {
     --pl-track: calc(var(--exp-numw) + 0.9rem + var(--exp-rail) / 2);
     --pl-deep: 92%;
-    height: clamp(38rem, 115vh, 52rem);
+    height: clamp(34rem, 100vh, 46rem);
     margin-top: 4rem;
   }
-  .exp__deep { left: calc(var(--pl-track) + 0.9rem); }
-  .exp__deep-in { font-size: clamp(3rem, 15vw, 4.6rem); bottom: 18svh; }
+  .exp__clock { left: calc(var(--pl-track) + 0.9rem); }
+  .exp__clock-in { font-size: clamp(2.9rem, 14vw, 4.4rem); bottom: 18vh; bottom: 18svh; }
   .exp__phase { font-size: 1.02rem; }
   .exp__phase--down { left: calc(var(--pl-mid) + 0.9rem); }
   .exp__phase--floor {
