@@ -3,11 +3,16 @@
  *
  * Signature: every jar is drawn on its own canvas (clear glass, a ribbed ink
  * lid, the dry pigment inside with its grain, a sloped surface and a little
- * heap). When a shelf comes into view, the lids come off, a thin stream of
- * powder pours in from above and each jar fills, the heap slumps to rest and
- * the lid is screwed back on. Hover tilts a jar towards the hand and the
- * powder slides after it. "Add to order" lifts the jar and lets a pinch of
- * the pigment fall into the dish; placing the order pours every colour in it.
+ * heap). The nine jars stand on one continuous shelf (two rows on a desktop,
+ * three below); as a row comes into view its plank draws itself in, the lids
+ * come off, a thin stream of powder pours in from above and each jar fills,
+ * the heap slumps to rest and the lid is screwed back on. Hover tilts a jar
+ * towards the hand and the powder slides after it. "Add to order" lifts the
+ * jar and lets a pinch of the pigment fall into the dish; placing the order
+ * pours every colour in it.
+ *
+ * Names, formulas, sizes and prices on the shelf are re-read from
+ * pigments.js at start-up, so the partial can never drift from the facts.
  *
  * Bus:
  *   listens  'order'         { id, qty }   id = a sold pigment id, or
@@ -47,7 +52,7 @@ const SET_DEFS = {
   'set-library': {
     name: 'The full library',
     unit: 'Nine jars',
-    price: 2940,
+    price: 2800, // cheaper than the nine jars bought separately (£2,936)
     ids: ['yellow-ochre', 'red-ochre', 'bone-black', 'indigo', 'malachite', 'egyptian-blue', 'tyrian-purple', 'ultramarine', 'carmine'],
   },
 }
@@ -782,6 +787,39 @@ export function init(ctx) {
     ITEMS[id] = { id, name: s.name, italic: false, unit: s.unit, price: s.price, colours: ps, set: true, tint: '#e9e7e1', hex: '#151413' }
   }
 
+  /* ---------------------------------------------------------- the facts
+     The partial is written out for a first paint without JavaScript; the
+     names, formulas, sizes and prices are set again here from pigments.js
+     and SET_DEFS, so they always agree with the rest of the page. */
+  const put = (el, v, html = false) => {
+    if (!el || v == null) return
+    if (html) {
+      if (el.innerHTML !== v) el.innerHTML = v
+    } else if (el.textContent !== v) el.textContent = v
+  }
+  root.querySelectorAll('.jar').forEach((li) => {
+    const p = BY_ID[li.dataset.id]
+    if (!p) return
+    li.style.setProperty('--pig', p.hex)
+    li.style.setProperty('--pig-tint', p.tint)
+    li.style.setProperty('--pig-ink', p.ink)
+    const tall = li.dataset.kind === 'vial'
+    put(li.querySelector('.jar__name'), tall ? p.name.split(' ').join('<br>') : p.name, tall)
+    put(li.querySelector('.jar__formula'), p.formula, true)
+    put(li.querySelector('.jar__net'), p.unit)
+    put(li.querySelector('.jar__title'), p.name)
+    put(li.querySelector('.jar__amount'), formatPrice(p.price))
+    put(li.querySelector('.jar__unit'), `for ${p.unit}`)
+    put(li.querySelector('.jar__rare'), p.rare)
+    put(li.querySelector('.shop-add .visually-hidden'), `: ${p.name}, ${p.unit} jar`)
+  })
+  root.querySelectorAll('.set').forEach((el) => {
+    const d = SET_DEFS[el.dataset.set]
+    if (!d) return
+    el.dataset.ids = d.ids.join(' ')
+    put(el.querySelector('.set__amount'), formatPrice(d.price))
+  })
+
   /* ---------------------------------------------------------- jars */
   const jars = [...root.querySelectorAll('.jar')].map((li) => new Jar(li, ctx))
   const byId = Object.fromEntries(jars.map((j) => [j.id, j]))
@@ -813,27 +851,52 @@ export function init(ctx) {
   )
   io.observe(root)
 
-  // the shelves fill as they arrive
-  root.querySelectorAll('.shelf').forEach((shelf) => {
-    const these = jars.filter((j) => shelf.contains(j.li))
-    const run = () => {
-      these.forEach((j, i) => {
-        if (!j.built) j.build()
-        if (!j.built) return
-        if (reducedMotion) j.fillNow()
-        else j.pour(0.1 + i * 0.26)
+  // the shelf fills row by row as it arrives: the plank draws itself in from
+  // the left, then each jar in the row is filled in turn
+  const planks = jars.map((j) => j.li.querySelector('.jar__plank')).filter(Boolean)
+  const rowOf = (j) => {
+    const top = j.li.offsetTop
+    return jars.filter((k) => Math.abs(k.li.offsetTop - top) < 4)
+  }
+  if (!reducedMotion) {
+    gsap.set(planks, { scaleX: 0 })
+    jars.forEach((j) => {
+      const slot = j.li.querySelector('.jar__slot')
+      const plank = j.li.querySelector('.jar__plank')
+      // the plank: one line drawn across the whole row
+      ScrollTrigger.create({
+        trigger: slot,
+        start: 'bottom 96%',
+        once: true,
+        onEnter: () => {
+          if (!plank || plank.__drawn) return
+          const row = rowOf(j)
+          const segs = row.map((k) => k.li.querySelector('.jar__plank')).filter((el) => el && !el.__drawn)
+          segs.forEach((el) => (el.__drawn = true))
+          const n = segs.length
+          const v = { t: 0 }
+          gsap.to(v, {
+            t: 1,
+            duration: 0.5 + n * 0.22,
+            ease: 'pour',
+            onUpdate: () => segs.forEach((el, i) => gsap.set(el, { scaleX: clamp(v.t * n - i) })),
+          })
+        },
       })
-    }
-    if (reducedMotion) return
-    ScrollTrigger.create({ trigger: shelf, start: 'top 82%', once: true, onEnter: run })
-    // the plank draws itself in
-    const plank = shelf.querySelector('.shelf__plank')
-    gsap.fromTo(
-      plank,
-      { scaleX: 0 },
-      { scaleX: 1, duration: 1.4, ease: 'pour', scrollTrigger: { trigger: shelf, start: 'top 90%', once: true } }
-    )
-  })
+      // the jar: lid off, the powder poured in, lid on
+      ScrollTrigger.create({
+        trigger: slot,
+        start: 'bottom 86%',
+        once: true,
+        onEnter: () => {
+          if (!j.built) j.build()
+          if (!j.built) return
+          const i = Math.max(0, rowOf(j).indexOf(j))
+          j.pour(0.15 + i * 0.22)
+        },
+      })
+    })
+  }
 
   // keep canvases sharp and sized
   const ro = new ResizeObserver((entries) => {
@@ -934,6 +997,28 @@ export function init(ctx) {
   flash.setAttribute('aria-hidden', 'true')
   bar.prepend(flash)
   panel.classList.add('is-js')
+  // phones: a slip of paper that rises out of the order bar when an add is
+  // refused (the reason is also read out through the live region)
+  const note = document.createElement('p')
+  note.className = 'order__toast'
+  note.setAttribute('aria-hidden', 'true')
+  note.hidden = true
+  panel.prepend(note)
+  function toast(msg) {
+    note.textContent = msg
+    note.hidden = false
+    clearTimeout(toast.t)
+    gsap.killTweensOf(note)
+    if (reducedMotion) gsap.set(note, { opacity: 1, yPercent: 0 })
+    else gsap.fromTo(note, { opacity: 0, yPercent: 30 }, { opacity: 1, yPercent: 0, duration: 0.6, ease: 'expo.out' })
+    toast.t = setTimeout(hideToast, 4200)
+  }
+  function hideToast() {
+    clearTimeout(toast.t)
+    if (note.hidden) return
+    if (reducedMotion) note.hidden = true
+    else gsap.to(note, { opacity: 0, duration: 0.4, ease: 'power2.out', onComplete: () => (note.hidden = true) })
+  }
 
   const qty = (id) => order.get(id) || 0
   const tyrianUsed = () => TYRIAN.reduce((n, id) => n + qty(id), 0)
@@ -1124,12 +1209,25 @@ export function init(ctx) {
     const before = qty(id)
     ctx.emit('order', { id, qty: 1 })
     const ok = qty(id) > before
-    if (!ok) return
-    // feedback on the button itself
     const label = b.querySelector('.shop-add__label')
+    clearTimeout(b.__t)
+    if (!ok) {
+      // refused: say so on the button itself, and on a phone, where the slip
+      // is folded away, on a note that rises out of the order bar
+      b.classList.remove('is-added')
+      b.classList.add('is-refused')
+      if (label) label.textContent = id === 'tyrian-purple' ? 'Two jars at most' : TYRIAN.includes(id) ? 'Tyrian limit reached' : 'Twenty at most'
+      b.__t = setTimeout(() => {
+        b.classList.remove('is-refused')
+        if (label) label.textContent = 'Add to order'
+      }, 2400)
+      if (mqPhone.matches && !open && !limitEl.hidden) toast(limitEl.textContent)
+      return
+    }
+    // feedback on the button itself
+    b.classList.remove('is-refused')
     b.classList.add('is-added')
     if (label) label.textContent = 'Added to order'
-    clearTimeout(b.__t)
     b.__t = setTimeout(() => {
       b.classList.remove('is-added')
       if (label) label.textContent = 'Add to order'
@@ -1296,6 +1394,7 @@ export function init(ctx) {
   let open = false
   function setOpen(v, { focus = false } = {}) {
     open = v
+    if (v) hideToast()
     bar.setAttribute('aria-expanded', String(v))
     panel.classList.toggle('is-open', v)
     sheet.hidden = mqPhone.matches ? !v : false

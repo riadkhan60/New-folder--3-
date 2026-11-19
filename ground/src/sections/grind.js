@@ -5,16 +5,21 @@
  * lazurite (blue), calcite (white) and pyrite (gold). The visitor drags a
  * glass muller over it; every pass breaks the grains down. Thousands of
  * grains are simulated in canvas 2D: they shrink with work, get dragged and
- * ploughed by the muller, and leave a paste ring along its path.
+ * ploughed by the muller, and the muller drags the fines into wet, streaky
+ * tracks of paste along its path.
  *
  * Colour physics: coarse ultramarine is the deepest, most saturated blue;
  * ground finer it scatters more light and turns paler and greyer. Readouts
  * (particle size, colour ruler, two drawdowns) follow the geometric mean
- * size of the lazurite grains. Reaching the sweet spot drops ultramarine
- * into the dish.
+ * size of the lazurite grains. Reaching the sweet spot pours ultramarine
+ * out of the slab across the whole dish; a moment later clear water washes
+ * it out again, the way the blue is washed out of the stone.
  *
- * Bus: emits `drop` (via ctx.palette.drop) once per heap at the sweet spot,
- * and `stir` while the muller moves. Listens to nothing.
+ * Touch: only a touch that starts on the muller grabs it (a grip that
+ * follows the muller has touch-action: none); the rest of the slab scrolls.
+ *
+ * Bus: emits `drop` (via ctx.palette.drop) at the sweet spot, and `stir`
+ * while the muller moves. Listens to nothing.
  */
 import '../styles/grind.css'
 
@@ -96,7 +101,7 @@ const S_FLOOR = 3.6 // per-grain floor (µm)
 const LOG_SPAN = Math.log(D_START / D_END)
 const scalePos = (d) => clamp(Math.log(D_START / d) / LOG_SPAN)
 const HARD = [1, 1.55, 0.62] // lazurite (Mohs 5–5.5), calcite (3, softer), pyrite (6–6.5, harder)
-const K_GRIND = 0.5 // grinding rate per slab-width of muller travel
+const K_GRIND = 0.6 // grinding rate per slab-width of muller travel (steady circling reaches the deepest blue in about ten seconds)
 const STEPS = [120, 80, 52, 34, 26, 18, 12, 8, 5] // reduced-motion steps
 
 function stageOf(d) {
@@ -141,8 +146,11 @@ export function init(ctx) {
   const reduced = !!ctx.reducedMotion
 
   const $ = (s) => root.querySelector(s)
+  const wrapEl = $('.wrap')
+  const labEl = $('.grind__lab')
   const slabEl = $('.grind__slab')
   const canvas = $('.grind__canvas')
+  const grip = $('.grind__grip')
   const hintSvg = $('.grind__hint')
   const hintArc = $('.grind__hint-arc')
   const hintHead = $('.grind__hint-head')
@@ -170,6 +178,14 @@ export function init(ctx) {
     holdBtn.hidden = true
     stepBtn.hidden = false
   }
+  // the facts come from pigments.js
+  const capEl = $('[data-grind-cap]')
+  if (capEl && P.ultramarine.origin) {
+    capEl.textContent = `Crushed lapis lazuli from ${P.ultramarine.origin}, on a ground-glass slab, with a glass muller.`
+  }
+  // on a touchscreen the muller is held with a finger, not dragged with a pointer
+  const touchFirst = !!ctx.isTouch
+  if (touchFirst && hintLabel) hintLabel.textContent = 'Put your finger on the muller and grind in circles'
 
   /* ---------------------------------------------------------- palette */
   const U = P.ultramarine.hex
@@ -202,7 +218,6 @@ export function init(ctx) {
   const at = (lut, d) => lut[clamp(Math.round(d), 0, 140)]
   const washedAt = (d) => at(WASHED, d)
   const groundAt = (d) => at(GROUND, d)
-  const pasteAt = (d) => at(PASTE, d)
   const gritOf = (d) => ramp(d, 34, 110) // 0 = smooth paint, 1 = gravel
 
   // grain colours (sprites + fine powder)
@@ -257,6 +272,8 @@ export function init(ctx) {
     frame: 0,
     stirAcc: 0,
     swatchD: -1,
+    travel: 0,
+    kGrind: K_GRIND,
   }
 
   let N = 0
@@ -269,9 +286,6 @@ export function init(ctx) {
   let slabLayer = null
   let paste = null
   let pg = null
-  let stampMask = null
-  let stamp = null
-  let stampD = -1
   let atlas = null
   const CELL = 40
   const SPR_R = 17
@@ -536,54 +550,117 @@ export function init(ctx) {
     if (old) pg.drawImage(old, 0, 0, paste.width, paste.height)
   }
 
-  function buildStampMask() {
-    const r = st.R * st.S * st.dpr
-    const size = Math.ceil(r * 2.1)
-    stampMask = makeCanvas(size, size)
-    const m = stampMask.getContext('2d')
-    const c = size / 2
-    // streaks along the direction of travel: the mullering marks
-    const rr = rng(5)
-    m.fillStyle = 'rgba(0,0,0,0.42)'
-    m.fillRect(0, 0, size, size)
-    for (let y = 0; y < size; y += 1 + rr() * 2.2) {
-      m.fillStyle = `rgba(0,0,0,${0.25 + rr() * 0.75})`
-      m.fillRect(0, y, size, 0.6 + rr() * 1.6)
+  // The muller's face drags the fines into tracks. Lanes across its face
+  // each lay a streak along the path: most are film (they overlap into a
+  // continuous wet layer, a little uneven), some are ridges that catch the
+  // window light, some are furrows. Lanes near the rim are faint and reach a
+  // little past it, so the paste feathers out where it squeezes from under
+  // the glass instead of ending on a hard edge.
+  const LANE_N = 40
+  const lanes = []
+  {
+    const r = rng(5)
+    for (let k = 0; k < LANE_N; k++) {
+      const o = -1.12 + (2.24 * (k + 0.5)) / LANE_N + (r() - 0.5) * (2.24 / LANE_N) * 0.9
+      const e = Math.abs(o)
+      const feather = 1 - smooth(clamp((e - 0.66) / 0.46))
+      const q = r()
+      const kind = e > 0.98 ? 0 : q < 0.17 ? 1 : q < 0.36 ? 2 : 0 // 0 film, 1 ridge, 2 furrow
+      // paste squeezes outwards: a touch more of it towards the rim
+      const a = (0.45 + r() * 0.55) * feather * (0.8 + 0.3 * smooth(clamp(e / 0.85)))
+      const lvl = a > 0.62 ? 2 : a > 0.32 ? 1 : 0
+      lanes.push({ o, kind, b: kind * 3 + lvl, ph: r() * TAU, f: 3 + r() * 9 })
     }
-    m.globalCompositeOperation = 'destination-in'
-    const grad = m.createRadialGradient(c, c, 0, c, c, r)
-    grad.addColorStop(0, 'rgba(0,0,0,0.22)')
-    grad.addColorStop(0.5, 'rgba(0,0,0,0.42)')
-    grad.addColorStop(0.84, 'rgba(0,0,0,1)')
-    grad.addColorStop(0.95, 'rgba(0,0,0,0.55)')
-    grad.addColorStop(1, 'rgba(0,0,0,0)')
-    m.fillStyle = grad
-    m.fillRect(0, 0, size, size)
-    stamp = makeCanvas(size, size)
-    stampD = -1
   }
-
-  function tintStamp(d) {
-    const k = Math.round(d)
-    if (k === stampD || !stamp) return
-    stampD = k
-    const s = stamp.getContext('2d')
-    s.globalCompositeOperation = 'source-over'
-    s.clearRect(0, 0, stamp.width, stamp.height)
-    s.drawImage(stampMask, 0, 0)
-    s.globalCompositeOperation = 'source-in'
-    s.fillStyle = pasteAt(d)
-    s.fillRect(0, 0, stamp.width, stamp.height)
+  const LANE_A = [0.07, 0.15, 0.24, 0.07, 0.13, 0.2, 0.06, 0.12, 0.2] // per bucket: kind * 3 + level
+  const laneXY = new Float32Array(LANE_N * 2)
+  const lanePaths = new Array(9)
+  const pasteTones = new Map()
+  const laneRun = { open: false, x: 0, y: 0, amt: 0, n: 0 }
+  let subs = new Float32Array(5 * 64) // per substep: centre x, y, normal x, y, travel
+  function toneOf(d) {
+    const k = clamp(Math.round(d), 0, 140)
+    let t = pasteTones.get(k)
+    if (!t) {
+      const f = PASTE[k]
+      t = [f, mixLab(f, LW, 0.55), mixLab(f, INK, 0.24)]
+      pasteTones.set(k, t)
+    }
+    return t
   }
-
-  function depositPaste(u, v, ang, alpha) {
-    if (!pg || alpha <= 0.002) return
-    const dpr = st.dpr
+  // the tracks wander a little as the muller turns
+  const laneOff = (L, t) => L.o + 0.018 * Math.sin(L.ph + t * L.f)
+  // one frame of travel: each lane is one polyline, so the tracks stay
+  // continuous round the curve; everything is stroked once per frame
+  function laneBegin(u, v, ux, uy) {
+    if (!pg) return
+    if (!laneRun.open || Math.abs(u - laneRun.x) > 1e-6 || Math.abs(v - laneRun.y) > 1e-6) {
+      const R = st.R * st.S * st.dpr
+      const cx = X(u) * st.dpr
+      const cy = Y(v) * st.dpr
+      for (let k = 0; k < LANE_N; k++) {
+        const o = laneOff(lanes[k], st.travel) * R
+        laneXY[k * 2] = cx - uy * o
+        laneXY[k * 2 + 1] = cy + ux * o
+      }
+    }
+    laneRun.open = true
+    laneRun.amt = 0
+    laneRun.n = 0
+  }
+  function laneTo(u, v, ux, uy, amount) {
+    const i = laneRun.n * 5
+    if (i + 5 > subs.length) {
+      const grown = new Float32Array(subs.length * 2)
+      grown.set(subs)
+      subs = grown
+    }
+    subs[i] = X(u) * st.dpr
+    subs[i + 1] = Y(v) * st.dpr
+    subs[i + 2] = -uy
+    subs[i + 3] = ux
+    subs[i + 4] = st.travel
+    laneRun.x = u
+    laneRun.y = v
+    laneRun.amt += amount
+    laneRun.n++
+  }
+  function laneEnd(d) {
+    const n = laneRun.n
+    if (!pg || !n) return
+    const R = st.R * st.S * st.dpr
+    const amount = laneRun.amt / n
+    const draw = amount >= 0.01
+    if (draw) for (let b = 0; b < 9; b++) lanePaths[b] = new Path2D()
+    for (let k = 0; k < LANE_N; k++) {
+      const L = lanes[k]
+      const path = draw ? lanePaths[L.b] : null
+      let x = laneXY[k * 2]
+      let y = laneXY[k * 2 + 1]
+      if (path) path.moveTo(x, y)
+      for (let j = 0; j < n; j++) {
+        const i = j * 5
+        const o = laneOff(L, subs[i + 4]) * R
+        x = subs[i] + subs[i + 2] * o
+        y = subs[i + 1] + subs[i + 3] * o
+        if (path) path.lineTo(x, y)
+      }
+      laneXY[k * 2] = x
+      laneXY[k * 2 + 1] = y
+    }
+    if (!draw) return
+    const tone = toneOf(d)
+    const widths = [R * 0.075, Math.max(0.7 * st.dpr, R * 0.014), Math.max(0.9 * st.dpr, R * 0.022)]
     pg.save()
-    pg.globalAlpha = Math.min(1, alpha)
-    pg.translate(X(u) * dpr, Y(v) * dpr)
-    pg.rotate(ang)
-    pg.drawImage(stamp, -stamp.width / 2, -stamp.height / 2)
+    pg.lineCap = 'butt'
+    pg.lineJoin = 'round'
+    for (let b = 0; b < 9; b++) {
+      const kind = (b / 3) | 0
+      pg.globalAlpha = Math.min(1, LANE_A[b] * amount * (0.8 + Math.random() * 0.4))
+      pg.strokeStyle = tone[kind]
+      pg.lineWidth = widths[kind]
+      pg.stroke(lanePaths[b])
+    }
     pg.restore()
   }
 
@@ -750,7 +827,7 @@ export function init(ctx) {
     const Ro2 = (R * 1.12) * (R * 1.12)
     const ux = dx / dist
     const uy = dy / dist
-    const k = K_GRIND * dist
+    const k = st.kGrind * dist
     const lo = 0.012
     const hiX = 1 - lo
     const hiY = st.A - lo
@@ -789,19 +866,20 @@ export function init(ctx) {
       px[i] = x < lo ? lo : x > hiX ? hiX : x
       py[i] = y < lo ? lo : y > hiY ? hiY : y
     }
-    // the paste ring
-    const amount = clamp(fine / (N * 0.03))
-    if (amount > 0) depositPaste(x1, y1, Math.atan2(dy, dx), 0.085 * amount * clamp(dist / (R * 0.12)))
+    // the paste: tracks of wet fines along the path
+    st.travel += dist
+    laneTo(x1, y1, ux, uy, clamp(fine / (N * 0.03)))
   }
 
   function grind(x0, y0, x1, y1) {
     const dist = Math.hypot(x1 - x0, y1 - y0)
     if (dist < 1e-6) return false
-    tintStamp(st.d)
     const steps = Math.max(1, Math.ceil(dist / (st.R * 0.22)))
+    laneBegin(x0, y0, (x1 - x0) / dist, (y1 - y0) / dist)
     for (let k = 1; k <= steps; k++) {
       grindSub(lerp(x0, x1, (k - 1) / steps), lerp(y0, y1, (k - 1) / steps), lerp(x0, x1, k / steps), lerp(y0, y1, k / steps))
     }
+    laneEnd(st.d)
     measure()
     return true
   }
@@ -845,9 +923,39 @@ export function init(ctx) {
     o.t = 0
   }
 
+  /* ---------------------------------------------------------- grip */
+  // touch: a transparent grip rides on the muller with touch-action: none,
+  // so a finger put on the muller holds it and a finger anywhere else on
+  // the slab scrolls the page
+  const GRIP = 1.6 // in muller radii
+  let gripX = NaN
+  let gripY = NaN
+  let gripLive = false
+  function placeGrip() {
+    const live = st.poured && !st.scripted
+    if (live !== gripLive) {
+      gripLive = live
+      root.classList.toggle('is-live', live)
+    }
+    if (!grip) return
+    const x = Math.round(st.M.x * st.S)
+    const y = Math.round(st.M.y * st.S)
+    if (x === gripX && y === gripY) return
+    gripX = x
+    gripY = y
+    grip.style.transform = `translate3d(${x}px,${y}px,0)`
+  }
+  function sizeGrip() {
+    if (!grip) return
+    grip.style.setProperty('--grip', `${Math.round(2 * st.R * st.S * GRIP)}px`)
+    gripX = NaN
+    placeGrip()
+  }
+
   /* ---------------------------------------------------------- render */
   function render() {
     if (!st.built) return
+    placeGrip()
     const { dpr } = st
     g.setTransform(1, 0, 0, 1, 0, 0)
     g.clearRect(0, 0, canvas.width, canvas.height)
@@ -985,7 +1093,7 @@ export function init(ctx) {
     g.clip('evenodd')
     const ca = g.createRadialGradient(cx + r * 0.28, cy + r * 0.36, r * 0.7, cx + r * 0.28, cy + r * 0.36, r * 1.12)
     ca.addColorStop(0, rgba(LW, 0))
-    ca.addColorStop(0.7, rgba(LW, 0.5))
+    ca.addColorStop(0.66, rgba(LW, 0.26))
     ca.addColorStop(1, rgba(LW, 0))
     g.fillStyle = ca
     g.beginPath()
@@ -1317,6 +1425,11 @@ export function init(ctx) {
       ly = cy + rr + 14
       place = 'below'
     }
+    // keep the words on the glass
+    if (place === 'below') {
+      const half = Math.min(lw, st.S - 24) / 2
+      lx = clamp(lx, st.x0 + half + 12, st.x0 + st.S - half - 12)
+    }
     hintLabel.dataset.place = place
     hintLabel.style.left = `${Math.round(lx - st.x0)}px`
     hintLabel.style.top = `${Math.round(ly - st.y0)}px`
@@ -1346,7 +1459,10 @@ export function init(ctx) {
     if (miniNote) miniNote.textContent = MINI[stage]
     if (stage === 'sweet' && !st.sweetDone) {
       st.sweetDone = true
-      dropBlue()
+      if (!floodDish()) dropBlue()
+      root.classList.remove('is-hit')
+      void root.offsetWidth
+      root.classList.add('is-hit')
     }
   }
   function updateReadouts(dt) {
@@ -1380,16 +1496,111 @@ export function init(ctx) {
       vx: clamp(st.V.x * 0.15, -0.3, 0.3),
       vy: clamp(st.V.y * 0.15, -0.3, 0.3),
     })
-    root.classList.remove('is-hit')
-    void root.offsetWidth
-    root.classList.add('is-hit')
+  }
+
+  /* ---------------------------------------------------------- the flood */
+  // The reward for stopping at the deepest blue: it pours out of the paste
+  // under the muller and opens across the whole dish, the lab's type turns
+  // to the field's ink, and after a breath clear water blooms in and washes
+  // the blue out again (Cennini's last step, in the dish).
+  const FLOOD_HOLD = 2.6 // seconds of full field
+  let floodCalls = []
+  let floodOn = false
+  function dishRunning() {
+    const h = document.documentElement
+    return h.classList.contains('dish-on') && !h.classList.contains('no-dish')
+  }
+  function inkOn(on) {
+    if (!wrapEl) return
+    root.classList.add('is-tinting')
+    if (on) wrapEl.dataset.field = 'ultramarine'
+    else delete wrapEl.dataset.field
+    floodCalls.push(gsap.delayedCall(1.1, () => root.classList.remove('is-tinting')))
+  }
+  function endFlood(rinse) {
+    if (!floodOn) return
+    floodOn = false
+    floodCalls.forEach((c) => c.kill())
+    floodCalls = []
+    if (!rinse) return inkOn(false)
+    washOut()
+    // the type goes back to paper ink as the clear water reaches it
+    floodCalls.push(gsap.delayedCall(0.35, () => inkOn(false)))
+  }
+  // drops on a grid that covers the viewport, nearest the origin first
+  function floodGrid(ox, oy) {
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const short = Math.min(vw, vh)
+    const cols = clamp(Math.round(vw / (short * 0.55)), 2, 5)
+    const rows = clamp(Math.round(vh / (short * 0.55)), 2, 5)
+    const pts = []
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const x = (i + 0.5 + (Math.random() - 0.5) * 0.35) / cols
+        const y = (j + 0.5 + (Math.random() - 0.5) * 0.35) / rows
+        pts.push({ x, y, d: Math.hypot((x - ox) * vw, (y - oy) * vh) / short })
+      }
+    }
+    return pts.sort((a, b) => a.d - b.d)
+  }
+  function washOut() {
+    if (!dishRunning() || ctx.palette?.get().field !== 'paper') return
+    const pts = floodGrid(0.5, -0.1) // the water comes in from the top
+    pts.forEach((p, i) => {
+      gsap.delayedCall(0.05 + p.d * 0.32 + i * 0.02, () =>
+        ctx.palette?.drop('water', { x: p.x, y: p.y, amount: 1, radius: 0.5, mode: 'mix' }),
+      )
+    })
+  }
+  function floodDish() {
+    if (reduced || !dishRunning() || !ctx.palette) return false
+    if (ctx.palette.get().field !== 'paper') return false
+    // only when the lab fills the screen: its type is the only type the
+    // flood re-inks (otherwise, e.g. holding the button from further down,
+    // the blue just blooms out of the slab)
+    const sr = root.getBoundingClientRect()
+    if (sr.top > window.innerHeight * 0.2 || sr.bottom < window.innerHeight * 0.8) return false
+    const b = canvas.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const ox = clamp((b.left + X(st.M.x)) / vw)
+    const oy = clamp((b.top + Y(st.M.y)) / vh)
+    endFlood(false)
+    floodOn = true
+    // out of the paste first, carried on by the muller's swing
+    ctx.palette.drop('ultramarine', {
+      x: ox,
+      y: oy,
+      amount: 1.6,
+      radius: 0.2,
+      mode: 'mix',
+      vx: clamp(st.V.x * 0.2, -0.4, 0.4),
+      vy: clamp(st.V.y * 0.2, -0.4, 0.4),
+    })
+    // then it opens out over the dish, a ring at a time
+    floodGrid(ox, oy).forEach((p) => {
+      floodCalls.push(
+        gsap.delayedCall(0.12 + p.d * 0.55, () =>
+          ctx.palette?.drop('ultramarine', { x: p.x, y: p.y, amount: 1.1, radius: 0.44, mode: 'mix' }),
+        ),
+      )
+    })
+    // the type turns as the blue reaches it
+    floodCalls.push(gsap.delayedCall(0.7, () => inkOn(true)))
+    floodCalls.push(gsap.delayedCall(0.7 + FLOOD_HOLD, () => endFlood(true)))
+    return true
   }
 
   /* ---------------------------------------------------------- loop */
   let raf = 0
   let last = 0
+  // grinding goes on while a button or key is held, even with the slab
+  // scrolled out of view (the readouts are still on screen)
+  const holdingNow = () => st.hold || st.keyHold || performance.now() < st.holdUntil
   function wake() {
-    if (raf || !st.built || !st.visible || document.hidden) return
+    if (raf || !st.built || document.hidden) return
+    if (!st.visible && !holdingNow()) return
     last = performance.now()
     raf = requestAnimationFrame(frame)
   }
@@ -1414,7 +1625,7 @@ export function init(ctx) {
     }
 
     // where does the muller want to be?
-    const holding = st.hold || st.keyHold || performance.now() < st.holdUntil
+    const holding = holdingNow()
     if (!st.scripted) {
       if (holding && st.poured) autoTarget(dt)
       if (st.keys.size) {
@@ -1458,7 +1669,7 @@ export function init(ctx) {
     if (updateReadouts(dt)) busy = true
 
     render()
-    if (busy && st.visible && !document.hidden) raf = requestAnimationFrame(frame)
+    if (busy && (st.visible || holding) && !document.hidden) raf = requestAnimationFrame(frame)
   }
 
   function stir(dx, dy, speed) {
@@ -1499,11 +1710,13 @@ export function init(ctx) {
     st.S = sb.width
     st.A = sb.height / sb.width
     st.R = st.S < 620 ? 0.15 : 0.11
+    // the bigger phone muller covers more of the heap per pass: same pace
+    st.kGrind = K_GRIND * Math.pow(0.11 / st.R, 1.3)
     st.scale = Math.pow(st.S / 760, 0.62)
     radiiAll()
     buildSlab()
     buildPaste(st.built && Math.abs(prevA - st.A) < 0.02)
-    buildStampMask()
+    laneRun.open = false
     if (!atlas) buildAtlas()
     if (!N) {
       makeHeap(2011)
@@ -1519,6 +1732,7 @@ export function init(ctx) {
     placeHint()
     buildRuler()
     buildStrokes()
+    sizeGrip()
     st.built = true
     return true
   }
@@ -1578,6 +1792,7 @@ export function init(ctx) {
     if (!st.built || st.resetting) return
     st.resetting = true
     st.interacted = true
+    endFlood(true)
     const wipe = { f: 1 }
     const again = () => {
       pg.clearRect(0, 0, paste.width, paste.height)
@@ -1695,13 +1910,16 @@ export function init(ctx) {
   slabEl.addEventListener('pointerdown', (e) => {
     if (!st.built || !st.poured || st.scripted) return
     if (e.pointerType === 'mouse' && e.button !== 0) return
+    const p = toUnits(e)
+    const dd = Math.hypot(p.x - st.M.x, p.y - st.M.y)
+    const direct = e.pointerType !== 'mouse' // a finger or a pen
+    // a finger off the muller is scrolling the page: leave it alone
+    if (direct && dd > st.R * GRIP) return
     e.preventDefault()
     try {
       slabEl.setPointerCapture(e.pointerId)
     } catch {}
-    const p = toUnits(e)
-    const dd = Math.hypot(p.x - st.M.x, p.y - st.M.y)
-    st.grabOff = dd < st.R * 1.2 ? { x: st.M.x - p.x, y: st.M.y - p.y } : { x: 0, y: 0 }
+    st.grabOff = dd < st.R * (direct ? GRIP : 1.2) ? { x: st.M.x - p.x, y: st.M.y - p.y } : { x: 0, y: 0 }
     st.T.x = p.x + st.grabOff.x
     st.T.y = p.y + st.grabOff.y
     clampMuller(st.T)
@@ -1817,15 +2035,24 @@ export function init(ctx) {
     }
   }
 
+  // the loop runs while any of the lab is on screen (slab or readouts); the
+  // heap is poured once a third of the slab is in view
+  let slabIn = false
+  let labIn = false
   const io = new IntersectionObserver(
     (entries) => {
+      let pourNow = false
       for (const e of entries) {
-        st.visible = e.isIntersecting
-        if (st.visible && ensureBuilt()) {
-          if (!st.poured && !st.pouring && e.intersectionRatio >= 0.3) pour()
-          render()
-          wake()
-        }
+        if (e.target === slabEl) {
+          slabIn = e.isIntersecting
+          if (slabIn && e.intersectionRatio >= 0.3) pourNow = true
+        } else labIn = e.isIntersecting
+      }
+      st.visible = slabIn || labIn
+      if (st.visible && ensureBuilt()) {
+        if (pourNow && !st.poured && !st.pouring) pour()
+        render()
+        wake()
       }
     },
     { threshold: [0, 0.3, 0.6] },
@@ -1841,7 +2068,10 @@ export function init(ctx) {
     { rootMargin: '900px 0px' },
   )
   near.observe(slabEl)
-  ctx.ready.then(() => io.observe(slabEl))
+  ctx.ready.then(() => {
+    io.observe(slabEl)
+    if (labEl) io.observe(labEl)
+  })
 
   let resizeRaf = 0
   const ro = new ResizeObserver(() => {

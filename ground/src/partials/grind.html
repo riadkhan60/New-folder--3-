@@ -3,7 +3,7 @@
     <header class="grid grind__head">
       <h2 id="grind-title" class="t-h2 grind__title">Grind your own <em class="t-italic">ultramarine</em>.</h2>
       <p class="t-lead grind__lead">
-        Lapis lazuli is mostly lazurite, the blue, with white calcite and gold pyrite running through it.
+        Lapis lazuli is a rock: blue lazurite, with white calcite and gold pyrite running through it.
         Take the glass muller and grind the stone in circles.
       </p>
     </header>
@@ -17,9 +17,10 @@
           aria-roledescription="grinding slab"
           aria-label="Glass slab with a heap of crushed lapis lazuli and a glass muller"
           aria-describedby="grind-keys grind-status"
-          data-cursor="drag"
+          data-cursor="hide"
         >
           <canvas class="grind__canvas" aria-hidden="true"></canvas>
+          <span class="grind__grip" aria-hidden="true"></span>
           <svg class="grind__hint" aria-hidden="true" focusable="false">
             <path class="grind__hint-arc" d="" />
             <path class="grind__hint-head" d="" />
@@ -30,8 +31,8 @@
           </p>
           <p class="grind__keys t-caption" id="grind-keys">Arrow keys move the muller. Hold Space to grind in circles.</p>
         </div>
-        <p class="grind__cap t-caption">
-          Crushed lapis lazuli from Sar-e-Sang, Badakhshan, on a ground-glass slab, with a glass muller.
+        <p class="grind__cap t-caption" data-grind-cap>
+          Crushed lapis lazuli from Sar-e-Sang, Badakhshan, Afghanistan, on a ground-glass slab, with a glass muller.
         </p>
       </div>
 

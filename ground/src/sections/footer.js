@@ -1,12 +1,15 @@
 /**
  * footer.js — the last field is bone black.
  *
- * Signature: the wordmark is set in loose pigment. The letters are sampled
- * into thousands of grains; when the footer arrives they fall into the
- * letterforms from left to right and settle. The cursor (or a finger) stirs
- * them aside like breath over powder, and they drift back, slowly, without
- * bounce. The real text stays in the DOM (transparent once the grains are
- * drawn), so the heading is still read, selected and found.
+ * Signature: the wordmark is a sand bottle of the whole page. The letters are
+ * sampled into thousands of grains and filled with the six chapter pigments
+ * in chapter order, oldest at the bottom (CHAPTERS from pigments.js): when
+ * the footer arrives each colour is poured in turn, a curtain of grains that
+ * sweeps across the word and settles in a wavy stratum on the one below, so
+ * the page's story ends as layers of powder. The cursor (or a finger) stirs
+ * the grains aside like breath over powder, and they drift back, slowly,
+ * without bounce. The real text stays in the DOM (transparent once the grains
+ * are drawn), so the heading is still read, selected and found.
  *
  * "Back to paper" drops clear water into the black at the button, then
  * scrolls back to the top.
@@ -14,6 +17,38 @@
 import '../styles/footer.css'
 
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
+const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+const mixRgb = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t))
+const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+const luma = (c) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+const WHITE = [255, 255, 255]
+const BLACK = [0, 0, 0]
+
+// the pour: one stratum after another, each a curtain sweeping left to right
+const BAND_T = 0.42 // seconds between strata
+const SWEEP = 0.5 // seconds for a curtain to cross the word
+const JIT = 0.18
+const FALL = [0.5, 0.35] // fall time: base + random
+const POUR_END = (n) => (n - 1) * BAND_T + SWEEP + JIT + FALL[0] + FALL[1] + 0.05
+// how coarse each powder is: 1 = sparkling crystals, 0 = a fine lake
+const COARSE = { 'yellow-ochre': 0.7, 'bone-black': 0.45, 'egyptian-blue': 0.95, 'tyrian-purple': 0.3, ultramarine: 1, carmine: 0.25 }
+
+/** The grains of one pigment: masstone, a wash between masstone and tint, the
+ *  tint, a few crystals that catch the light and a little dark grit. Dark
+ *  pigments lean on the lighter grains so they still read on bone black. */
+function tonesOf(p) {
+  const hex = rgbOf(p.hex)
+  const tint = rgbOf(p.tint)
+  const dark = luma(hex) < 0.06
+  const tones = [
+    [hex, dark ? 0.3 : 0.5],
+    [mixRgb(hex, tint, 0.45), dark ? 0.34 : 0.24],
+    [tint, dark ? 0.24 : 0.12],
+    [mixRgb(tint, WHITE, 0.45), dark ? 0.07 : 0.06],
+    [mixRgb(hex, BLACK, 0.3), dark ? 0.05 : 0.08],
+  ]
+  return tones.map(([c, w]) => ({ style: `rgb(${c[0]} ${c[1]} ${c[2]})`, w }))
+}
 function rng(seed) {
   let a = seed >>> 0
   return () => {
@@ -81,10 +116,12 @@ export function init(ctx) {
   let visible = false
   let pointer = { x: -9999, y: -9999, vx: 0, vy: 0, t: 0, in: false }
 
-  const INK = getComputedStyle(root).getPropertyValue('--ink').trim() || '#f3f1ee'
-  const SPECKS = ['yellow-ochre', 'egyptian-blue', 'malachite', 'carmine', 'ultramarine', 'red-ochre', 'tyrian-purple']
-    .map((id) => ctx.pigments.BY_ID[id])
-    .filter(Boolean)
+  // the strata, bottom to top: the six chapter colours, oldest first
+  const { BY_ID, CHAPTERS, PAPER } = ctx.pigments
+  const STRATA = (CHAPTERS || []).map((id) => BY_ID[id]).filter(Boolean)
+  if (!STRATA.length) STRATA.push(BY_ID['bone-black'] || PAPER)
+  const TONES = STRATA.map(tonesOf)
+  const B = STRATA.length
 
   function sample() {
     const cr = canvas.getBoundingClientRect()
@@ -130,6 +167,7 @@ export function init(ctx) {
       }
     }
     N = pts.length / 2
+    if (!N) return false
     hx = new Float32Array(N)
     hy = new Float32Array(N)
     px = new Float32Array(N)
@@ -141,42 +179,76 @@ export function init(ctx) {
     du = new Float32Array(N)
     sx0 = new Float32Array(N)
     sy0 = new Float32Array(N)
+
+    // stratum boundaries: equal shares of the grains (so each colour gets
+    // the same weight, though the tall letters reach higher), each boundary
+    // a slow wave with a ripple on it, like sand settling in a bottle
+    const ys = new Float32Array(N)
+    let minY = Infinity
+    for (let i = 0; i < N; i++) {
+      ys[i] = pts[i * 2 + 1]
+      if (ys[i] < minY) minY = ys[i]
+    }
+    ys.sort()
+    const q = [ys[N - 1]]
+    for (let k = 1; k < B; k++) q.push(ys[Math.min(N - 1, Math.floor(N * (1 - k / B)))])
+    q.push(ys[0])
+    const bounds = []
+    for (let k = 1; k < B; k++) {
+      const room = Math.min(q[k - 1] - q[k], q[k] - q[k + 1])
+      bounds.push({
+        y: q[k],
+        a: room * 0.46,
+        w1: (Math.PI * 2) / (cw * (0.24 + rnd() * 0.16)),
+        p1: rnd() * Math.PI * 2,
+        w2: (Math.PI * 2) / (cw * (0.09 + rnd() * 0.05)),
+        p2: rnd() * Math.PI * 2,
+        tilt: (rnd() - 0.5) * room * 0.5,
+      })
+    }
+    const bandAt = (x, y) => {
+      let b = 0
+      for (let k = 0; k < bounds.length; k++) {
+        const o = bounds[k]
+        const by = o.y + o.a * (0.66 * Math.sin(x * o.w1 + o.p1) + 0.34 * Math.sin(x * o.w2 + o.p2)) + o.tilt * (x / cw - 0.5)
+        if (y < by) b = k + 1
+      }
+      return b
+    }
+
     const bk = new Uint8Array(N)
-    const nInk = 4
-    const alphas = [1, 0.8, 0.6, 0.38]
+    const top0 = Math.max(0, minY - ch * 0.05)
+    const coarse = STRATA.map((p) => COARSE[p.id] ?? 0.6)
     for (let i = 0; i < N; i++) {
       const x = pts[i * 2]
       const y = pts[i * 2 + 1]
       hx[i] = px[i] = x
       hy[i] = py[i] = y
-      sz[i] = step * (0.5 + rnd() * 0.65)
-      const r = rnd()
-      bk[i] = r < 0.034 ? nInk + ((rnd() * SPECKS.length) | 0) : r < 0.5 ? 0 : r < 0.76 ? 1 : r < 0.92 ? 2 : 3
-      // pouring: left to right, each grain falls from above and settles
-      dl[i] = (x / cw) * 1.05 + rnd() * 0.45
-      du[i] = 0.9 + rnd() * 0.7
-      sx0[i] = x + (rnd() - 0.5) * 40
-      sy0[i] = Math.max(-y * 0.2, y - (140 + rnd() * 300) * (ch / 600))
+      const band = bandAt(x, y)
+      sz[i] = step * (0.42 + rnd() * 0.55 + coarse[band] * 0.3)
+      // pick a tone within the stratum
+      const tones = TONES[band]
+      let r = rnd()
+      let t = 0
+      while (t < tones.length - 1 && r > tones[t].w) r -= tones[t++].w
+      bk[i] = band * 5 + t
+      // the pour: stratum by stratum, each a curtain sweeping left to right;
+      // every grain falls almost straight down from above the word
+      dl[i] = band * BAND_T + (x / cw) * SWEEP + rnd() * JIT
+      du[i] = FALL[0] + rnd() * FALL[1]
+      sx0[i] = x + (rnd() - 0.5) * 6
+      sy0[i] = top0 - rnd() * ch * 0.08
     }
     // draw order grouped by colour
     order = new Uint32Array(N)
     buckets = []
     let k = 0
-    const nb = nInk + SPECKS.length
-    for (let b = 0; b < nb; b++) {
+    for (let b = 0; b < B * 5; b++) {
       const from = k
       for (let i = 0; i < N; i++) if (bk[i] === b) order[k++] = i
-      const style =
-        b < nInk ? hexA(INK, alphas[b]) : hexA(SPECKS[b - nInk].hex === '#6a1e55' ? SPECKS[b - nInk].tint : SPECKS[b - nInk].hex, 0.95)
-      buckets.push({ style, from, to: k })
+      if (k > from) buckets.push({ style: TONES[(b / 5) | 0][b % 5].style, from, to: k })
     }
     return true
-  }
-
-  function hexA(h, a) {
-    const c = h.replace('#', '')
-    const n = parseInt(c.length === 3 ? c.replace(/./g, '$&$&') : c, 16)
-    return `rgb(${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255} / ${a})`
   }
 
   const eo = (u) => 1 - Math.pow(1 - u, 3)
@@ -192,12 +264,18 @@ export function init(ctx) {
           const i = order[k]
           const u = clamp((t - dl[i]) / du[i])
           if (u <= 0) continue
-          const e = eo(u)
-          const x = sx0[i] + (hx[i] - sx0[i]) * e
-          const y = sy0[i] + (hy[i] - sy0[i]) * (u < 0.62 ? (u / 0.62) ** 2 * 0.92 : 0.92 + 0.08 * eo((u - 0.62) / 0.38))
-          const s = sz[i] * (0.7 + 0.3 * e)
-          g.globalAlpha = clamp(u * 4)
-          g.fillRect(x, y, s, s)
+          const s = sz[i]
+          if (u < 0.86) {
+            // falling, gathering speed: drawn as a short streak
+            const f = u / 0.86
+            const x = sx0[i] + (hx[i] - sx0[i]) * eo(f)
+            const y = sy0[i] + (hy[i] - sy0[i]) * f * f
+            g.globalAlpha = 0.5 + 0.4 * clamp(f * 3)
+            g.fillRect(x, y - s * 2.6 * f, s * 0.8, s * (1 + 2.6 * f))
+          } else {
+            g.globalAlpha = 1
+            g.fillRect(hx[i], hy[i], s, s)
+          }
         }
         g.globalAlpha = 1
       } else {
@@ -212,9 +290,7 @@ export function init(ctx) {
   function step(now) {
     if (!poured) {
       const t = (now - pourStart) / 1000
-      if (t > 1.05 + 0.45 + 1.6 + 0.05) {
-        poured = true
-      }
+      if (t > POUR_END(B)) poured = true
       draw(now)
       return true
     }
