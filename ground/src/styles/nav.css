@@ -171,6 +171,48 @@ html.is-loading .nav {
     color 0.7s var(--ease-out);
 }
 
+/* ------------------------------------------------------ the order count */
+/* A printed counter after a hairline: "Order pigments | 2". The figures
+   roll (nav.js); the visually hidden text names the count for the link. */
+.nav__count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.nav__count::before {
+  content: '';
+  flex: none;
+  width: 1px;
+  height: 1.2em;
+  background: currentColor;
+  opacity: 0.5;
+}
+.nav__count-roll {
+  display: inline-grid;
+  overflow: hidden;
+  padding-block: 0.12em;
+  margin-block: -0.12em;
+}
+.nav__count-n {
+  grid-area: 1 / 1;
+  justify-self: end;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+}
+/* phones: "Order | 2" beside the menu, only while the order has something */
+.nav__order {
+  display: none;
+  justify-self: end;
+  align-items: center;
+  gap: 0.7em;
+  min-height: 44px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
 /* ----------------------------------------------------------- the toggle */
 .nav__toggle {
   display: none;
@@ -345,8 +387,17 @@ html.is-ready .nav .nav__cta {
   .nav__toggle {
     display: inline-flex;
   }
+  .nav.has-order:not(.is-open) .nav__order {
+    display: inline-flex;
+  }
+  .nav__order {
+    grid-column: 2;
+  }
+  .nav__toggle {
+    grid-column: 3;
+  }
   .nav__row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     height: 64px;
   }
   .nav__mark {

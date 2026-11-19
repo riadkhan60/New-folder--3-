@@ -30,14 +30,14 @@
         <div class="mix__res mix__res--paint">
           <p class="mix__res-label t-label">Mixed as paint</p>
           <div class="mix__res-chip mix__res-chip--paint"><canvas aria-hidden="true"></canvas></div>
-          <p class="mix__res-hex t-num" data-out="paint-hex">#567542</p>
-          <p class="mix__res-desc" data-out="paint-desc">A muted green</p>
+          <p class="mix__res-desc" data-out="paint-desc">A green</p>
+          <p class="mix__res-hex t-caption t-num" data-out="paint-hex">#567542</p>
         </div>
         <div class="mix__res mix__res--light">
           <p class="mix__res-label t-label">Averaged like light</p>
           <div class="mix__res-chip mix__res-chip--light" aria-hidden="true"></div>
-          <p class="mix__res-hex t-num" data-out="light-hex">#736666</p>
           <p class="mix__res-desc" data-out="light-desc">A mauve grey</p>
+          <p class="mix__res-hex t-caption t-num" data-out="light-hex">#736666</p>
         </div>
         <p class="mix__verdict" data-out="verdict">Paint makes a green. The screen gives grey.</p>
         <p class="visually-hidden" id="mix-status" role="status" aria-live="polite"></p>
@@ -62,12 +62,13 @@
       <div class="mix__picks">
         <fieldset class="mix__pick" data-slot="a">
           <legend class="mix__legend"><span class="t-label">First pigment</span> <span class="mix__legend-name" data-out="name-a">Ultramarine</span></legend>
-          <div class="mix__pans"></div>
+          <div class="mix__box"><div class="mix__pans"></div></div>
         </fieldset>
         <fieldset class="mix__pick" data-slot="b">
           <legend class="mix__legend"><span class="t-label">Second pigment</span> <span class="mix__legend-name" data-out="name-b">Yellow ochre</span></legend>
-          <div class="mix__pans"></div>
+          <div class="mix__box"><div class="mix__pans"></div></div>
         </fieldset>
+        <p class="mix__picks-note t-caption">Oldest first, as in the library. Colours with corner marks are archive only: they are toxic, so you can mix them here, but we never sell them.</p>
       </div>
     </div>
   </div>

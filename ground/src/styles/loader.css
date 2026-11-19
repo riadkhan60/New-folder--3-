@@ -1,8 +1,9 @@
 /* ==========================================================================
    Loader — one drop of ultramarine falls into clear water.
-   Clean paper; a pipette drawn in fine line; the drop; quiet rings; the
-   wordmark settles like sediment, then lifts into the nav as the paper
-   drains away and the real dish blooms beneath.
+   Clean paper; a pipette with a rubber bulb, drawn in fine line; the drop;
+   rings on the water, the first of which carries the paper away so the real
+   dish blooms through; the wordmark settles like sediment, then lifts into
+   the nav.
    ========================================================================== */
 
 .loader {
@@ -19,6 +20,19 @@
   inset: 0;
   background: var(--paper);
   transition: opacity 1.25s var(--ease-in-out) 0.05s;
+}
+/* On impact the first ring travels out to the edges and takes the paper with
+   it: clear water inside the ring, feathered out to the ring itself.
+   loader.js writes --ox/--oy (the impact), --r (the ring) and --f. */
+.loader.is-opening .loader__paper {
+  --hole: radial-gradient(
+    circle at var(--ox, 50%) var(--oy, 50%),
+    transparent calc(var(--r, 0px) - var(--f, 120px)),
+    rgb(0 0 0 / 0.55) calc(var(--r, 0px) - var(--f, 120px) * 0.35),
+    #000 var(--r, 0px)
+  );
+  -webkit-mask-image: var(--hole);
+  mask-image: var(--hole);
 }
 
 /* Everything that is drawn waits until loader.js has measured the screen. */
@@ -54,12 +68,32 @@
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.loader__glass { stroke-width: 1; stroke-opacity: 0.88; }
+.loader__glass { stroke-width: 1.1; stroke-opacity: 0.9; }
 .loader__wall { stroke-width: 0.75; stroke-opacity: 0.3; }
 .loader__glint { stroke-width: 0.75; stroke-opacity: 0.22; }
 .loader__ticks { stroke-width: 0.75; stroke-opacity: 0.55; }
 .loader__meniscus { stroke-width: 0.75; stroke-opacity: 0.5; }
 .loader__leader { stroke-width: 0.75; stroke-opacity: 0.45; }
+
+/* the rubber teat: paper-white, outlined and hatched like an engraving */
+.loader__rubber {
+  fill: var(--paper);
+  stroke: var(--ink-black);
+  stroke-width: 1.1;
+  stroke-opacity: 0.9;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.loader__hatch,
+.loader__lip {
+  fill: none;
+  stroke: var(--ink-black);
+  stroke-width: 0.75;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.loader__hatch { stroke-opacity: 0.5; }
+.loader__lip { stroke-opacity: 0.55; }
 
 .loader__liquid,
 .loader__bead,
@@ -87,6 +121,9 @@
   stroke-width: 1;
   stroke-opacity: 0;
   vector-effect: non-scaling-stroke;
+}
+.loader__ring--wave {
+  stroke-width: 1.25;
 }
 
 /* ----------------------------------------------------- the specimen label */
@@ -145,7 +182,8 @@ html.is-ready .loader {
   visibility: hidden;
   transition: visibility 0s linear 3.2s;
 }
-html.is-ready .loader__paper {
+/* if the ripple never ran (a failed intro), the paper simply drains */
+html.is-ready .loader:not(.is-opening) .loader__paper {
   opacity: 0;
 }
 html.skip-intro .loader,

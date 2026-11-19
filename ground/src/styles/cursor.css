@@ -1,8 +1,9 @@
 /* ==========================================================================
    Cursor — a drop of water (fine pointers only; cursor.js decides).
    A lens ring that trails and stretches, a dot exactly on the pointer. Ink
-   from [data-tone]. Sits above the loader so it is there from the first
-   frame of the intro.
+   from [data-tone] — the field's, or the surface's under the pointer
+   (cursor.js). Sits above the loader so it is there from the first frame of
+   the intro.
    ========================================================================== */
 
 /* The native cursor steps aside while the drop runs, except where the
@@ -66,7 +67,8 @@ html.has-cursor
   background-color: transparent;
   box-shadow:
     inset -2px -3px 6px -3px color-mix(in srgb, currentColor 30%, transparent),
-    inset 2px 3px 5px -3px rgb(255 255 255 / 0.6);
+    inset 2px 3px 5px -3px rgb(255 255 255 / 0.6),
+    0 0 0 1px color-mix(in srgb, var(--field) 22%, transparent);
   -webkit-backdrop-filter: saturate(1.6) contrast(1.06);
   backdrop-filter: saturate(1.6) contrast(1.06);
   will-change: transform;
@@ -88,6 +90,9 @@ html.has-cursor
   margin: -2.5px 0 0 -2.5px;
   border-radius: 50%;
   background: currentColor;
+  /* a hairline of the field's own colour: the dot stays visible on paint
+     the tone can't see (canvas drawdowns, the dish's streaks) */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--field) 70%, transparent);
   will-change: transform;
   transition: scale 0.45s var(--ease-out), opacity 0.3s var(--ease-out);
 }

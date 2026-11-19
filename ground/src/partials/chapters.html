@@ -1,10 +1,9 @@
 <div id="chapters" class="chapters">
-  <nav class="chapters__ribbon" aria-label="The six colours in time">
+  <nav class="chapters__ribbon" aria-label="The six colours in time" data-cursor="hide">
     <div class="ribbon__scale" aria-hidden="true">
       <span class="ribbon__line"></span>
       <span class="ribbon__fill"></span>
-      <span class="ribbon__span" style="--from:0.1403"></span>
-      <span class="ribbon__tick" style="--x:0.2835"></span><span class="ribbon__tick" style="--x:0.5641"></span><span class="ribbon__tick" style="--x:0.8192"></span>
+      <span class="ribbon__tick" style="--x:0.2839"></span><span class="ribbon__tick" style="--x:0.5677"></span><span class="ribbon__tick" style="--x:0.8516"></span>
       <span class="ribbon__end ribbon__end--from">100,000 years ago</span>
       <span class="ribbon__end ribbon__end--to">Today</span>
       <span class="ribbon__marker"></span>
@@ -16,34 +15,34 @@
           <span class="ribbon__label"><span class="ribbon__name t-italic">Yellow ochre</span> <span class="ribbon__when t-num">100,000 years ago</span></span>
         </a>
       </li>
-      <li class="ribbon__stop" data-stop="egyptian-blue" style="--x:0.3781;--swatch:#1f6aa8">
+      <li class="ribbon__stop" data-stop="bone-black" style="--x:0.1484;--swatch:#1c1a19">
+        <a class="ribbon__link" href="#bone-black">
+          <span class="ribbon__dot" aria-hidden="true"></span>
+          <span class="ribbon__label"><span class="ribbon__name t-italic">Bone black</span> <span class="ribbon__when t-num">30,000 years ago</span></span>
+        </a>
+      </li>
+      <li class="ribbon__stop" data-stop="egyptian-blue" style="--x:0.3656;--swatch:#1f6aa8">
         <a class="ribbon__link" href="#egyptian-blue">
           <span class="ribbon__dot" aria-hidden="true"></span>
           <span class="ribbon__label"><span class="ribbon__name t-italic">Egyptian blue</span> <span class="ribbon__when t-num">4,500 years ago</span></span>
         </a>
       </li>
-      <li class="ribbon__stop" data-stop="tyrian-purple" style="--x:0.4113;--swatch:#6a1e55">
+      <li class="ribbon__stop" data-stop="tyrian-purple" style="--x:0.4256;--swatch:#6a1e55">
         <a class="ribbon__link" href="#tyrian-purple">
           <span class="ribbon__dot" aria-hidden="true"></span>
           <span class="ribbon__label"><span class="ribbon__name t-italic">Tyrian purple</span> <span class="ribbon__when t-num">3,500 years ago</span></span>
         </a>
       </li>
-      <li class="ribbon__stop" data-stop="ultramarine" style="--x:0.5214;--swatch:#1e3a9e">
+      <li class="ribbon__stop" data-stop="ultramarine" style="--x:0.5240;--swatch:#1e3a9e">
         <a class="ribbon__link" href="#ultramarine">
           <span class="ribbon__dot" aria-hidden="true"></span>
           <span class="ribbon__label"><span class="ribbon__name t-italic">Ultramarine</span> <span class="ribbon__when t-num">1,500 years ago</span></span>
         </a>
       </li>
-      <li class="ribbon__stop" data-stop="carmine" style="--x:0.6446;--swatch:#a3123a">
+      <li class="ribbon__stop" data-stop="carmine" style="--x:0.6517;--swatch:#a3123a">
         <a class="ribbon__link" href="#carmine">
           <span class="ribbon__dot" aria-hidden="true"></span>
           <span class="ribbon__label"><span class="ribbon__name t-italic">Carmine</span> <span class="ribbon__when t-num">500 years ago</span></span>
-        </a>
-      </li>
-      <li class="ribbon__stop" data-stop="bone-black" style="--x:1.0000;--swatch:#1c1a19">
-        <a class="ribbon__link" href="#bone-black">
-          <span class="ribbon__dot" aria-hidden="true"></span>
-          <span class="ribbon__label"><span class="ribbon__name t-italic">Bone black</span> <span class="ribbon__when t-num">Today</span></span>
         </a>
       </li>
     </ol>
@@ -53,9 +52,13 @@
     <div class="chapter__inner wrap">
       <div class="chapter__stage">
         <h2 class="chapter__name t-italic" id="yellow-ochre-name"><span class="chapter__word chapter__word--1">Yellow</span> <span class="chapter__word chapter__word--2">ochre</span></h2>
-        <p class="chapter__era"><span class="chapter__years">100,000</span> <span class="chapter__ago">years ago</span></p>
-        <p class="chapter__fact t-lead" data-k="fact">The oldest colour people used. A paint workshop about 100,000 years old, with ochre ground in abalone shells, was found in Blombos Cave, South Africa.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">100,000</span> <span class="chapter__ago" data-k="ago-text">years ago</span></p>
+        <p class="chapter__fact t-lead" data-k="fact">The oldest colour people used. A paint workshop about 100,000 years old, with ochre mixed and stored in abalone shells, was found in Blombos Cave, South Africa.</p>
+        <div class="chapter__proof">
+          <button class="chapter__try" type="button" data-try="heat"><span class="chapter__try-ring" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><circle class="chapter__try-track" cx="20" cy="20" r="17"></circle><circle class="chapter__try-fill" cx="20" cy="20" r="17" pathLength="1"></circle></svg></span><span class="chapter__try-label">Hold to heat it</span></button>
+          <p class="chapter__note t-body" data-note aria-live="polite"></p>
+        </div>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas></div>
       </div>
       <div class="chapter__specimen">
         <figure class="chapter__drawdown" data-pull="ltr">
@@ -79,160 +82,7 @@
           <div class="chapter__buy">
             <p class="chapter__price"><span class="chapter__amount" data-k="price">£14</span> <span class="chapter__unit">per <span data-k="unit">50 g</span> jar</span></p>
             <button class="btn chapter__add" type="button" data-order="yellow-ochre">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Yellow ochre, 50 g jar</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="egyptian-blue" class="chapter chapter--r" data-field="egyptian-blue" aria-labelledby="egyptian-blue-name">
-    <div class="chapter__inner wrap">
-      <div class="chapter__stage">
-        <h2 class="chapter__name t-italic" id="egyptian-blue-name"><span class="chapter__word chapter__word--1">Egyptian</span> <span class="chapter__word chapter__word--2">blue</span></h2>
-        <p class="chapter__era"><span class="chapter__years">4,500</span> <span class="chapter__ago">years ago</span></p>
-        <p class="chapter__fact t-lead" data-k="fact">The first colour anyone made rather than found. Under infrared light it glows, which is how conservators find its traces on ancient statues.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
-      </div>
-      <div class="chapter__specimen">
-        <figure class="chapter__drawdown" data-pull="rtl">
-          <div class="chapter__card">
-            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
-            <span class="chapter__card-name t-italic" aria-hidden="true">Egyptian blue</span>
-            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
-            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
-            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
-          </div>
-          <figcaption class="visually-hidden">Egyptian blue mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
-        </figure>
-        <div class="chapter__data">
-          <dl class="chapter__spec">
-            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Sand, copper and lime, fired together</dd></div>
-            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Egypt</dd></div>
-            <div class="chapter__row"><dt>History</dt><dd data-k="era">More than 4,500 years ago</dd></div>
-            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Calcium copper silicate</dd></div>
-            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">CaCuSi<sub>4</sub>O<sub>10</sub></dd></div>
-          </dl>
-          <div class="chapter__buy">
-            <p class="chapter__price"><span class="chapter__amount" data-k="price">£38</span> <span class="chapter__unit">per <span data-k="unit">20 g</span> jar</span></p>
-            <button class="btn chapter__add" type="button" data-order="egyptian-blue">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Egyptian blue, 20 g jar</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="tyrian-purple" class="chapter chapter--l" data-field="tyrian-purple" aria-labelledby="tyrian-purple-name">
-    <div class="chapter__inner wrap">
-      <div class="chapter__stage">
-        <h2 class="chapter__name t-italic" id="tyrian-purple-name"><span class="chapter__word chapter__word--1">Tyrian</span> <span class="chapter__word chapter__word--2">purple</span></h2>
-        <p class="chapter__era"><span class="chapter__years">3,500</span> <span class="chapter__ago">years ago</span></p>
-        <p class="chapter__fact t-lead" data-k="fact">Thousands of snails give a single gram. In late imperial Rome, the law reserved the finest purple for the emperor.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
-      </div>
-      <div class="chapter__specimen">
-        <figure class="chapter__drawdown" data-pull="ltr">
-          <div class="chapter__card">
-            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
-            <span class="chapter__card-name t-italic" aria-hidden="true">Tyrian purple</span>
-            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
-            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
-            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
-          </div>
-          <figcaption class="visually-hidden">Tyrian purple mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
-        </figure>
-        <div class="chapter__data">
-          <dl class="chapter__spec">
-            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Glands of murex sea snails</dd></div>
-            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Tyre, on the coast of Lebanon</dd></div>
-            <div class="chapter__row"><dt>History</dt><dd data-k="era">Phoenician, from about 1500 BCE</dd></div>
-            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">6,6′-dibromoindigo</dd></div>
-            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">C<sub>16</sub>H<sub>8</sub>Br<sub>2</sub>N<sub>2</sub>O<sub>2</sub></dd></div>
-          </dl>
-          <div class="chapter__buy">
-            <p class="chapter__rare t-italic" data-k="rare">Two grams a year</p>
-            <p class="chapter__price"><span class="chapter__amount" data-k="price">£2,600</span> <span class="chapter__unit">per <span data-k="unit">1 g</span> jar</span></p>
-            <button class="btn chapter__add" type="button" data-order="tyrian-purple">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Tyrian purple, 1 g jar</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="ultramarine" class="chapter chapter--r" data-field="ultramarine" aria-labelledby="ultramarine-name">
-    <div class="chapter__inner wrap">
-      <div class="chapter__stage">
-        <h2 class="chapter__name t-italic" id="ultramarine-name"><span class="chapter__word chapter__word--1">Ultramarine</span></h2>
-        <p class="chapter__era"><span class="chapter__years">1,500</span> <span class="chapter__ago">years ago</span></p>
-        <p class="chapter__fact t-lead" data-k="fact">Its name means “beyond the sea”. In Renaissance Italy the best grade could cost more than gold, so contracts stated how much of it a painter had to use.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
-      </div>
-      <div class="chapter__specimen">
-        <figure class="chapter__drawdown" data-pull="rtl">
-          <div class="chapter__card">
-            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
-            <span class="chapter__card-name t-italic" aria-hidden="true">Ultramarine</span>
-            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
-            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
-            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
-          </div>
-          <figcaption class="visually-hidden">Ultramarine mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
-        </figure>
-        <div class="chapter__data">
-          <dl class="chapter__spec">
-            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Lapis lazuli</dd></div>
-            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Sar-e-Sang, Badakhshan, Afghanistan</dd></div>
-            <div class="chapter__row"><dt>History</dt><dd data-k="era">Afghan cave paintings, 6th century; Renaissance Italy</dd></div>
-            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Lazurite, a sodium aluminium silicate holding sulfur</dd></div>
-            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">(Na,Ca)<sub>8</sub>(AlSiO<sub>4</sub>)<sub>6</sub>(S,SO<sub>4</sub>,Cl)<sub>2</sub></dd></div>
-          </dl>
-          <div class="chapter__buy">
-            <p class="chapter__price"><span class="chapter__amount" data-k="price">£180</span> <span class="chapter__unit">per <span data-k="unit">5 g</span> jar</span></p>
-            <button class="btn chapter__add" type="button" data-order="ultramarine">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Ultramarine, 5 g jar</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section id="carmine" class="chapter chapter--l" data-field="carmine" aria-labelledby="carmine-name">
-    <div class="chapter__inner wrap">
-      <div class="chapter__stage">
-        <h2 class="chapter__name t-italic" id="carmine-name"><span class="chapter__word chapter__word--1">Carmine</span></h2>
-        <p class="chapter__era"><span class="chapter__years">500</span> <span class="chapter__ago">years ago</span></p>
-        <p class="chapter__fact t-lead" data-k="fact">About 70,000 dried insects make a pound of dye. Under Spanish rule it became one of Mexico’s most valuable exports, second only to silver.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
-      </div>
-      <div class="chapter__specimen">
-        <figure class="chapter__drawdown" data-pull="ltr">
-          <div class="chapter__card">
-            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
-            <span class="chapter__card-name t-italic" aria-hidden="true">Carmine</span>
-            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
-            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
-            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
-          </div>
-          <figcaption class="visually-hidden">Carmine mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
-        </figure>
-        <div class="chapter__data">
-          <dl class="chapter__spec">
-            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Cochineal insects from prickly pear cactus</dd></div>
-            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Oaxaca, Mexico</dd></div>
-            <div class="chapter__row"><dt>History</dt><dd data-k="era">Aztec and Maya; in Europe from the 16th century</dd></div>
-            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Carminic acid</dd></div>
-            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">C<sub>22</sub>H<sub>20</sub>O<sub>13</sub></dd></div>
-          </dl>
-          <div class="chapter__buy">
-            <p class="chapter__price"><span class="chapter__amount" data-k="price">£34</span> <span class="chapter__unit">per <span data-k="unit">10 g</span> jar</span></p>
-            <button class="btn chapter__add" type="button" data-order="carmine">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Carmine, 10 g jar</span>
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Yellow ochre, 50 g jar</span>
             </button>
           </div>
         </div>
@@ -244,9 +94,9 @@
     <div class="chapter__inner wrap">
       <div class="chapter__stage">
         <h2 class="chapter__name t-italic" id="bone-black-name"><span class="chapter__word chapter__word--1">Bone</span> <span class="chapter__word chapter__word--2">black</span></h2>
-        <p class="chapter__era"><span class="chapter__years">Today</span></p>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">30,000</span> <span class="chapter__ago" data-k="ago-text">years ago, and still made today</span></p>
         <p class="chapter__fact t-lead" data-k="fact">Burn bone without air and what is left is a warm, deep black. The finest version, ivory black, is no longer made.</p>
-        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas></div>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas></div>
       </div>
       <div class="chapter__specimen">
         <figure class="chapter__drawdown" data-pull="rtl">
@@ -270,7 +120,168 @@
           <div class="chapter__buy">
             <p class="chapter__price"><span class="chapter__amount" data-k="price">£12</span> <span class="chapter__unit">per <span data-k="unit">50 g</span> jar</span></p>
             <button class="btn chapter__add" type="button" data-order="bone-black">
-              <span class="chapter__add-label">Add to order</span><span class="visually-hidden">: Bone black, 50 g jar</span>
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Bone black, 50 g jar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="egyptian-blue" class="chapter chapter--l" data-field="egyptian-blue" aria-labelledby="egyptian-blue-name">
+    <div class="chapter__ir" aria-hidden="true"></div>
+    <div class="chapter__inner wrap">
+      <div class="chapter__stage">
+        <h2 class="chapter__name t-italic" id="egyptian-blue-name"><span class="chapter__word chapter__word--1">Egyptian</span> <span class="chapter__word chapter__word--2">blue</span></h2>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">4,500</span> <span class="chapter__ago" data-k="ago-text">years ago</span></p>
+        <p class="chapter__fact t-lead" data-k="fact">The first colour anyone made rather than found. Lit by ordinary light, it gives off infrared that a camera can see, which is how conservators find its traces on ancient statues.</p>
+        <div class="chapter__proof">
+          <button class="chapter__try" type="button" data-try="infrared" aria-pressed="false"><span class="chapter__try-ring" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><circle class="chapter__try-track" cx="20" cy="20" r="17"></circle><circle class="chapter__try-fill" cx="20" cy="20" r="17" pathLength="1"></circle></svg></span><span class="chapter__try-label">See it in infrared</span></button>
+          <p class="chapter__note t-body" data-note aria-live="polite"></p>
+        </div>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas></div>
+      </div>
+      <div class="chapter__specimen">
+        <figure class="chapter__drawdown" data-pull="ltr">
+          <div class="chapter__card">
+            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
+            <span class="chapter__card-name t-italic" aria-hidden="true">Egyptian blue</span>
+            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
+            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
+            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
+          </div>
+          <figcaption class="visually-hidden">Egyptian blue mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
+        </figure>
+        <div class="chapter__data">
+          <dl class="chapter__spec">
+            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Sand, copper and lime, fired together</dd></div>
+            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Egypt</dd></div>
+            <div class="chapter__row"><dt>History</dt><dd data-k="era">More than 4,500 years ago</dd></div>
+            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Calcium copper silicate</dd></div>
+            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">CaCuSi<sub>4</sub>O<sub>10</sub></dd></div>
+          </dl>
+          <div class="chapter__buy">
+            <p class="chapter__price"><span class="chapter__amount" data-k="price">£38</span> <span class="chapter__unit">per <span data-k="unit">20 g</span> jar</span></p>
+            <button class="btn chapter__add" type="button" data-order="egyptian-blue">
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Egyptian blue, 20 g jar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tyrian-purple" class="chapter chapter--r" data-field="tyrian-purple" aria-labelledby="tyrian-purple-name">
+    <div class="chapter__inner wrap">
+      <div class="chapter__stage">
+        <h2 class="chapter__name t-italic" id="tyrian-purple-name"><span class="chapter__word chapter__word--1">Tyrian</span> <span class="chapter__word chapter__word--2">purple</span></h2>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">3,500</span> <span class="chapter__ago" data-k="ago-text">years ago</span></p>
+        <p class="chapter__fact t-lead" data-k="fact">Thousands of snails give a single gram. In late imperial Rome, the law reserved the finest purple for the emperor.</p>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__tally"></canvas><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas><p class="chapter__gram" aria-hidden="true"><span class="chapter__gram-rule"></span><span class="chapter__gram-n" data-k="unit">1 g</span></p></div>
+      </div>
+      <div class="chapter__specimen">
+        <figure class="chapter__drawdown" data-pull="rtl">
+          <div class="chapter__card">
+            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
+            <span class="chapter__card-name t-italic" aria-hidden="true">Tyrian purple</span>
+            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
+            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
+            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
+          </div>
+          <figcaption class="visually-hidden">Tyrian purple mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
+        </figure>
+        <div class="chapter__data">
+          <dl class="chapter__spec">
+            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Glands of murex sea snails</dd></div>
+            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Tyre, on the coast of Lebanon</dd></div>
+            <div class="chapter__row"><dt>History</dt><dd data-k="era">Phoenician, from about 1500 BCE</dd></div>
+            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">6,6′-dibromoindigo</dd></div>
+            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">C<sub>16</sub>H<sub>8</sub>Br<sub>2</sub>N<sub>2</sub>O<sub>2</sub></dd></div>
+          </dl>
+          <div class="chapter__buy">
+            <p class="chapter__rare t-italic" data-k="rare">Two grams a year</p>
+            <p class="chapter__price"><span class="chapter__amount" data-k="price">£2,600</span> <span class="chapter__unit">per <span data-k="unit">1 g</span> jar</span></p>
+            <button class="btn chapter__add" type="button" data-order="tyrian-purple">
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Tyrian purple, 1 g jar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ultramarine" class="chapter chapter--l" data-field="ultramarine" aria-labelledby="ultramarine-name">
+    <div class="chapter__inner wrap">
+      <div class="chapter__stage">
+        <h2 class="chapter__name t-italic" id="ultramarine-name"><span class="chapter__word chapter__word--1">Ultramarine</span></h2>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">1,500</span> <span class="chapter__ago" data-k="ago-text">years ago</span></p>
+        <p class="chapter__fact t-lead" data-k="fact">Its name means “beyond the sea”. In Renaissance Italy the best grade could cost more than gold, so contracts stated how much of it a painter had to use.</p>
+        <div class="chapter__proof">
+          <a class="chapter__try" href="#grind"><span class="chapter__try-ring" aria-hidden="true"><svg viewBox="0 0 40 40" focusable="false"><circle class="chapter__try-track" cx="20" cy="20" r="17"></circle><circle class="chapter__try-fill" cx="20" cy="20" r="17" pathLength="1"></circle></svg></span><span class="chapter__try-label">Grind it yourself</span></a>
+        </div>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas></div>
+      </div>
+      <div class="chapter__specimen">
+        <figure class="chapter__drawdown" data-pull="ltr">
+          <div class="chapter__card">
+            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
+            <span class="chapter__card-name t-italic" aria-hidden="true">Ultramarine</span>
+            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
+            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
+            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
+          </div>
+          <figcaption class="visually-hidden">Ultramarine mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
+        </figure>
+        <div class="chapter__data">
+          <dl class="chapter__spec">
+            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Lapis lazuli</dd></div>
+            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Sar-e-Sang, Badakhshan, Afghanistan</dd></div>
+            <div class="chapter__row"><dt>History</dt><dd data-k="era">Afghan cave paintings, 6th century; Renaissance Italy</dd></div>
+            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Lazurite, a sodium aluminium silicate holding sulfur</dd></div>
+            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">(Na,Ca)<sub>8</sub>(AlSiO<sub>4</sub>)<sub>6</sub>(S,SO<sub>4</sub>,Cl)<sub>2</sub></dd></div>
+          </dl>
+          <div class="chapter__buy">
+            <p class="chapter__price"><span class="chapter__amount" data-k="price">£180</span> <span class="chapter__unit">per <span data-k="unit">5 g</span> jar</span></p>
+            <button class="btn chapter__add" type="button" data-order="ultramarine">
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Ultramarine, 5 g jar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="carmine" class="chapter chapter--r" data-field="carmine" aria-labelledby="carmine-name">
+    <div class="chapter__inner wrap">
+      <div class="chapter__stage">
+        <h2 class="chapter__name t-italic" id="carmine-name"><span class="chapter__word chapter__word--1">Carmine</span></h2>
+        <p class="chapter__era"><span class="chapter__years" data-k="ago">500</span> <span class="chapter__ago" data-k="ago-text">years ago</span></p>
+        <p class="chapter__fact t-lead" data-k="fact">About 70,000 dried insects make a pound of dye. Under Spanish rule it became one of Mexico’s most valuable exports, second only to silver.</p>
+        <div class="chapter__heap" aria-hidden="true"><canvas class="chapter__heap-canvas"></canvas><canvas class="chapter__stream"></canvas><p class="chapter__count" aria-hidden="true"><span class="chapter__count-n t-num">0</span> <span class="chapter__count-what">dried insects</span></p></div>
+      </div>
+      <div class="chapter__specimen">
+        <figure class="chapter__drawdown" data-pull="rtl">
+          <div class="chapter__card">
+            <canvas class="chapter__card-canvas" aria-hidden="true"></canvas>
+            <span class="chapter__card-name t-italic" aria-hidden="true">Carmine</span>
+            <span class="chapter__card-medium" aria-hidden="true">In gum arabic</span>
+            <span class="chapter__card-end chapter__card-end--thick">Masstone</span>
+            <span class="chapter__card-end chapter__card-end--thin">Tint</span>
+          </div>
+          <figcaption class="visually-hidden">Carmine mulled into gum arabic and drawn down on paper with a palette knife, from full masstone to a thin tint.</figcaption>
+        </figure>
+        <div class="chapter__data">
+          <dl class="chapter__spec">
+            <div class="chapter__row"><dt>Material</dt><dd data-k="material">Cochineal insects from prickly pear cactus</dd></div>
+            <div class="chapter__row"><dt>Origin</dt><dd data-k="origin">Oaxaca, Mexico</dd></div>
+            <div class="chapter__row"><dt>History</dt><dd data-k="era">Mixtec and Aztec Mexico; in Europe from the 16th century</dd></div>
+            <div class="chapter__row"><dt>Chemistry</dt><dd data-k="chemistry">Carminic acid</dd></div>
+            <div class="chapter__row chapter__row--formula"><dt>Formula</dt><dd class="t-formula" data-k="formula">C<sub>22</sub>H<sub>20</sub>O<sub>13</sub></dd></div>
+          </dl>
+          <div class="chapter__buy">
+            <p class="chapter__price"><span class="chapter__amount" data-k="price">£34</span> <span class="chapter__unit">per <span data-k="unit">10 g</span> jar</span></p>
+            <button class="btn chapter__add" type="button" data-order="carmine">
+              <span class="chapter__add-label">Add to order</span><span class="visually-hidden" data-k="add-label">: Carmine, 10 g jar</span>
             </button>
           </div>
         </div>

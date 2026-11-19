@@ -5,13 +5,19 @@
   <svg class="loader__svg" focusable="false">
     <defs>
       <clipPath id="loader-below-tip"><rect class="loader__tipclip" x="0" y="0" width="0" height="0" /></clipPath>
+      <!-- the stain on impact: ink feathering into wet paper -->
+      <filter id="loader-ink" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="16" xChannelSelector="R" yChannelSelector="G" result="d" />
+        <feGaussianBlur in="d" stdDeviation="1.4" />
+      </filter>
     </defs>
     <g class="loader__rings" fill="none">
-      <circle class="loader__ring" r="0" />
+      <circle class="loader__ring loader__ring--wave" r="0" />
       <circle class="loader__ring" r="0" />
       <circle class="loader__ring" r="0" />
     </g>
-    <circle class="loader__stain" r="0" />
+    <circle class="loader__stain" r="0" filter="url(#loader-ink)" />
     <g class="loader__pipette">
       <path class="loader__liquid" />
       <path class="loader__shine" />
@@ -22,6 +28,14 @@
       <path class="loader__glass" />
       <path class="loader__glint" />
       <path class="loader__ticks" />
+      <g class="loader__teat">
+        <g class="loader__bulb">
+          <path class="loader__rubber loader__bulb-shape" />
+          <path class="loader__hatch" />
+        </g>
+        <path class="loader__rubber loader__skirt" />
+        <path class="loader__lip" />
+      </g>
       <g clip-path="url(#loader-below-tip)">
         <path class="loader__bead" />
         <ellipse class="loader__bead-glint" rx="0" ry="0" />

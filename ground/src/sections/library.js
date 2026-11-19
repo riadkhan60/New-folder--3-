@@ -276,6 +276,45 @@ export function makeReveal(canvas, src, seed, split = 0.7) {
   }
 }
 
+/* ================================================================ chart data */
+
+const esc = (s) =>
+  String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const NUM_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const numWord = (n) => NUM_WORDS[n] ?? String(n)
+/** Natural "from …" phrasing for the filter announcement and the plate. */
+const FROM = {
+  earth: 'the earth',
+  kiln: 'a kiln',
+  shell: 'a sea snail',
+  stone: 'stone',
+  metal: 'metal',
+  insect: 'an insect',
+  plant: 'a plant',
+  bone: 'bone',
+}
+
+/** Every pigment, oldest first: the order of the chart (and of the mix lab's paintbox). */
+export const byAge = (PIGMENTS) => [...PIGMENTS].sort((a, b) => a.year - b.year)
+
+/** One chip of the chart. The partial holds the same markup as a no-JS fallback. */
+function chipMarkup(p, SOURCES, formatPrice) {
+  const tail = p.sold
+    ? `<p class="lib-chip__price t-num">${esc(`${formatPrice(p.price)} for ${p.unit}`)}</p>`
+    : '<p class="lib-chip__flag">Archive only: toxic</p>'
+  return (
+    `<li class="lib-chip${p.sold ? '' : ' is-archive'}" data-id="${esc(p.id)}" data-source="${esc(p.source)}" style="--pig:${esc(p.hex)};--pig-tint:${esc(p.tint)}">` +
+    `<p class="lib-chip__source t-caption">${esc(SOURCES[p.source] ?? p.source)}</p>` +
+    '<div class="lib-chip__swatch"><canvas class="lib-chip__canvas" aria-hidden="true"></canvas></div>' +
+    `<h3 class="lib-chip__name"><button type="button" class="lib-chip__btn" aria-haspopup="dialog" aria-describedby="lib-d-${esc(p.id)}"><span class="lib-chip__name-text">${esc(p.name)}</span></button></h3>` +
+    `<div class="lib-chip__meta" id="lib-d-${esc(p.id)}">` +
+    `<p class="lib-chip__origin">${esc(p.origin)}</p>` +
+    `<p class="lib-chip__era">${esc(p.era)}</p>` +
+    tail +
+    '</div></li>'
+  )
+}
+
 /* ================================================================ section */
 
 export function init(ctx) {
@@ -283,13 +322,37 @@ export function init(ctx) {
   if (!root) return
   const { gsap, ScrollTrigger, SplitText, pigments } = ctx
   const RM = ctx.reducedMotion
-  const { BY_ID, SOURCES, formatPrice } = pigments
+  const { PIGMENTS, BY_ID, SOURCES, formatPrice } = pigments
   const dpr = () => Math.min(ctx.dpr || 1, 2)
 
   const plate = root.querySelector('.library__plate')
   const list = root.querySelector('.library__chips')
   const status = root.querySelector('#library-status')
   const filters = [...root.querySelectorAll('.lib-filter')]
+
+  // pigments.js is the single source of truth: the chart is rebuilt from it
+  // (oldest first, by `year`), so a corrected fact or date reaches the page
+  // without touching the partial.
+  const chart = byAge(PIGMENTS)
+  if (list && chart.length) list.innerHTML = chart.map((p) => chipMarkup(p, SOURCES, formatPrice)).join('')
+  const sold = PIGMENTS.filter((p) => p.sold).length
+  const tally = { all: PIGMENTS.length, sold, archive: PIGMENTS.length - sold }
+  root.querySelectorAll('[data-count]').forEach((el) => {
+    const w = numWord(tally[el.dataset.count] ?? 0)
+    el.textContent = el.hasAttribute('data-cap') ? w[0].toUpperCase() + w.slice(1) : w
+  })
+  const counts = {}
+  for (const p of PIGMENTS) counts[p.source] = (counts[p.source] || 0) + 1
+  filters.forEach((b) => {
+    const src = b.dataset.source
+    if (src === 'all') {
+      b.firstChild.textContent = `All ${numWord(PIGMENTS.length)}`
+      return
+    }
+    const n = b.querySelector('.lib-filter__n')
+    if (n) n.textContent = String(counts[src] || 0)
+    b.hidden = !counts[src]
+  })
 
   const items = [...root.querySelectorAll('.lib-chip')]
     .map((li, i) => {
@@ -373,6 +436,45 @@ export function init(ctx) {
   })
   ro.observe(list)
 
+  /* ---------------------------------------------------------- arrival */
+  // The field hands over from the last chapter while this section's top is
+  // still low in the viewport, so the heading waits for the paper: once the
+  // dish has turned to paper, the title soaks in, letter by letter, like ink.
+  const head = root.querySelector('.library__head')
+  const title = root.querySelector('.library__title')
+  if (!RM && head && title && ctx.palette?.onChange) {
+    root.classList.add('is-held')
+    let done = false
+    let off = null
+    const release = (animate) => {
+      done = true
+      off?.()
+      root.classList.remove('is-held')
+      if (!animate) return
+      try {
+        const st = SplitText.create(title, { type: 'chars,words' })
+        gsap.from(st.chars, {
+          opacity: 0,
+          filter: 'blur(10px)',
+          duration: 1.4,
+          ease: 'settle',
+          stagger: 0.05,
+          onComplete: () => st.revert(),
+        })
+      } catch {
+        /* the title simply shows */
+      }
+    }
+    const check = (s) => {
+      if (done || s.field !== root.dataset.field) return
+      const t = title.getBoundingClientRect()
+      if (t.bottom < 0) release(false)
+      else if (t.top < window.innerHeight * 0.92) release(true)
+    }
+    off = ctx.palette.onChange(check)
+    if (done) off()
+  }
+
   /* ---------------------------------------------------------- entrance */
   // The printer rules the plate; then each colour is brushed on, oldest first.
   if (!RM) {
@@ -446,8 +548,8 @@ export function init(ctx) {
     if (status) {
       status.textContent =
         src === 'all'
-          ? 'Showing all twelve colours.'
-          : `Showing ${on.length === 1 ? 'one colour' : on.length + ' colours'} from ${SOURCES[src].toLowerCase()}: ${list12(on.map((it) => it.p.name))}.`
+          ? `Showing all ${numWord(items.length)} colours.`
+          : `Showing ${on.length === 1 ? 'one colour' : numWord(on.length) + ' colours'} from ${FROM[src] || SOURCES[src].toLowerCase()}: ${list12(on.map((it) => it.p.name))}.`
     }
     if (src !== 'all') on.forEach((it, k) => setTimeout(() => dropAt(it, 0.4, 0.045, true), 80 + k * 110))
   }
@@ -634,10 +736,22 @@ export function init(ctx) {
       handoff = false
       return
     }
-    // return focus to the colour now on the plate (it may differ from the opener)
-    const back = items[cur]?.btn || opener
-    if (back && !back.closest('[inert]')) back.focus({ preventScroll: true })
-    else opener?.focus({ preventScroll: true })
+    // return focus to the colour now on the plate (it may differ from the
+    // opener). After stepping through the plates that chip can be off-screen:
+    // bring it into view first, so keyboard focus never lands out of sight.
+    let back = items[cur]?.btn || opener
+    if (!back || back.closest('[inert]')) back = opener
+    if (!back) return
+    const chip = back.closest('.lib-chip') || back
+    const r = chip.getBoundingClientRect()
+    const vh = window.innerHeight
+    const navH = Math.max(0, document.querySelector('.nav')?.getBoundingClientRect().bottom ?? 80) // the fixed nav
+    if (r.top < navH || r.bottom > vh) {
+      const y = Math.max(0, r.top + window.scrollY - Math.max(navH + 16, (vh - r.height) * 0.4))
+      if (ctx.lenis) ctx.lenis.scrollTo(y, { immediate: true, force: true })
+      else window.scrollTo(0, y)
+    }
+    back.focus({ preventScroll: true })
   })
   dlg.addEventListener('cancel', (e) => {
     e.preventDefault()

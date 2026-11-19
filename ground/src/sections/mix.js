@@ -8,12 +8,18 @@
  * Every in-between streak is itself a Kubelka–Munk mix at that local
  * concentration, so the swirl is physically honest all the way through.
  *
+ * The two pigments are chosen from a paintbox: twelve brushed chips in the
+ * library's order (oldest first), each named, archive colours with the
+ * library's specimen corner marks. Choosing one brushes it out again and
+ * lets a drop of it run from the chip towards the well, through the dish.
+ *
  * Listens: 'select-pigment' { id } → becomes the first pigment.
- * Emits:   'drop' (via ctx.palette.drop) — both pigments, near the well.
+ * Emits:   'drop' (via ctx.palette.drop) — from the chosen chip, and both
+ *          pigments at the well's rim; 'stir' — the ratio stirs the water.
  */
 import '../styles/mix.css'
 import * as spectralNS from 'spectral.js'
-import { paintStroke, hexRgb, rgbCss, shade, noise1, rng, hashStr } from './library.js'
+import { paintStroke, makeReveal, byAge, hexRgb, rgbCss, shade, noise1, rng, hashStr } from './library.js'
 
 const spectral = spectralNS.Color ? spectralNS : spectralNS.default
 
@@ -95,28 +101,15 @@ const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t)
 }
 
-/** Palette order for the pans: light to warm to cool to dark, as on a painter's palette. */
-const PAN_ORDER = [
-  'lead-white',
-  'orpiment',
-  'yellow-ochre',
-  'red-ochre',
-  'vermilion',
-  'carmine',
-  'tyrian-purple',
-  'ultramarine',
-  'indigo',
-  'egyptian-blue',
-  'malachite',
-  'bone-black',
-]
+const esc = (v) =>
+  String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 /* ================================================================ section */
 export function init(ctx) {
   const root = document.getElementById('mix')
   if (!root || !spectral?.Color) return
   const { gsap, pigments } = ctx
-  const { BY_ID } = pigments
+  const { PIGMENTS, BY_ID } = pigments
   const RM = ctx.reducedMotion
   const dpr = () => Math.min(ctx.dpr || 1, 2)
   const $ = (s) => root.querySelector(s)
@@ -178,24 +171,42 @@ export function init(ctx) {
   const status = $('#mix-status')
   const presets = [...root.querySelectorAll('.mix__preset')]
 
-  // pans: one radio group per slot
+  // presets: colours and names come from pigments.js
+  presets.forEach((b) => {
+    const A = BY_ID[b.dataset.a]
+    const B = BY_ID[b.dataset.b]
+    if (!A || !B) return
+    b.innerHTML =
+      `<span class="mix__preset-dots" aria-hidden="true"><i style="--pig:${esc(A.hex)}"></i><i style="--pig:${esc(B.hex)}"></i></span>` +
+      esc(`${A.name} and ${lowerName(B.name)}`)
+  })
+
+  // the paintbox: one radio group per slot, every pigment, oldest first
+  const order = byAge(PIGMENTS)
   const picks = [...root.querySelectorAll('.mix__pick')]
+  const pans = [] // { id, p, slot, label, canvas, src, draw, w, h, sp }
   picks.forEach((fs) => {
     const slot = fs.dataset.slot
-    fs.querySelector('.mix__pans').innerHTML = PAN_ORDER.filter((id) => BY_ID[id])
-      .map((id) => {
-        const p = BY_ID[id]
-        return (
-          `<label class="mix__pan${p.sold ? '' : ' is-archive'}" style="--pig:${p.hex}">` +
-          `<input class="mix__pan-input" type="radio" name="mix-${slot}" value="${p.id}">` +
-          `<span class="mix__pan-dot" aria-hidden="true"></span>` +
-          `<span class="mix__pan-name">${p.name}</span></label>`
-        )
-      })
+    const box = fs.querySelector('.mix__pans')
+    box.innerHTML = order
+      .map(
+        (p) =>
+          `<label class="mix__pan${p.sold ? '' : ' is-archive'}" style="--pig:${esc(p.hex)}">` +
+          `<input class="mix__pan-input" type="radio" name="mix-${slot}" value="${esc(p.id)}">` +
+          '<span class="mix__pan-paint" aria-hidden="true"><canvas class="mix__pan-canvas"></canvas></span>' +
+          `<span class="mix__pan-name">${esc(p.name)}${p.sold ? '' : '<span class="visually-hidden">, archive only</span>'}</span>` +
+          '</label>'
+      )
       .join('')
+    box.querySelectorAll('.mix__pan').forEach((label, k) => {
+      const p = order[k]
+      pans.push({ id: p.id, p, slot, label, canvas: label.querySelector('canvas'), src: null, draw: null, w: 0, h: 0, sp: RM ? 1 : 0 })
+    })
     fs.addEventListener('change', (e) => {
       const v = e.target?.value
       if (!v || !BY_ID[v]) return
+      const pan = pans.find((it) => it.slot === slot && it.id === v)
+      if (pan) chosen(pan)
       set({ [slot]: v }, { pour: true, announce: true })
     })
   })
@@ -678,6 +689,91 @@ export function init(ctx) {
     }
   }
 
+  /* -------------------------------------------------------- the paintbox */
+  function paintPan(it) {
+    const k = dpr()
+    const cw = it.canvas.clientWidth
+    const ch = it.canvas.clientHeight
+    if (!cw || !ch) return
+    const w = Math.round(cw * k)
+    const h = Math.round(ch * k)
+    if (it.src && w === it.w && h === it.h) return
+    it.w = it.canvas.width = w
+    it.h = it.canvas.height = h
+    const src = document.createElement('canvas')
+    src.width = w
+    src.height = h
+    paintStroke(src.getContext('2d'), {
+      x0: w * 0.1,
+      x1: w * 0.95,
+      y: h * 0.5,
+      h: h * 0.6,
+      color: it.p.hex,
+      seed: hashStr(it.id + 'pan'),
+      dry: 0.34,
+      s: k,
+    })
+    it.src = src
+    it.draw = makeReveal(it.canvas, src, hashStr(it.id + 'pan'))
+    it.draw(it.sp)
+  }
+  const paintPans = () => pans.forEach(paintPan)
+
+  // the box is brushed out, oldest first, the first time it comes into view
+  let pansShown = RM
+  function showPans() {
+    if (pansShown) return
+    pansShown = true
+    paintPans()
+    const n = order.length
+    pans.forEach((it) => {
+      const k = order.indexOf(it.p)
+      const o = { p: 0 }
+      it.tw = gsap.to(o, {
+        p: 1,
+        duration: 0.85,
+        ease: 'power2.inOut',
+        delay: 0.1 + (k / n) * 0.9 + (it.slot === 'b' ? 0.12 : 0),
+        onUpdate: () => {
+          it.sp = o.p
+          it.draw?.(o.p)
+        },
+      })
+    })
+  }
+
+  // choosing a chip: it is brushed out again, and a drop of the pigment runs
+  // from the chip towards the well, through the water behind the page
+  function chosen(it) {
+    if (RM) return
+    if (it.draw) {
+      const o = { p: 0.08 }
+      it.tw?.kill()
+      it.tw = gsap.to(o, {
+        p: 1,
+        duration: 0.7,
+        ease: 'power2.out',
+        onUpdate: () => {
+          it.sp = o.p
+          it.draw(o.p)
+        },
+      })
+    }
+    const r = it.label.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    if (r.bottom < 0 || r.top > vh) return
+    const x = (r.left + r.width / 2) / vw
+    const y = (r.top + r.height * 0.3) / vh
+    const b = well.getBoundingClientRect()
+    let dx = (b.left + b.width / 2) / vw - x
+    let dy = (b.top + b.height / 2) / vh - y
+    const m = Math.hypot(dx, dy) || 1
+    dx /= m
+    dy /= m
+    ctx.palette?.drop(it.id, { x, y, amount: 0.42, radius: 0.035, vx: dx * 0.7, vy: dy * 0.7 })
+  }
+
   function paintChip(hex) {
     const k = dpr()
     const w = Math.round(chipPaint.clientWidth * k)
@@ -750,7 +846,7 @@ export function init(ctx) {
     if (announce && status) {
       clearTimeout(announceT)
       announceT = setTimeout(() => {
-        status.textContent = `${ratioText}. Mixed as paint: ${paintDesc.toLowerCase()}, ${paintHex}. Averaged like light: ${lightDesc.toLowerCase()}, ${lightHex}.`
+        status.textContent = `${ratioText}. Mixed as paint: ${paintDesc.toLowerCase()}. Averaged like light: ${lightDesc.toLowerCase()}. ${v}`
       }, 250)
     }
     dirty = true
@@ -770,10 +866,35 @@ export function init(ctx) {
 
   /* -------------------------------------------------------- controls */
   range.addEventListener('input', () => {
-    S.r = +range.value / 100
+    const r = +range.value / 100
+    const d = r - S.r
+    S.r = r
     update()
     stir()
+    stirDish(d)
   })
+
+  // moving the ratio stirs the water around the well, as a knife would
+  function stirDish(d) {
+    if (RM || !visible || !d) return
+    const b = canvas.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const cx = b.left + b.width / 2
+    const cy = b.top + b.height / 2
+    const R = b.width * 0.39 * 1.3
+    const k = Math.max(-0.035, Math.min(0.035, d * 0.6))
+    for (const ang of [ANG_A, ANG_B]) {
+      ctx.emit('stir', {
+        x: (cx + Math.cos(ang) * R) / vw,
+        y: (cy + Math.sin(ang) * R) / vh,
+        dx: -Math.sin(ang) * k,
+        dy: Math.cos(ang) * k,
+        strength: 1.4,
+        radius: 0.07,
+      })
+    }
+  }
   range.addEventListener('change', () => {
     update({ announce: true })
     if (visible) dropNearWell()
@@ -847,9 +968,20 @@ export function init(ctx) {
       }
       paintStrips()
       paintChip(km(S.a, S.b, S.r))
+      paintPans()
       dirty = true
     }, 120)
   })
+  const picksBox = $('.mix__picks')
+  const pio = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        showPans()
+        pio.disconnect()
+      }
+    },
+    { threshold: 0.15 }
+  )
 
   // heavy work waits for the page to be ready
   const start = () => {
@@ -861,9 +993,14 @@ export function init(ctx) {
       poured = true
       settle()
     }
+    paintPans()
     io.observe(well)
     ro.observe(well)
     ro.observe(stripPaint)
+    if (picksBox) {
+      ro.observe(picksBox)
+      pio.observe(picksBox)
+    }
     dirty = true
   }
   update()

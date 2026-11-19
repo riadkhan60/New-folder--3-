@@ -7,8 +7,16 @@
  * palette.js measures every top-level [data-field] element as a section, and
  * a fixed bar measured mid-page would hijack the field.
  *
+ * Order: a quiet count of the visitor's order sits in "Order pigments" (bar
+ * and phone menu) and, on phones, in a short "Order" link that appears
+ * beside "Menu" once the order has something — from the shop's
+ * 'order-change' { count }. It rolls like a printed counter when it changes,
+ * and an addition brings a hidden bar back so the count is seen. The shop
+ * announces changes itself, so the count only names the links ("Order
+ * pigments, 2 items in your order"); the figures themselves are aria-hidden.
+ *
  * Bus: emits 'nav:menu' { open } when the phone menu opens or closes (the
- * cursor listens, to take the menu's paper ink).
+ * cursor listens, to take the menu's paper ink). Listens to 'order-change'.
  */
 import '../styles/nav.css'
 
@@ -24,7 +32,7 @@ export function ensureTones(pigments) {
   if (!pigments || document.querySelector('style[data-ground="tones"]')) return
   const rule = (p) =>
     `[data-tone="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
-    `--ink-2:${rgba(p.ink, 0.76)};--ink-3:${rgba(p.ink, 0.54)};--line:${rgba(p.ink, 0.2)};}`
+    `--ink-2:${rgba(p.ink, 0.84)};--ink-3:${rgba(p.ink, 0.68)};--line:${rgba(p.ink, 0.24)};}`
   const el = document.createElement('style')
   el.dataset.ground = 'tones'
   el.textContent = [pigments.PAPER, ...pigments.PIGMENTS].map(rule).join('\n')
@@ -51,12 +59,14 @@ export function init(ctx) {
   const chapters = ctx.pigments?.CHAPTERS ?? []
   const desktop = window.matchMedia('(min-width: 900px)')
 
-  // paint the chips from the pigment data
+  // paint the chips, and name them, from the pigment data
   for (const s of swatches) {
     const p = ctx.pigments?.BY_ID?.[s.dataset.pigment]
     if (!p) continue
     s.style.setProperty('--c', p.hex)
     s.style.setProperty('--t', p.tint)
+    const name = s.querySelector('.swatch__pigment')
+    if (name) name.textContent = p.name
   }
 
   /* --------------------------------------------------------------- tone */
@@ -175,6 +185,69 @@ export function init(ctx) {
     { passive: true },
   )
   root.addEventListener('focusin', () => setHidden(false))
+
+  /* ------------------------------------------------------ the order count */
+  const counts = [...root.querySelectorAll('.nav__count')]
+  let count = 0
+  function rollTo(box, n, dir) {
+    const roll = box.querySelector('.nav__count-roll')
+    const cur = roll?.querySelector('.nav__count-n:not(.is-leaving)')
+    if (!roll || !cur) return
+    if (!dir || ctx.reducedMotion) {
+      roll.querySelectorAll('.is-leaving').forEach((e) => e.remove())
+      cur.textContent = n
+      return
+    }
+    // a printed counter: the old figure rolls away, the new one rolls in
+    const next = cur.cloneNode(false)
+    next.textContent = n
+    roll.appendChild(next)
+    cur.classList.add('is-leaving')
+    gsap.fromTo(next, { yPercent: 110 * dir }, { yPercent: 0, duration: 0.75, ease: 'expo.out' })
+    gsap.to(cur, { yPercent: -110 * dir, duration: 0.6, ease: 'expo.out', onComplete: () => cur.remove() })
+  }
+  function setCount(n) {
+    n = Math.max(0, Math.round(+n || 0))
+    if (n === count) return
+    const was = count
+    count = n
+    for (const box of counts) {
+      const link = box.closest('a')
+      if (link) {
+        const word = link.firstElementChild?.textContent.trim() || 'Order'
+        if (n) link.setAttribute('aria-label', `${word}, ${n} ${n === 1 ? 'item' : 'items'} in your order`)
+        else link.removeAttribute('aria-label')
+      }
+      gsap.killTweensOf(box)
+      if (!n) {
+        box.hidden = true
+        gsap.set(box, { clearProps: 'all' })
+        rollTo(box, 0, 0)
+        continue
+      }
+      if (!was) {
+        rollTo(box, n, 0)
+        box.hidden = false
+        if (!ctx.reducedMotion && box.offsetParent !== null) {
+          // the count opens up beside the word, in place of the gap
+          const gap = parseFloat(getComputedStyle(box.parentElement).columnGap) || 0
+          gsap.fromTo(
+            box,
+            { width: 0, marginLeft: -gap, opacity: 0 },
+            { width: 'auto', marginLeft: 0, opacity: 1, duration: 0.9, ease: 'expo.out', clearProps: 'all' },
+          )
+        }
+      } else rollTo(box, n, n > was ? 1 : -1)
+    }
+    const phone = root.querySelector('.nav__order')
+    root.classList.toggle('has-order', n > 0)
+    if (!was && phone && !ctx.reducedMotion && phone.offsetParent !== null) {
+      gsap.fromTo(phone, { opacity: 0, x: 10 }, { opacity: 1, x: 0, duration: 0.9, ease: 'expo.out', clearProps: 'all' })
+    }
+    // something went into the order: bring the bar back so the count is seen
+    if (n > was && html.classList.contains('is-ready')) setHidden(false)
+  }
+  ctx.on('order-change', (d) => setCount(d?.count))
 
   /* ---------------------------------------------- the swatch-book menu */
   if (!toggle || !menu) return

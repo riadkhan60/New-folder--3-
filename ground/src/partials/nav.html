@@ -47,7 +47,12 @@
         <span class="nav__drop" aria-hidden="true"></span>
       </nav>
 
-      <a class="btn nav__cta" href="#shop">Order pigments</a>
+      <!-- The count of the visitor's order (from the shop's 'order-change');
+           hidden while the order is empty. nav.js names the link with it. -->
+      <a class="btn nav__cta" href="#shop"><span>Order pigments</span><span class="nav__count" hidden><span class="nav__count-roll" aria-hidden="true"><span class="nav__count-n t-num">0</span></span></span></a>
+
+      <!-- phones: once something is in the order, a short way to it -->
+      <a class="nav__order" href="#shop"><span>Order</span><span class="nav__count" hidden><span class="nav__count-roll" aria-hidden="true"><span class="nav__count-n t-num">0</span></span></span></a>
 
       <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-menu">
         <span class="nav__toggle-label">Menu</span>
@@ -108,7 +113,7 @@
       </ul>
 
       <div class="nav__menu-foot">
-        <a class="btn nav__menu-cta" href="#shop">Order pigments</a>
+        <a class="btn nav__menu-cta" href="#shop"><span>Order pigments</span><span class="nav__count" hidden><span class="nav__count-roll" aria-hidden="true"><span class="nav__count-n t-num">0</span></span></span></a>
         <p class="nav__menu-note">Pigments, ground by hand in Clerkenwell, London.</p>
       </div>
     </nav>

@@ -4,7 +4,12 @@
  * A small lens: a ring with a bead's light in it that saturates whatever is
  * under it, trailing the pointer a little and stretching along its path like
  * a drop pulled across glass; a fine dot sits exactly on the pointer. It takes
- * the current field's ink (data-tone). Over links and buttons it opens up;
+ * the ink of whatever it is over (data-tone): the current field's, unless the
+ * pointer is on a surface of its own — a paper drawdown card on a dark field,
+ * a swatch, a flooded lab, the phone menu — whose ink it reads from the
+ * nearest [data-tone], nested [data-field] or opaque background (matched to
+ * the nearest pigment, else to paper or bone black by lightness), so it never
+ * vanishes into what it sits on. Over links and buttons it opens up;
  * [data-cursor] shows a word: drop | drag | view ([data-cursor-label] sets
  * any other word), and hide puts it away. Over text fields, selects, range
  * inputs and open <dialog>s it steps aside for the native cursor.
@@ -44,9 +49,10 @@ export function init(ctx) {
 
   /* --------------------------------------------------------------- tone */
   let field = 'paper'
+  let local = null // the tone of the surface under the pointer, if it has one
   let menuOpen = false
   const setTone = () => {
-    const t = menuOpen ? 'paper' : field
+    const t = menuOpen ? 'paper' : local || field
     if (el.dataset.tone !== t) el.dataset.tone = t
   }
   ctx.palette?.onChange((st) => {
@@ -58,6 +64,76 @@ export function init(ctx) {
     menuOpen = !!d?.open
     setTone()
   })
+
+  // Any CSS colour → [r, g, b, a] (0..255, a 0..1), by letting a 1px canvas
+  // parse it: computed colours come back as rgb(), color(srgb …), oklab()…
+  const swatchCanvas = document.createElement('canvas')
+  swatchCanvas.width = swatchCanvas.height = 1
+  const sc = swatchCanvas.getContext('2d', { willReadFrequently: true })
+  const parsed = new Map()
+  function rgbaOf(css) {
+    if (!sc || !css || css === 'transparent' || css === 'rgba(0, 0, 0, 0)') return null
+    if (parsed.has(css)) return parsed.get(css)
+    let out = null
+    try {
+      sc.clearRect(0, 0, 1, 1)
+      sc.fillStyle = '#010203' // a sentinel: still there means the colour didn't parse
+      sc.fillStyle = css
+      if (sc.fillStyle !== '#010203') {
+        sc.fillRect(0, 0, 1, 1)
+        const d = sc.getImageData(0, 0, 1, 1).data
+        out = [d[0], d[1], d[2], d[3] / 255]
+      }
+    } catch {}
+    if (parsed.size > 200) parsed.clear()
+    parsed.set(css, out)
+    return out
+  }
+  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const TONES = ctx.pigments ? [ctx.pigments.PAPER, ...ctx.pigments.PIGMENTS].map((p) => [p.id, hexRgb(p.hex)]) : []
+  const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+  function toneOf([r, g, b]) {
+    let best = 'paper'
+    let bd = Infinity
+    for (const [id, [R, G, B]] of TONES) {
+      const d = (r - R) ** 2 + (g - G) ** 2 + (b - B) ** 2
+      if (d < bd) {
+        bd = d
+        best = id
+      }
+    }
+    if (bd < 900) return best // close enough to be that pigment, or paper
+    const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+    return L > 0.3 ? 'paper' : 'bone-black'
+  }
+  // Walk up from the element under the pointer to its section. The first
+  // element that says what it is ([data-tone], a nested [data-field]) or
+  // paints a solid surface big enough to hold the lens decides the ink.
+  // Buttons and links are skipped: their own fill is not the ground.
+  function surfaceTone(target) {
+    for (let n = target; n && n !== document.body && n !== html; n = n.parentElement) {
+      const tone = n.dataset?.tone
+      if (tone) return tone
+      if (n.dataset?.field) {
+        // a top-level section: the field (and the dish) rules
+        if (!n.parentElement?.closest('[data-field]')) return null
+        return n.dataset.field
+      }
+      if (n.matches(INTERACTIVE)) continue
+      const c = rgbaOf(getComputedStyle(n).backgroundColor)
+      if (!c || c[3] < 0.6) continue
+      const r = n.getBoundingClientRect()
+      if (r.width < 64 || r.height < 40) continue
+      return toneOf(c)
+    }
+    return null
+  }
+  function resolveTone(target) {
+    const t = target instanceof Element ? surfaceTone(target) : null
+    if (t === local) return
+    local = t
+    setTone()
+  }
 
   /* -------------------------------------------------------------- state */
   let mode = 'none' // none | hover | label | native
@@ -145,7 +221,9 @@ export function init(ctx) {
     { passive: true },
   )
   document.addEventListener('pointerover', (e) => {
-    if (e.pointerType !== 'touch') sense(e.target)
+    if (e.pointerType === 'touch') return
+    sense(e.target)
+    resolveTone(e.target)
   })
   window.addEventListener('mouseout', (e) => {
     if (!e.relatedTarget) el.classList.remove('is-on')
@@ -154,7 +232,14 @@ export function init(ctx) {
   window.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') el.classList.add('is-down')
   })
-  const up = () => el.classList.remove('is-down')
+  // a click can change the surface under a still pointer (a card turned to
+  // infrared, a flooded lab): look again once its colour has turned
+  let recheck = 0
+  const up = () => {
+    el.classList.remove('is-down')
+    clearTimeout(recheck)
+    recheck = setTimeout(() => shown && resolveTone(document.elementFromPoint(mx, my)), 700)
+  }
   window.addEventListener('pointerup', up)
   window.addEventListener('pointercancel', up)
 
@@ -167,7 +252,9 @@ export function init(ctx) {
       pending = true
       requestAnimationFrame(() => {
         pending = false
-        sense(document.elementFromPoint(mx, my))
+        const under = document.elementFromPoint(mx, my)
+        sense(under)
+        resolveTone(under)
       })
     },
     { passive: true },
