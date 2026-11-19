@@ -328,3 +328,9 @@ html.is-loading body { overflow: hidden; }
 /* <main> takes focus from the skip link; don't ring the whole page */
 main:focus,
 main:focus-visible { outline: none; }
+
+/* Browser-driven focus scrolling keeps headings clear of the fixed nav */
+html { scroll-padding-top: calc(76px + 16px); }
+@media (max-width: 767px) {
+  html { scroll-padding-top: 64px; }
+}

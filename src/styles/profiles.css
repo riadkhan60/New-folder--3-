@@ -537,3 +537,8 @@
   .pf__hint { margin-top: var(--s-4); }
   .pf__reserve { width: 100%; justify-content: center; }
 }
+
+/* Touch: the reserve action meets the 48 px target used by the form */
+@media (pointer: coarse) {
+  #dives .pf__reserve { min-height: 48px; }
+}
