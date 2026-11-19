@@ -25,7 +25,7 @@ export const PIGMENTS = [
     tint: '#e8c98a',
     ink: '#1d1307',
     fact:
-      'The oldest colour people used. A paint workshop about 100,000 years old, with ochre ground in abalone shells, was found in Blombos Cave, South Africa.',
+      'The oldest colour people used. A paint workshop about 100,000 years old, with ochre mixed and stored in abalone shells, was found in Blombos Cave, South Africa.',
     price: 14,
     unit: '50 g',
     sold: true,
@@ -63,7 +63,7 @@ export const PIGMENTS = [
     tint: '#8db8db',
     ink: '#f2f7fb',
     fact:
-      'The first colour anyone made rather than found. Under infrared light it glows, which is how conservators find its traces on ancient statues.',
+      'The first colour anyone made rather than found. Lit by ordinary light, it gives off infrared that a camera can see, which is how conservators find its traces on ancient statues.',
     price: 38,
     unit: '20 g',
     sold: true,
@@ -152,7 +152,7 @@ export const PIGMENTS = [
     formula: 'HgS',
     chemistry: 'Mercury sulfide',
     era: 'Roman, then medieval Europe',
-    year: 800,
+    year: -100,
     hex: '#e03a27',
     tint: '#f2a497',
     ink: '#fff2ef',
@@ -188,7 +188,7 @@ export const PIGMENTS = [
     origin: 'Oaxaca, Mexico',
     formula: 'C<sub>22</sub>H<sub>20</sub>O<sub>13</sub>',
     chemistry: 'Carminic acid',
-    era: 'Aztec and Maya; in Europe from the 16th century',
+    era: 'Mixtec and Aztec Mexico; in Europe from the 16th century',
     year: 1520,
     hex: '#a3123a',
     tint: '#df8aa1',
@@ -239,8 +239,8 @@ export const PIGMENTS = [
 
 export const BY_ID = Object.fromEntries(PIGMENTS.map((p) => [p.id, p]))
 
-/** The six pigments that get a full chapter, in the order the page tells them. */
-export const CHAPTERS = ['yellow-ochre', 'egyptian-blue', 'tyrian-purple', 'ultramarine', 'carmine', 'bone-black']
+/** The six pigments that get a full chapter, oldest to newest (by `year`). */
+export const CHAPTERS = ['yellow-ochre', 'bone-black', 'egyptian-blue', 'tyrian-purple', 'ultramarine', 'carmine'] // oldest to newest
 
 /** The paper the dish starts on and returns to between fields. */
 export const PAPER = { id: 'paper', name: 'Paper', hex: '#f3f2ee', tint: '#f3f2ee', ink: '#151413' }

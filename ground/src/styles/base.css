@@ -14,9 +14,9 @@
   --field: var(--paper);
   --tint: var(--paper);
   --ink: var(--ink-black);
-  --ink-2: rgb(21 20 19 / 0.76);
-  --ink-3: rgb(21 20 19 / 0.54);
-  --line: rgb(21 20 19 / 0.2);
+  --ink-2: rgb(21 20 19 / 0.84);
+  --ink-3: rgb(21 20 19 / 0.68);
+  --line: rgb(21 20 19 / 0.24);
 
   /* Type */
   --font-display: 'Bodoni Moda', 'Didot', 'Bodoni 72', Georgia, serif;
@@ -235,10 +235,11 @@ html.no-dish [data-field] { background-color: var(--field); }
   letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
-  transition: transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
+  transition: background-color 0.35s var(--ease-out), color 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
 }
-.btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px var(--ink); }
-.btn:active { transform: translateY(0); }
+/* Hover: the printed label turns into its own outline, like a proof */
+.btn:hover { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.btn:active { box-shadow: inset 0 0 0 2.5px var(--ink); }
 .btn--ghost {
   background: transparent;
   color: var(--ink);

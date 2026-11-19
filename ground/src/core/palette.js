@@ -2,7 +2,7 @@
  * palette.js — which colour field are we in?
  *
  * Every section carries data-field="<pigment id>" (or "paper"). A probe line
- * at the vertical centre of the viewport decides the current field. While a
+ * at 85% of the viewport height decides the current field. While a
  * section boundary crosses the band around the probe, `mix` runs 0 → 1 from
  * the previous field into the next.
  *
@@ -44,7 +44,7 @@ function rgba(h, a) {
 function injectFieldStyles() {
   const rule = (p) =>
     `[data-field="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
-    `--ink-2:${rgba(p.ink, 0.76)};--ink-3:${rgba(p.ink, 0.54)};--line:${rgba(p.ink, 0.2)};}`
+    `--ink-2:${rgba(p.ink, 0.84)};--ink-3:${rgba(p.ink, 0.68)};--line:${rgba(p.ink, 0.24)};}`
   const css = [PAPER, ...PIGMENTS].map(rule).join('\n')
   const el = document.createElement('style')
   el.dataset.ground = 'fields'
@@ -57,7 +57,11 @@ export function createPalette({ gsap, lenis = null, emit }) {
   const listeners = new Set()
   let geo = []
   let docH = 0
-  const BAND = 0.32 // transition band, as a fraction of viewport height
+  // The field hands over while the incoming section's top travels from 85%
+  // to 65% of the viewport (flip at 75%): the pour plays over the empty tail
+  // of the outgoing section, so the new field is in place before its text.
+  const PROBE = 0.85
+  const BAND = 0.2
 
   const state = {
     field: 'paper', // id of the field under the probe
@@ -106,7 +110,7 @@ export function createPalette({ gsap, lenis = null, emit }) {
     lastY = y
     lastVh = vh
     dirty = false
-    const probe = y + vh * 0.5
+    const probe = y + vh * PROBE
     let i = geo.findIndex((g) => probe < g.top + g.h)
     if (i < 0) i = geo.length - 1
     const cur = geo[i]

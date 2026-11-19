@@ -24,13 +24,13 @@ printed, like an old colourman's catalogue.
 
 - **Name:** Ground. Wordmark "Ground" in Bodoni Moda italic. Line: "Pigments,
   ground by hand."
-- **Workshop:** Clerkenwell, London. Est. 2011. Two people grind every batch
+- **Workshop:** Clerkenwell, London EC1 (no street address: the company is fictional). Est. 2011. Two people grind every batch
   on a glass slab with a glass muller.
 - **What they sell:** loose dry pigment in glass jars (prices and jar sizes in
   `src/core/pigments.js`), plus three sets: "The earths" (yellow ochre, red
   ochre, bone black, £36), "The blues" (Egyptian blue, ultramarine, indigo,
-  £220), "The full library" (every pigment that is sold, £2,940 — Tyrian purple
-  included). UK prices in pounds. Ships worldwide.
+  £220), "The full library" (every pigment that is sold, £2,800 — Tyrian purple
+  included; always cheaper than the nine jars bought separately, £2,936). UK prices in pounds. Ships worldwide.
 - **Archive only:** toxic historic pigments (orpiment, vermilion, lead white)
   appear in the library with their story but are never sold. Say so plainly.
 - **Primary action:** "Order pigments" (nav) → the shop. Shop buttons:
@@ -46,8 +46,9 @@ facts. If you add one, it must be accurate and conservative.
 ## 3. Section map and ownership
 
 `palette.js` decides the current field from `data-field` on each top-level
-section (probe = viewport centre; the first 32% of a section blends from the
-previous field). **Keep every `id` and `data-field` below.**
+section (probe at 85% of the viewport height; the field hands over while the
+incoming section's top moves from 85% to 65% of the viewport, flipping at
+75% — so the pour plays over the empty tail of the outgoing section). **Keep every `id` and `data-field` below.**
 
 | Order | Partial / module | `id` | `data-field` | Job |
 | --- | --- | --- | --- | --- |
@@ -57,7 +58,7 @@ previous field). **Keep every `id` and `data-field` below.**
 | — | `core/dish` | — | — | the global WebGL fluid simulation |
 | 1 | `hero` | `top` | paper | the h1, a bloom of ultramarine in water |
 | 2 | `intro` | `intro` | paper | where colour comes from: the six sources |
-| 3 | `chapters` (one partial, six sections inside `#chapters`) | `yellow-ochre`, `egyptian-blue`, `tyrian-purple`, `ultramarine`, `carmine`, `bone-black` | same as id | six full-bleed colour chapters, oldest to newest |
+| 3 | `chapters` (one partial, six sections inside `#chapters`) | `yellow-ochre`, `bone-black`, `egyptian-blue`, `tyrian-purple`, `ultramarine`, `carmine` (this order: oldest to newest, = `CHAPTERS`) | same as id | six full-bleed colour chapters, oldest to newest |
 | 4 | `library` | `library` | paper | all twelve pigments as a swatch library |
 | 5 | `grind` | `grind` | paper | lab: grind lapis into ultramarine yourself |
 | 6 | `mix` | `mix` | paper | lab: mix two pigments like paint, not like light |
