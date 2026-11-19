@@ -162,7 +162,7 @@ export function init(ctx) {
     gsap.killTweensOf(wash)
     gsap
       .timeline()
-      .fromTo(wash, { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1.3, duration: 0.8, ease: 'power2.out' })
+      .fromTo(wash, { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, /* ≤ 1: a fixed, scaled box must never widen the page */ duration: 0.8, ease: 'power2.out' })
       .to(wash, { opacity: 0, duration: 2.2, ease: 'power2.inOut' }, 0.75)
   }
   function setLamps(red, show) {

@@ -662,3 +662,7 @@
   }
   .exp__phase--up { left: calc(var(--pl-mid) + 0.9rem); }
 }
+
+/* Nothing in the logbook may widen the page (the red wash is scaled from
+   the lamp's position). clip, unlike hidden, keeps sticky children working. */
+#expedition { overflow-x: clip; }
