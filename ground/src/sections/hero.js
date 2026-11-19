@@ -8,7 +8,12 @@
  * A slow current keeps them moving for a while; scrolling away lifts the
  * headline and the water keeps drifting.
  *
- * Emits: 'drop' (via ctx.palette.drop) and 'stir'. Listens to nothing.
+ * After the loader, its hand-over drop of ultramarine (which lands right
+ * behind the headline) is adopted as the hero's ultramarine: a current
+ * carries it up into open water and clear-water drops lift it off the type.
+ *
+ * Emits: 'drop' (via ctx.palette.drop, incl. id 'water') and 'stir'.
+ * Listens: 'drop', only until ctx.ready, to notice the loader's hand-over.
  * Without the dish (html.no-dish) the three drops are shown still in SVG.
  */
 import '../styles/hero.css'
@@ -60,8 +65,9 @@ export function init(ctx) {
     const mobile = vw < 768
     const l1 = textBox(lines[0])
     const top = l1.top
+    // on a phone the open water is the band between the bar and the headline
     const ux = mobile ? 0.6 : clamp((l1.right / vw + 0.86) / 2, 0.62, 0.76)
-    const uy = mobile ? clamp(top / vh - 0.14, 0.22, 0.32) : clamp(top / vh - 0.07, 0.3, 0.44)
+    const uy = mobile ? clamp(0.11 + (top / vh - 0.11) * 0.5, 0.2, 0.34) : clamp(top / vh - 0.07, 0.3, 0.44)
     return DROPS.map((d) => ({
       x: clamp(ux + (d.dx * s) / vw, 0.08, 0.94),
       y: clamp(uy + (d.dy * s) / vh, 0.12, 0.9),
@@ -79,10 +85,12 @@ export function init(ctx) {
     })
   }
 
+  placeStill()
+  document.fonts?.ready.then(placeStill)
+  window.addEventListener('resize', () => placeStill(), { passive: true })
+
   if (reducedMotion) {
     root.classList.add('is-still')
-    document.fonts?.ready.then(placeStill)
-    placeStill()
     return
   }
 
@@ -118,18 +126,79 @@ export function init(ctx) {
   /* ------------------------------------------------------------ the bloom */
   let current = null // ambient stir, while the blooms are fresh
   let bloomAt = null // where the drops went in
+
+  // The loader hands over by dropping ultramarine into the middle of the
+  // dish, which is right behind the headline. If that happened, it becomes
+  // the hero's ultramarine: a current carries it up into the open water and
+  // clean water lifts what is left off the type, as a painter would.
+  let handed = null
+  const offHand = ctx.on('drop', (d) => {
+    if (!handed && d && d.id === 'ultramarine') handed = { x: d.x ?? 0.5, y: d.y ?? 0.5 }
+  })
+  function carry(from, to) {
+    const h1 = title.getBoundingClientRect()
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const len = Math.hypot(dx, dy) || 1
+    // where the type sits over the drop: lift colour there with clear water
+    const lifts = [
+      [0.42, 0.3],
+      [0.6, 0.75],
+      [0.3, 0.72],
+      [0.66, 0.22],
+    ].map(([u, v]) => ({ x: (h1.left + h1.width * u) / vw, y: (h1.top + h1.height * v) / vh }))
+    for (let i = 0; i < 16; i++) {
+      const t = i / 15
+      gsap.delayedCall(0.05 + i * 0.07, () => {
+        ctx.emit('stir', {
+          x: from.x + dx * 0.35 * t,
+          y: from.y + dy * 0.35 * t,
+          dx: (dx / len) * 0.0017,
+          dy: (dy / len) * 0.0017,
+          strength: 1,
+          radius: 0.13,
+        })
+        if (i % 4 === 1) {
+          const w = lifts[(i - 1) / 4]
+          if (w) ctx.palette.drop('water', { x: w.x, y: w.y, amount: 1, radius: 0.085, vx: (dx / len) * 0.06, vy: (dy / len) * 0.06 })
+        }
+      })
+    }
+    // and a last touch of clean water where the tail of it still lies
+    ;[
+      [1.3, 0.6, 0.5],
+      [1.6, 0.52, 0.18],
+    ].forEach(([at, u, v]) =>
+      gsap.delayedCall(at, () =>
+        ctx.palette.drop('water', {
+          x: (h1.left + h1.width * u) / vw,
+          y: (h1.top + h1.height * v) / vh,
+          amount: 1,
+          radius: 0.07,
+          vx: (dx / len) * 0.04,
+          vy: (dy / len) * 0.04,
+        })
+      )
+    )
+  }
+
   function bloom() {
+    offHand()
     const r = root.getBoundingClientRect()
     if (r.bottom < window.innerHeight * 0.35) return // landed elsewhere (deep link)
     const sp = spots()
     bloomAt = sp
+    if (handed) carry(handed, sp[0])
     DROPS.forEach((d, i) => {
+      if (i === 0 && handed) return // the loader's drop is our ultramarine
       gsap.delayedCall(d.at, () => {
         ctx.palette.drop(d.id, {
           x: sp[i].x,
           y: sp[i].y,
           amount: d.amount,
-          radius: d.radius * (window.innerWidth < 768 ? 0.85 : 1),
+          radius: d.radius * (window.innerWidth < 768 ? 0.72 : 1),
           vx: d.vx,
           vy: d.vy,
         })
@@ -251,10 +320,6 @@ export function init(ctx) {
       })
     })
   }
-
-  placeStill()
-  document.fonts?.ready.then(placeStill)
-  window.addEventListener('resize', () => placeStill(), { passive: true })
 
   ctx.ready.then(() => {
     reveal()

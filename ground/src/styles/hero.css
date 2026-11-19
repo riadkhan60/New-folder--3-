@@ -183,23 +183,22 @@ html.no-dish #top .hero__still { display: block; }
   }
   #top .hero__lead {
     grid-column: 1 / -1;
-    max-width: 24ch;
-    font-size: 1.15rem;
+    max-width: 26ch;
+    font-size: 1.1rem;
   }
   #top .hero__cue { grid-column: 1 / -1; justify-self: start; }
   #top .hero__caption {
     grid-column: 1 / -1;
     grid-row: 2;
-    max-width: 26ch;
+    max-width: 30ch;
     margin: var(--s-4) 0 0;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
   #top .hero__inner { grid-template-rows: 1fr auto auto; }
-  #top .hero__title { grid-row: 2; }
   #top .hero__foot { grid-row: 3; }
-  #top .hero__caption { grid-column: 7 / -1; grid-row: 1; margin-bottom: var(--s-6); }
+  #top .hero__caption { grid-column: 7 / -1; grid-row: 2; margin: var(--s-4) 0 0; }
   #top .hero__lead { grid-column: 1 / span 6; }
   #top .hero__cue { grid-column: 8 / -1; }
 }
