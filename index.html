@@ -3,19 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Noctiluca — Descend 10,935 metres</title>
+    <title>Noctiluca Deep Expeditions</title>
     <meta
       name="description"
-      content="Noctiluca runs crewed submersible dives to the bottom of the Challenger Deep, 10,935 metres below the Pacific. Scroll to descend."
+      content="Noctiluca runs crewed submersible dives from Guam to the floor of the Challenger Deep, 10,935 metres below the Pacific."
     />
     <meta name="theme-color" content="#0e6f86" />
-    <meta property="og:title" content="Noctiluca — Descend 10,935 metres" />
+    <meta property="og:title" content="Noctiluca Deep Expeditions" />
     <meta
       property="og:description"
       content="Crewed submersible dives through the five layers of the ocean, to the deepest point on Earth."
     />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <noscript>
+      <style>
+        .loader { display: none !important; }
+        html.is-loading body { overflow: auto !important; }
+      </style>
+    </noscript>
+    <script>
+      /* Watchdog: if the page's JavaScript never starts (blocked, failed,
+         unsupported), reveal the static page instead of a black screen. */
+      setTimeout(function () {
+        var h = document.documentElement
+        if (!window.__noctilucaBooting && !h.classList.contains('is-ready')) {
+          h.classList.remove('is-loading')
+          h.classList.add('skip-intro')
+        }
+      }, 8000)
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -6,9 +6,11 @@
  * viewport decides the current depth: inside a section, depth interpolates
  * linearly from start → end as the section scrolls past the probe.
  *
- * Each frame it writes CSS custom properties on <html>:
+ * It sets the page's water colour on <body>, and publishes live CSS custom
+ * properties — only when their (quantised) value changes, and only on the
+ * elements that use them (.nav, .hud, #expedition, #dives and any element
+ * with [data-depth-vars]) so a change never restyles the whole document:
  *   --bg       interpolated water colour
- *   --depth-n  0 → 1 (linear over 0 … 10,935 m)
  *   --sun      visible sunlight 1 → 0 (gone by ~1,000 m)
  *   --hadal    0 → 1 between 5,800 m and 6,400 m (red-light mode)
  * and once per layout, on every depth section:
@@ -118,7 +120,7 @@ export function compression(depth) {
 
 export const format = (m) => Math.round(m).toLocaleString('en-US')
 
-export function createDepth({ gsap }) {
+export function createDepth({ gsap, lenis = null }) {
   const root = document.documentElement
   let sections = []
   const listeners = new Set()
@@ -149,6 +151,10 @@ export function createDepth({ gsap }) {
   // fonts. Per frame, depth is pure arithmetic on scrollY — no layout reads.
   let geo = []
   let dirty = true
+  let varTargets = []
+  let docH = 0
+  const VAR_SELECTOR = '.nav, .hud, #expedition, #dives, [data-depth-vars]'
+  const published = { bg: '', sun: '', hadal: '' }
 
   function refresh() {
     sections = [...document.querySelectorAll('[data-depth-start]')].map((el) => {
@@ -161,10 +167,13 @@ export function createDepth({ gsap }) {
       if (!el.dataset.zone) el.dataset.zone = zoneAt(mid).id
       return { el, start, end, until: el.querySelector('[data-depth-until]') }
     })
+    varTargets = [...document.querySelectorAll(VAR_SELECTOR)]
+    published.bg = published.sun = published.hadal = '' // re-publish to new targets
     measure()
   }
 
   function measure() {
+    docH = document.documentElement.scrollHeight
     const sy = window.scrollY
     geo = sections.map((s) => {
       const r = measureEl(s.el).getBoundingClientRect()
@@ -178,11 +187,13 @@ export function createDepth({ gsap }) {
     dirty = true
   }
 
+  const scrollTop = () => (lenis ? lenis.scroll : window.scrollY)
+
   function computeDepth() {
     const vh = window.innerHeight
     const probe = vh * 0.5
-    const maxScroll = document.documentElement.scrollHeight - vh
-    const y = window.scrollY
+    const maxScroll = docH - vh
+    const y = scrollTop()
     state.scrollProgress = maxScroll > 0 ? clamp(y / maxScroll) : 0
     if (maxScroll > 0 && y >= maxScroll - 2) {
       const lastG = geo[geo.length - 1]
@@ -210,7 +221,7 @@ export function createDepth({ gsap }) {
 
   function scrollYForDepth(d) {
     const vh = window.innerHeight
-    const maxScroll = Math.max(0, document.documentElement.scrollHeight - vh)
+    const maxScroll = Math.max(0, docH - vh)
     if (d <= 0) return 0
     for (const g of geo) {
       const { start, end } = g.s
@@ -222,11 +233,35 @@ export function createDepth({ gsap }) {
     return maxScroll
   }
 
+  // Write each live variable only when its quantised value changes, and only
+  // to the subtrees that read it. (Writing inherited custom properties on
+  // :root every frame restyles every element on the page.)
+  const q = (v) => (Math.round(v * 200) / 200).toFixed(3)
+  function publish(st) {
+    const bg = st.color.css
+    const sun = q(st.sun)
+    const hadal = q(st.hadal)
+    if (bg !== published.bg) {
+      published.bg = bg
+      document.body.style.backgroundColor = bg
+      for (const el of varTargets) el.style.setProperty('--bg', bg)
+    }
+    if (sun !== published.sun) {
+      published.sun = sun
+      for (const el of varTargets) el.style.setProperty('--sun', sun)
+    }
+    if (hadal !== published.hadal) {
+      published.hadal = hadal
+      for (const el of varTargets) el.style.setProperty('--hadal', hadal)
+    }
+    if (root.dataset.zone !== st.zone.id) root.dataset.zone = st.zone.id
+  }
+
   let last = -1
   let lastY = -1
   let lastVh = -1
   function update(force = false) {
-    const y = window.scrollY
+    const y = scrollTop()
     const vh = window.innerHeight
     if (!force && !dirty && y === lastY && vh === lastVh) {
       if (state.velocity !== 0) {
@@ -255,11 +290,7 @@ export function createDepth({ gsap }) {
     state.zone = zoneAt(depth)
     state.color = colorAt(depth)
 
-    root.style.setProperty('--bg', state.color.css)
-    root.style.setProperty('--depth-n', state.n.toFixed(4))
-    root.style.setProperty('--sun', state.sun.toFixed(4))
-    root.style.setProperty('--hadal', state.hadal.toFixed(4))
-    root.dataset.zone = state.zone.id
+    publish(state)
 
     for (const fn of listeners) {
       try {

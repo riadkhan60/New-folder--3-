@@ -26,9 +26,10 @@
   --c-lure: #ffb054;        /* anglerfish lure, bacterial glow             */
   --c-redlight: #ff3b2f;    /* submersible red observation lamps (6,000 m+) */
 
-  /* ---- Live values written every frame by depth.js (defaults = surface) */
+  /* ---- Live values published by depth.js on change, ONLY on .nav, .hud,
+     #expedition, #dives and [data-depth-vars] (never here on :root, which
+     would restyle the whole page). These are the static defaults. */
   --bg: var(--c-surface);
-  --depth-n: 0;   /* 0 at surface → 1 at 10,935 m (linear)                  */
   --sun: 1;       /* visible sunlight 1 → 0 (gone by ~1,000 m)              */
   --hadal: 0;     /* 0 → 1 between 5,800 m and 6,400 m (red-light mode)     */
 
@@ -62,7 +63,8 @@
   --s-10: clamp(6rem, 16vw, 14rem);
 
   /* ---- Layout */
-  --rail: clamp(20px, 5vw, 88px);          /* outer horizontal padding      */
+  /* outer horizontal padding; clears the notch on landscape phones */
+  --rail: max(clamp(20px, 5vw, 88px), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
   --instrument: 0px;                        /* right gutter kept for the depth ruler */
   --gap: clamp(16px, 2vw, 32px);
   --maxw: 1520px;

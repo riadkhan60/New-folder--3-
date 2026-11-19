@@ -7,6 +7,11 @@
  */
 import 'lenis/dist/lenis.css'
 import './styles/base.css'
+// Every section's stylesheet ships in the entry CSS (a <link> in <head>), so
+// sections are styled from the first paint, before their JS chunk arrives,
+// and even when JavaScript never runs. Modules still import their own CSS;
+// Vite de-duplicates.
+import.meta.glob('./styles/*.css', { eager: true })
 
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -25,7 +30,14 @@ const mq = (q) => window.matchMedia(q).matches
 const reducedMotion = mq('(prefers-reduced-motion: reduce)') || params.has('reduced')
 // A deep link (e.g. #reserve) goes straight to its section: no intro.
 const deepLink = location.hash.length > 1 ? location.hash : null
-const skipIntro = params.has('skipintro') || reducedMotion || !!deepLink
+// html.skip-intro may already be set by the inline loader script or by the
+// no-JS watchdog in index.html.
+const skipIntro =
+  params.has('skipintro') ||
+  reducedMotion ||
+  !!deepLink ||
+  document.documentElement.classList.contains('skip-intro')
+window.__noctilucaBooting = true // tells the index.html watchdog that JS is alive
 
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
 if (!location.hash) window.scrollTo(0, 0)
@@ -37,7 +49,7 @@ const lenis = reducedMotion
       lerp: 0.085,
       wheelMultiplier: 0.95,
       touchMultiplier: 1.4,
-      anchors: { offset: 0, duration: 2.4 },
+      anchors: false, // in-page links are handled below (pin-aware, focus, history)
       autoRaf: false,
     })
 if (lenis) {
@@ -119,52 +131,69 @@ async function run(name, mod) {
   }
 }
 
+const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+let handedOver = false
+function handOver() {
+  if (handedOver) return
+  handedOver = true
+  document.documentElement.classList.remove('is-loading')
+  document.documentElement.classList.add('is-ready')
+  lenis?.start()
+  try {
+    ScrollTrigger.refresh()
+    ctx.depth?.refresh()
+    goToDeepLink()
+    keepDepthAcrossRefreshes()
+  } catch (err) {
+    console.error('[noctiluca] hand-over refresh failed', err)
+  }
+  resolveReady()
+}
+
 async function boot() {
-  ctx.depth = createDepth({ gsap })
+  ctx.depth = createDepth({ gsap, lenis })
 
-  // Load everything in parallel, init in a deterministic order.
-  const [core, sections, loaderMod] = await Promise.all([
-    Promise.all(CORE_ORDER.map((n) => load(coreModules, `./core/${n}.js`))),
-    Promise.all(SECTION_ORDER.map((n) => load(sectionModules, `./sections/${n}.js`))),
-    load(coreModules, './core/loader.js'),
-  ])
+  // Start every download at once. The intro only needs its own small chunk
+  // and the fonts; three.js and the sections load behind it.
+  const loaderP = load(coreModules, './core/loader.js')
+  const coreP = CORE_ORDER.map((n) => load(coreModules, `./core/${n}.js`))
+  const sectionP = SECTION_ORDER.map((n) => load(sectionModules, `./sections/${n}.js`))
 
-  for (let i = 0; i < CORE_ORDER.length; i++) await run(CORE_ORDER[i], core[i])
-  for (let i = 0; i < SECTION_ORDER.length; i++) await run(SECTION_ORDER[i], sections[i])
-
-  // Fonts change line breaks → re-measure every trigger once they land.
-  const fontsReady = document.fonts?.ready ?? Promise.resolve()
-  fontsReady.then(() => {
+  // Fonts change line breaks: re-measure once they land, but never wait on
+  // the font CDN for more than a moment.
+  const fontsLoaded = document.fonts?.ready ?? Promise.resolve()
+  const fontsReady = Promise.race([fontsLoaded, wait(2500)])
+  fontsLoaded.then(() => {
     ScrollTrigger.refresh()
     ctx.depth.refresh()
   })
 
-  const handOver = () => {
-    document.documentElement.classList.remove('is-loading')
-    document.documentElement.classList.add('is-ready')
-    lenis?.start()
-    ScrollTrigger.refresh()
-    ctx.depth.refresh()
-    goToDeepLink()
-    keepDepthAcrossRefreshes()
-    resolveReady()
-  }
+  // Init in a deterministic order as modules arrive, while the intro plays.
+  const initAll = (async () => {
+    for (let i = 0; i < CORE_ORDER.length; i++) await run(CORE_ORDER[i], await coreP[i])
+    for (let i = 0; i < SECTION_ORDER.length; i++) await run(SECTION_ORDER[i], await sectionP[i])
+  })()
+  // A module that never settles must not hold the page hostage.
+  const pageReady = Promise.race([initAll, wait(15000)])
 
-  if (skipIntro || !loaderMod?.init) {
+  const loaderMod = skipIntro ? null : await loaderP
+  if (!loaderMod?.init) {
     document.documentElement.classList.add('skip-intro')
-    await fontsReady
+    await Promise.all([pageReady, fontsReady])
     handOver()
     return
   }
 
   lenis?.stop()
   try {
-    // loader.init(ctx, { fontsReady }) must resolve at the moment the page
-    // should take over (it may keep animating its own exit afterwards).
-    await loaderMod.init(ctx, { fontsReady })
+    // The loader resolves at the moment the page should take over (it may
+    // keep animating its own exit). It holds its release until pageReady.
+    await loaderMod.init(ctx, { fontsReady, pageReady })
   } catch (err) {
     console.error('[noctiluca] loader failed', err)
   }
+  await pageReady
   handOver()
 }
 
@@ -238,6 +267,61 @@ function keepDepthAcrossRefreshes() {
   })
 }
 
+/* ------------------------------------------------------------ in-page links */
+// One handler for every a[href^="#"]: smooth-scroll (pin-aware), keep a real
+// history entry, and move keyboard focus to the target section's heading.
+function pinBox(el) {
+  const p = el.parentElement
+  return p && p.classList.contains('pin-spacer') ? p : el
+}
+function focusSection(el) {
+  const h = el.matches('h1, h2') ? el : el.querySelector('h1, h2') || el
+  if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1')
+  h.focus({ preventScroll: true })
+}
+function scrollToY(y, { smooth = true, onComplete } = {}) {
+  if (lenis) {
+    lenis.scrollTo(y, smooth
+      ? { duration: 2.4, easing: (t) => 1 - Math.pow(1 - t, 4), onComplete }
+      : { immediate: true, force: true, onComplete })
+  } else {
+    window.scrollTo(0, y)
+    onComplete?.()
+  }
+}
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  const a = e.target.closest?.('a[href^="#"]')
+  if (!a) return
+  const hash = a.getAttribute('href')
+  if (!hash || hash.length < 2) return
+  let el = null
+  try {
+    el = document.querySelector(hash)
+  } catch {
+    return
+  }
+  if (!el) return
+  e.preventDefault()
+  const keyboard = e.detail === 0
+  const y = Math.max(0, pinBox(el).getBoundingClientRect().top + window.scrollY)
+  try {
+    history.replaceState({ y: window.scrollY }, '')
+    if (location.hash !== hash) history.pushState({ y }, '', hash)
+  } catch {}
+  scrollToY(y, { onComplete: keyboard ? () => focusSection(el) : undefined })
+})
+window.addEventListener('popstate', (e) => {
+  const y = e.state && typeof e.state.y === 'number' ? e.state.y : null
+  if (y !== null) return scrollToY(y)
+  if (location.hash.length > 1) {
+    try {
+      const el = document.querySelector(location.hash)
+      if (el) scrollToY(pinBox(el).getBoundingClientRect().top + window.scrollY)
+    } catch {}
+  }
+})
+
 /* ------------------------------------------------------------ skip link */
 document.querySelector('.skip-link')?.addEventListener('click', (e) => {
   const main = document.getElementById('main')
@@ -250,4 +334,8 @@ document.querySelector('.skip-link')?.addEventListener('click', (e) => {
   main.focus({ preventScroll: true })
 })
 
-boot()
+boot().catch((err) => {
+  console.error('[noctiluca] boot failed', err)
+  document.documentElement.classList.add('skip-intro')
+  handOver()
+})

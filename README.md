@@ -30,8 +30,8 @@ URL flags: `?skipintro` skips the loader, `?reduced` forces reduced motion.
 
 ## Stack
 
-Vite · vanilla JS modules · GSAP 3 (ScrollTrigger, SplitText, DrawSVG) ·
-Lenis smooth scroll · three.js · Google Fonts (Anybody, Newsreader).
+Vite and vanilla JS modules, GSAP 3 (ScrollTrigger, SplitText, DrawSVG),
+Lenis smooth scroll, three.js, and Google Fonts (Anybody, Newsreader).
 No images or video: everything on the page is generated with SVG, canvas,
 WebGL and CSS.
 
