@@ -133,7 +133,20 @@ export function init(ctx) {
   const signal = document.createElement('span')
   signal.className = 'exp__signal'
   signal.setAttribute('aria-hidden', 'true')
-  if (!reduced) log.appendChild(signal)
+  const ring = document.createElement('i')
+  ring.className = 'exp__signal-ring'
+  const flash = document.createElement('i')
+  flash.className = 'exp__signal-flash'
+  signal.append(flash, ring)
+  // a pulse of light sent down the tether; it lands on the signal
+  const pulse = document.createElement('span')
+  pulse.className = 'exp__pulse'
+  pulse.setAttribute('aria-hidden', 'true')
+  // the lamps lighting the floor of the trench while Vesper is on it (Day 6)
+  const floorLight = document.createElement('span')
+  floorLight.className = 'exp__floorlight'
+  floorLight.setAttribute('aria-hidden', 'true')
+  if (!reduced) log.append(floorLight, pulse, signal)
   if (readout) log.appendChild(readout)
   const readD = readout?.querySelector('.exp__readout-d')
 
@@ -224,16 +237,32 @@ export function init(ctx) {
     if (!fig) return
     const draw = [...fig.querySelectorAll('.exp__sk-line, .exp__sk-contour, .exp__sk-mark, .exp__sk-port, .exp__sk-beams path')]
     const fade = [...fig.querySelectorAll('.exp__sk-faint, .exp__sk-route, .exp__sk-label, .exp__sk-hatch, .exp__sk-fill')]
+    // Everything drawn in lamp colour also casts a little light: a soft,
+    // wide copy of the stroke underneath it (cheaper than a filter).
+    const glowDraw = []
+    const glowFade = []
+    fig.querySelectorAll('.exp__sk-mark, .exp__sk-port, .exp__sk-route').forEach((p) => {
+      const g = p.cloneNode(false)
+      const route = p.classList.contains('exp__sk-route')
+      g.setAttribute('class', `exp__sk-glow${route ? ' exp__sk-glow--route' : ''}`)
+      p.before(g)
+      ;(route ? glowFade : glowDraw).push(g)
+    })
+    draw.push(...glowDraw)
+    fade.push(...glowFade)
     if (!reduced) {
       if (draw.length) gsap.set(draw, { drawSVG: '0%' })
       if (fade.length) gsap.set(fade, { opacity: 0 })
     }
-    sketches.set(day, { draw, fade, done: reduced })
+    sketches.set(day, { fig, draw, fade, done: reduced })
   })
   function drawSketch(day) {
     const s = sketches.get(day)
     if (!s || s.done) return
     s.done = true
+    // drawn in red light: the drawing glows while the pen moves, then settles
+    s.fig.classList.add('is-drawing')
+    gsap.delayedCall(1.5, () => s.fig.classList.remove('is-drawing'))
     if (s.draw.length) gsap.to(s.draw, { drawSVG: '100%', duration: 1.5, ease: 'power3.out', stagger: 0.045 })
     if (s.fade.length) gsap.to(s.fade, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.35, stagger: 0.06 })
   }
@@ -300,6 +329,14 @@ export function init(ctx) {
       [f + 0.05, 'var(--c-redlight)'],
       [1, 'var(--c-redlight)'],
     ].forEach(([o, c]) => el('stop', { offset: o, style: `stop-color:${c}` }, grad))
+    // the hot filament inside the lit cable: the same colours, nearly white
+    const hot = el('linearGradient', { id: 'exp-plunge-hot', gradientUnits: 'userSpaceOnUse', x1: T, y1: 0, x2: D, y2: 0 }, defs)
+    ;[
+      [0, 'var(--exp-hot-blue)'],
+      [f - 0.05, 'var(--exp-hot-blue)'],
+      [f + 0.05, 'var(--exp-hot-red)'],
+      [1, 'var(--exp-hot-red)'],
+    ].forEach(([o, c]) => el('stop', { offset: o, style: `stop-color:${c}` }, hot))
 
     const dA = `M${T} 0 L${T} ${yA1}`
     const dP = roundedPath(
@@ -349,17 +386,19 @@ export function init(ctx) {
       /* not rendered yet: the next build measures again */
     }
 
-    const layers = ['halo', 'mid', 'core']
-    const mk = (d, cls, stroke) =>
+    // Stacked strokes make an additive glow without a filter: a wide soft
+    // bloom, the halo, the lit cable, and a hot filament down its centre.
+    const layers = ['bloom', 'halo', 'mid', 'core', 'fil']
+    const mk = (d, cls, plunge) =>
       layers.map((k) => {
         const p = el('path', { class: `exp__c-lit exp__c-lit--${k} ${cls}`, d }, svg)
-        if (stroke) p.style.stroke = stroke
+        if (plunge) p.style.stroke = k === 'fil' ? 'url(#exp-plunge-hot)' : 'url(#exp-plunge-grad)'
         return p
       })
     const segA = mk(dA, 'exp__c-track')
-    const segP = mk(dP, 'exp__c-plunge', 'url(#exp-plunge-grad)')
+    const segP = mk(dP, 'exp__c-plunge', true)
     const segB = mk(dB, 'exp__c-track')
-    const lut = sample(segP[2])
+    const lut = sample(segP[3])
 
     // readout size, measured once with its widest text
     let readW = 110
@@ -373,6 +412,10 @@ export function init(ctx) {
     }
 
     G = { ...g, yA1, yB0, lut, segA, segP, segB, floorTop: pTop + h / 3, floorBot: pTop + (2 * h) / 3, readW }
+
+    // the pool of lamp light on the trench floor, centred on the floor leg
+    floorLight.style.transform = `translate3d(${D.toFixed(1)}px, ${(pTop + h / 3 - h * 0.08).toFixed(1)}px, 0)`
+    floorLight.style.height = `${(h / 3 + h * 0.16).toFixed(1)}px`
 
     if (reduced) return
     makeTimeline()
@@ -410,7 +453,10 @@ export function init(ctx) {
         start: 'top center',
         end: 'bottom center',
         scrub: 0.45,
-        onToggle: (self) => log.classList.toggle('is-live', self.isActive),
+        onToggle: (self) => {
+          log.classList.toggle('is-live', self.isActive)
+          pulses(self.isActive)
+        },
       },
     })
     // Time is measured in pixels of tether: tl.time() is the signal's y.
@@ -418,16 +464,132 @@ export function init(ctx) {
     tl.fromTo(segP, { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: pSpan, ease: plEase }, yA1)
     tl.fromTo(segB, { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: Math.max(1, H - yB0) }, yB0)
     paint(tl.time())
+    pulses(!!tl.scrollTrigger?.isActive)
   }
 
+  /* ----------------------------------------------- light down the tether */
+  // Every few seconds a pulse of light runs down the lit cable and lands on
+  // the signal, which answers with a ping. Only while the log is on screen
+  // (rAF also stops by itself in a hidden tab). Transform/opacity only.
+  const PERIOD = 3200
+  const TRAVEL = 1250
+  let sigY = 0
+  let pRaf = 0
+  let pT0 = 0
+  let pCycle = -1
+  let pShown = false
+  let pShallow = false
+
+  // length along the tether (A → swing → B) at the signal's height y
+  function routeLen(y) {
+    const { yA1, yB0, lut } = G
+    if (y <= yA1) return Math.max(0, y)
+    if (y < yB0) return yA1 + atY(lut, y).len
+    return yA1 + lut.total + (y - yB0)
+  }
+  // point and heading at a length along the tether
+  function routeAt(s) {
+    const { T, yA1, yB0, lut } = G
+    if (s <= yA1) return { x: T, y: s, a: 0 }
+    const sp = s - yA1
+    if (sp >= lut.total) return { x: T, y: yB0 + (sp - lut.total), a: 0 }
+    const { L, X, Y, n } = lut
+    let lo = 0
+    let hi = n
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1
+      if (L[mid] <= sp) lo = mid
+      else hi = mid
+    }
+    const t = (sp - L[lo]) / Math.max(1e-4, L[hi] - L[lo])
+    const i0 = Math.max(0, lo - 1)
+    const i1 = Math.min(n, hi + 1)
+    return {
+      x: X[lo] + (X[hi] - X[lo]) * t,
+      y: Y[lo] + (Y[hi] - Y[lo]) * t,
+      a: Math.atan2(-(X[i1] - X[i0]), Y[i1] - Y[i0] || 1e-4),
+    }
+  }
+  function showPulse(on) {
+    if (on === pShown) return
+    pShown = on
+    pulse.style.opacity = on ? '' : '0'
+  }
+  function land() {
+    ring.animate(
+      [
+        { transform: 'scale(0.35)', opacity: 0.95 },
+        { transform: 'scale(3.4)', opacity: 0 },
+      ],
+      { duration: 1800, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+    )
+    flash.animate(
+      [
+        { transform: 'scale(0.6)', opacity: 0 },
+        { transform: 'scale(1)', opacity: 1, offset: 0.12 },
+        { transform: 'scale(1.5)', opacity: 0 },
+      ],
+      { duration: 1100, easing: 'ease-out' },
+    )
+  }
+  function pulseFrame(now) {
+    pRaf = requestAnimationFrame(pulseFrame)
+    if (!G) return
+    const dt = now - pT0
+    const cycle = Math.floor(dt / PERIOD)
+    const t = dt - cycle * PERIOD
+    const sLen = routeLen(sigY)
+    const span = Math.min(window.innerHeight * 0.42, 400, sLen) // stays on screen
+    if (t >= TRAVEL || span < 48) {
+      showPulse(false)
+      if (t >= TRAVEL && cycle !== pCycle) {
+        pCycle = cycle
+        if (span >= 48) land()
+      }
+      return
+    }
+    const k = t / TRAVEL
+    const e = Math.pow(k, 1.35) // gathers speed on its way down
+    const p = routeAt(sLen - span * (1 - e))
+    pulse.style.transform = `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0) rotate(${p.a.toFixed(3)}rad)`
+    pulse.style.setProperty('--pk', Math.min(1, k / 0.2, (1 - k) / 0.06).toFixed(3))
+    const shallowNow = p.y > G.yA1 && p.y < G.yB0 && ((p.x - G.T) / (G.D - G.T)) * MAX < RED_FROM
+    if (shallowNow !== pShallow) {
+      pShallow = shallowNow
+      pulse.classList.toggle('is-shallow', shallowNow)
+    }
+    showPulse(true)
+  }
+  function pulses(on) {
+    if (reduced) return
+    if (on && !pRaf) {
+      pT0 = performance.now() - PERIOD + 500 // first pulse soon
+      pCycle = -1
+      pRaf = requestAnimationFrame(pulseFrame)
+    } else if (!on && pRaf) {
+      cancelAnimationFrame(pRaf)
+      pRaf = 0
+      showPulse(false)
+    }
+  }
+
+  let onFloorNow = false
   function paint(y) {
     if (!G) return
     const { T, D, yA1, yB0, lut, nodes, pTop, h, floorTop, W } = G
+    sigY = y
 
     // the signal
     let x = T
     if (y > yA1 && y < yB0) x = atY(lut, y).x
     signal.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
+    // Vesper on the floor: the lamps light up the mud around her
+    const flr = y >= floorTop - 4 && y <= G.floorBot + 4
+    if (flr !== onFloorNow) {
+      onFloorNow = flr
+      floorLight.classList.toggle('is-on', flr)
+      signal.classList.toggle('is-floor', flr)
+    }
 
     // days
     let cur = -1

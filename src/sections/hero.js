@@ -22,10 +22,142 @@
  *      - then it rises away and dims, handing over to the manifesto.
  *    One CSS variable (--squeeze, 0 → 1) drives every axis; hero.css maps it.
  * 3. A plumb line pays out under "Scroll to descend", slowly, on a loop.
+ * 4. Sunlight on the type: once the title has formed, the light of the
+ *    water it sits in comes on across the letters — a caustic network
+ *    (generated here, in idle time, by refracting rays through a rippling
+ *    surface) drifting over the strokes. hero.css fills the glyphs with it
+ *    and hands them back to plain ink as the pressure takes the title.
  */
 import '../styles/hero.css'
 
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v))
+
+const idle = (fn, timeout = 600) =>
+  typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(fn, { timeout })
+    : setTimeout(() => fn({ timeRemaining: () => 8, didTimeout: true }), 16)
+
+/**
+ * A tileable caustic texture, made the way the real thing is: parallel rays
+ * pass through a periodic, rippling height field, are bent by its slope and
+ * binned where they land, so light piles up along bright cusps and leaves
+ * dim cells between them. White with alpha. Runs in idle slices (~40 ms of
+ * work in all); resolves to an object URL, or null if anything fails.
+ */
+function makeCaustic({ N = 176, S = 3, seed = 11 } = {}) {
+  return new Promise((resolve) => {
+    try {
+      let s = seed >>> 0
+      const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296
+      // integer wave vectors keep the field (and the texture) tileable
+      const KS = [[2, 1], [-1, 3], [3, -2], [1, -4], [-4, -1], [5, 2], [-2, 5], [6, -3]]
+      const waves = KS.map(([kx, ky]) => ({
+        kx,
+        ky,
+        a: (0.7 + 0.6 * rnd()) / Math.pow(Math.hypot(kx, ky), 1.55),
+        p: rnd() * Math.PI * 2,
+      }))
+      const TAU = Math.PI * 2
+      const gx = new Float32Array(N * N)
+      const gy = new Float32Array(N * N)
+      const acc = new Float32Array(N * N)
+      const D = 4.6 * (N / 192) // focal strength, in texels per unit slope
+      let stage = 0
+      let row = 0
+
+      const work = (deadline) => {
+        // a busy page may only ever grant timed-out slots: always take a
+        // small slice, more when the browser says it is idle
+        const t0 = performance.now()
+        const budget = Math.max(6, Math.min(12, (deadline?.timeRemaining?.() ?? 0) - 1))
+        const more = () => performance.now() - t0 < budget
+        if (stage === 0) {
+          // the surface slope on the grid
+          while (row < N && more()) {
+            for (let x = 0; x < N; x++) {
+              let ax = 0
+              let ay = 0
+              for (const w of waves) {
+                const c = Math.cos((TAU * (w.kx * x + w.ky * row)) / N + w.p) * w.a
+                ax += c * w.kx
+                ay += c * w.ky
+              }
+              gx[row * N + x] = ax
+              gy[row * N + x] = ay
+            }
+            row++
+          }
+          if (row >= N) {
+            stage = 1
+            row = 0
+          }
+        }
+        if (stage === 1) {
+          // S×S rays per texel, bent by the slope, splatted bilinearly
+          const R = N * S
+          while (row < R && more()) {
+            const y = (row + 0.5) / S
+            const yi = Math.floor(y) % N
+            for (let i = 0; i < R; i++) {
+              const x = (i + 0.5) / S
+              const k = yi * N + (Math.floor(x) % N)
+              const tx = x + D * gx[k]
+              const ty = y + D * gy[k]
+              const fx = Math.floor(tx)
+              const fy = Math.floor(ty)
+              const u = tx - fx
+              const v = ty - fy
+              const x0 = ((fx % N) + N) % N
+              const y0 = ((fy % N) + N) % N
+              const x1 = (x0 + 1) % N
+              const y1 = (y0 + 1) % N
+              acc[y0 * N + x0] += (1 - u) * (1 - v)
+              acc[y0 * N + x1] += u * (1 - v)
+              acc[y1 * N + x0] += (1 - u) * v
+              acc[y1 * N + x1] += u * v
+            }
+            row++
+          }
+          if (row >= R) stage = 2
+        }
+        if (stage === 2) {
+          // a touch of blur (the ray count is finite), then tone-map:
+          // only light well above the mean shows, as soft-edged filaments
+          const c = document.createElement('canvas')
+          c.width = c.height = N
+          const g = c.getContext('2d')
+          const im = g.createImageData(N, N)
+          const d = im.data
+          const m = S * S
+          for (let y = 0; y < N; y++) {
+            for (let x = 0; x < N; x++) {
+              let sum = 0
+              for (let dy = -1; dy <= 1; dy++) {
+                const yy = ((y + dy + N) % N) * N
+                for (let dx = -1; dx <= 1; dx++) {
+                  sum += (dx ? 1 : 2) * (dy ? 1 : 2) * acc[yy + ((x + dx + N) % N)]
+                }
+              }
+              const v = sum / 16 / m
+              const a = Math.pow(clamp((v - 0.8) / 1.7), 0.85)
+              const o = (y * N + x) * 4
+              d[o] = d[o + 1] = d[o + 2] = 255
+              d[o + 3] = Math.round(a * 255)
+            }
+          }
+          g.putImageData(im, 0, 0)
+          if (c.toBlob) c.toBlob((b) => resolve(b ? URL.createObjectURL(b) : null), 'image/png')
+          else resolve(c.toDataURL('image/png'))
+          return
+        }
+        idle(work, 120)
+      }
+      idle(work, 300)
+    } catch {
+      resolve(null)
+    }
+  })
+}
 
 export function init(ctx) {
   const root = document.getElementById('surface')
@@ -39,11 +171,36 @@ export function init(ctx) {
   const cord = root.querySelector('.hero__plumb-cord')
   const bob = root.querySelector('.hero__plumb-bob')
 
-  // Reduced motion: final, static state. No split, no scrub, no loop.
+  // The light on the letters: generated in idle slices once the page has
+  // handed over (never under the loader), applied once the title has formed.
+  let causticP = null
+  const caustic = () => (causticP ??= makeCaustic())
+  function lightTheType(instant = false) {
+    if (!title) return
+    caustic().then((url) => {
+      if (!url) return
+      title.style.setProperty('--caustic', `url("${url}")`)
+      title.classList.add('is-lit')
+      if (instant) title.style.setProperty('--lit', 1)
+      else gsap.fromTo(title, { '--lit': 0 }, { '--lit': 1, duration: 2.8, ease: 'power2.inOut' })
+    })
+  }
+
+  // Reduced motion: final, static state. No split, no scrub, no loop —
+  // the light on the letters is there, but still.
   if (ctx.reducedMotion || !title) {
     root.classList.add('is-static')
+    ctx.ready.then(() => lightTheType(true))
     return
   }
+
+  // only let the light move while the title can be seen
+  ctx.ScrollTrigger.create({
+    trigger: root,
+    start: 'top bottom',
+    end: 'bottom top',
+    toggleClass: { targets: root, className: 'is-near' },
+  })
 
   root.classList.add('is-armed')
   let introDone = false
@@ -138,12 +295,14 @@ export function init(ctx) {
         c.s.filter = ''
         c.s.opacity = ''
       }
+      // the letters have settled: now the sunlight finds them
+      lightTheType()
     }
 
     if (data.length) {
       draw()
       gsap.to(st, { t: total, duration: total, ease: 'none', onUpdate: draw, onComplete: done })
-    }
+    } else gsap.delayedCall(1.2, lightTheType)
     // the line exhales to its full surface width as the light floods in
     gsap.to(title, { '--breath': 0, '--press': 0, duration: 2.6, ease: 'abyss' })
 
@@ -254,6 +413,7 @@ export function init(ctx) {
     offFlood?.()
     floodObs?.disconnect()
     playIntro(false)
+    caustic() // in idle slices, while the title forms
   })
 
   document.addEventListener('visibilitychange', () => {

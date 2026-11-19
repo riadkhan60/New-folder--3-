@@ -90,6 +90,7 @@ const BY_ID = Object.fromEntries(PROFILES.map((p) => [p.id, p]))
 // [start, end] of each piece within the scrubbed timeline (0–1)
 const WINDOWS = { twilight: [0.04, 0.2], abyss: [0.14, 0.34], hadal: [0.26, 0.5] }
 const RIDE = [0.53, 0.97]
+const DRAW_EASE = 'power1.inOut'
 
 function el(name, attrs = {}, parent) {
   const n = document.createElementNS(SVGNS, name)
@@ -120,7 +121,8 @@ function roundedPath(pts, radii) {
   return d + ` L${f(last[0])} ${f(last[1])}`
 }
 
-/* Lookup by x (time is monotonic along a profile). */
+/* Lookup by x (time is monotonic along a profile), sampled at equal steps
+   of length so a length along the line is just an index. */
 function sampleX(path, step = 2) {
   const total = path.getTotalLength()
   const n = Math.max(2, Math.ceil(total / step))
@@ -133,7 +135,35 @@ function sampleX(path, step = 2) {
     X[i] = mx
     Y[i] = p.y
   }
-  return { X, Y, n }
+  return { X, Y, n, total }
+}
+// length along the line at time-x
+function sAtX(lut, x) {
+  const { X, n, total } = lut
+  if (x <= X[0]) return 0
+  if (x >= X[n]) return total
+  let lo = 0
+  let hi = n
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (X[mid] <= x) lo = mid
+    else hi = mid
+  }
+  const span = X[hi] - X[lo]
+  return ((lo + (span > 1e-4 ? (x - X[lo]) / span : 0)) / n) * total
+}
+// point at a length along the line
+function atS(lut, s) {
+  const { X, Y, n, total } = lut
+  const f = clamp(s / total) * n
+  const i = Math.min(n - 1, Math.floor(f))
+  const t = f - i
+  return { x: X[i] + (X[i + 1] - X[i]) * t, y: Y[i] + (Y[i + 1] - Y[i]) * t }
+}
+// a lit segment [s - len, s] of a path, as a dash
+function dashTo(path, s, len, total) {
+  path.style.strokeDasharray = `${len.toFixed(1)} ${(total + len + 10).toFixed(1)}`
+  path.style.strokeDashoffset = (len - s).toFixed(1)
 }
 function yAtX(lut, x) {
   const { X, Y, n } = lut
@@ -210,6 +240,14 @@ export function init(ctx) {
     F.price.textContent = p.price
     F.reserveName.textContent = ` on the ${p.name} profile`
   }
+  // The price arrives under pressure: set wide and light, it is squeezed
+  // narrow and heavy, like every headline at this depth (font axes only).
+  let squeezeTw = null
+  function squeeze(delay = 0) {
+    if (reduced || !F.price) return
+    squeezeTw?.kill()
+    squeezeTw = gsap.fromTo(F.price, { '--pf-sq': 1 }, { '--pf-sq': 0, duration: 1.5, delay, ease: 'expo.out' })
+  }
   function renderPanel(p, animate) {
     panel.dataset.profile = p.id
     if (!animate || reduced) {
@@ -220,6 +258,7 @@ export function init(ctx) {
     panelTl = gsap
       .timeline()
       .to(inner, { opacity: 0, y: -6, duration: 0.16, ease: 'power2.in', onComplete: () => fillPanel(p) })
+      .add(() => squeeze())
       .to(inner, { opacity: 1, y: 0, duration: 0.8, ease: 'expo.out' })
   }
 
@@ -244,6 +283,7 @@ export function init(ctx) {
       renderPanel(BY_ID[id], animate)
       if (from && animate && !reduced) glideFrom(from)
       else placeSub()
+      if (animate && G) sweep(G.curves[id])
     }
     if (announce && status) {
       const p = BY_ID[id]
@@ -288,6 +328,23 @@ export function init(ctx) {
     const hg = el('linearGradient', { id: 'pf-hadal-grad', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(RED_FROM - 500), x2: 0, y2: Y(RED_FROM + 500) }, defs)
     el('stop', { offset: 0, style: 'stop-color:var(--pf-twilight)' }, hg)
     el('stop', { offset: 1, style: 'stop-color:var(--pf-hadal)' }, hg)
+    // the hot filament down the centre of the Hadal line
+    const hh = el('linearGradient', { id: 'pf-hadal-hot', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(RED_FROM - 500), x2: 0, y2: Y(RED_FROM + 500) }, defs)
+    el('stop', { offset: 0, style: 'stop-color:var(--pf-hot-twilight)' }, hh)
+    el('stop', { offset: 1, style: 'stop-color:var(--pf-hot-hadal)' }, hh)
+    // soft points of light (the drawing tip, the lamp): one per light colour
+    for (const [id, c] of [['twilight', '--pf-twilight'], ['abyss', '--pf-abyss'], ['red', '--pf-hadal']]) {
+      const rg = el('radialGradient', { id: `pf-glow-${id}` }, defs)
+      el('stop', { offset: 0, style: `stop-color:var(${c});stop-opacity:0.75` }, rg)
+      el('stop', { offset: 0.35, style: `stop-color:var(${c});stop-opacity:0.22` }, rg)
+      el('stop', { offset: 1, style: `stop-color:var(${c});stop-opacity:0` }, rg)
+    }
+    // Vesper's lamp beam: white above 6,000 m, red below
+    for (const [id, c] of [['white', 'var(--c-ink)'], ['red', 'var(--pf-hadal)']]) {
+      const bg = el('linearGradient', { id: `pf-beam-${id}`, x1: 0, y1: 0, x2: 1, y2: 0.7 }, defs)
+      el('stop', { offset: 0, style: `stop-color:${c};stop-opacity:0.55` }, bg)
+      el('stop', { offset: 1, style: `stop-color:${c};stop-opacity:0` }, bg)
+    }
     // the water column itself, in the colours depth.js paints the page with
     const wg = el('linearGradient', { id: 'pf-water', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(0), x2: 0, y2: Y(Y_MAX) }, defs)
     for (const d of [0, 90, 200, 550, 1000, 2200, 4000, 6000, 8000, 10935]) {
@@ -299,8 +356,13 @@ export function init(ctx) {
     const lg = el('linearGradient', { id: 'pf-lamp', gradientUnits: 'userSpaceOnUse', x1: 0, y1: Y(0), x2: 0, y2: Y(Y_MAX) }, defs)
     el('stop', { offset: 0, style: 'stop-color:var(--pf-sel);stop-opacity:0' }, lg)
     el('stop', { offset: 1, style: 'stop-color:var(--pf-sel);stop-opacity:0.2' }, lg)
-    const clip = el('clipPath', { id: 'pf-ride-clip', clipPathUnits: 'userSpaceOnUse' }, defs)
-    const clipRect = el('rect', { x: 0, y: 0, width: reduced ? W : 0, height: H }, clip)
+    // The water fills in behind the sub, its leading edge soft like light
+    // falling off in water (a luminance mask with a gradient edge).
+    const fade = el('linearGradient', { id: 'pf-ride-fade', gradientUnits: 'userSpaceOnUse', x1: 0, y1: 0, x2: 1, y2: 0 }, defs)
+    el('stop', { offset: 0, 'stop-color': '#fff' }, fade)
+    el('stop', { offset: 1, 'stop-color': '#000' }, fade)
+    const mask = el('mask', { id: 'pf-ride-mask', maskUnits: 'userSpaceOnUse', x: 0, y: 0, width: W, height: H }, defs)
+    const clipRect = el('rect', { x: 0, y: 0, width: reduced ? W : 0, height: H, fill: reduced ? '#fff' : 'url(#pf-ride-fade)' }, mask)
     const sg = el('radialGradient', { id: 'pf-sub-glow' }, defs)
     el('stop', { offset: 0, style: 'stop-color:var(--pf-sel);stop-opacity:0.55' }, sg)
     el('stop', { offset: 1, style: 'stop-color:var(--pf-sel);stop-opacity:0' }, sg)
@@ -357,17 +419,28 @@ export function init(ctx) {
         },
         curvesG,
       )
-      const area = el('g', { class: 'pf__area', 'clip-path': 'url(#pf-ride-clip)' }, g)
+      const area = el('g', { class: 'pf__area', mask: 'url(#pf-ride-mask)' }, g)
       el('path', { d: `${d} Z`, fill: 'url(#pf-water)' }, area)
       el('path', { d: `${d} Z`, fill: 'url(#pf-lamp)' }, area)
+      // Luminous line: a wide bloom, the halo, the line, a hot filament.
+      const bloom = el('path', { class: 'pf__bloom', d }, g)
       const halo = el('path', { class: 'pf__halo', d }, g)
       const line = el('path', { class: 'pf__line', d }, g)
+      const fil = el('path', { class: 'pf__fil', d }, g)
+      // the wake of light behind the sub, and the sweep that runs along a
+      // line when it is chosen (dashes, placed by placeSub / sweep)
+      const wake = ['wide', 'mid', 'core'].map((k) => el('path', { class: `pf__wake pf__wake--${k}`, d }, g))
+      const sweepP = ['wide', 'core'].map((k) => el('path', { class: `pf__sweep pf__sweep--${k}`, d }, g))
       if (p.id === 'hadal') {
-        halo.style.stroke = 'url(#pf-hadal-grad)'
-        line.style.stroke = 'url(#pf-hadal-grad)'
+        for (const q of [bloom, halo, line, wake[0], wake[1], sweepP[0]]) q.style.stroke = 'url(#pf-hadal-grad)'
+        for (const q of [fil, wake[2], sweepP[1]]) q.style.stroke = 'url(#pf-hadal-hot)'
       }
       el('path', { class: 'pf__focus', d }, g)
       el('path', { class: 'pf__hit', d }, g)
+      // the point of light that draws the line as you sink
+      const tip = el('g', { class: 'pf__tip', 'aria-hidden': 'true' }, g)
+      el('circle', { class: 'pf__tip-glow', r: 18 }, tip)
+      el('circle', { class: 'pf__tip-core', r: 2.1 }, tip)
 
       // name + depth beside the floor
       const fx = X(p.tagAt)
@@ -379,9 +452,14 @@ export function init(ctx) {
       const td = el('tspan', { class: 'pf__tag-depth', dx: 8 }, tn)
       td.textContent = `${fmt(p.depth)} m`
 
-      curves[p.id] = { id: p.id, g, line, halo, area, tag, tn, lut: null, p, pins: [] }
+      curves[p.id] = { id: p.id, g, line, halo, bloom, fil, wake, sweepP, tip, area, tag, tn, lut: null, p, pins: [] }
     }
-    for (const c of Object.values(curves)) c.lut = sampleX(c.line)
+    for (const c of Object.values(curves)) {
+      c.lut = sampleX(c.line)
+      if (reduced) continue
+      // the sweep and the wake are dashes: nothing shows until they are placed
+      for (const q of [...c.sweepP, ...c.wake]) dashTo(q, 0, 0, c.lut.total)
+    }
 
     /* what you meet along each line (shown for the chosen one) */
     for (const c of Object.values(curves)) {
@@ -411,15 +489,19 @@ export function init(ctx) {
     const scan = el('line', { class: 'pf__scan', 'aria-hidden': 'true', x1: 0, x2: 0, y1: Y(0), y2: Y(Y_MAX) }, svg)
     const sub = el('g', { class: 'pf__sub', 'aria-hidden': 'true' }, svg)
     const subG = el('g', {}, sub)
-    el('circle', { class: 'pf__sub-glow', r: 26 }, subG)
-    el('rect', { class: 'pf__sub-body', x: -9, y: -3.5, width: 15, height: 7, rx: 3.5 }, subG)
-    el('circle', { class: 'pf__sub-body', cx: 6.5, cy: 0, r: 4.2 }, subG)
-    el('circle', { class: 'pf__sub-port', cx: 8, cy: 0.4, r: 1.6 }, subG)
-    el('rect', { class: 'pf__sub-body', x: -6, y: -6.5, width: 6, height: 3.5, rx: 1.2 }, subG)
-    const readD = el('text', { class: 'pf__sub-read', x: 16, y: -2 }, sub)
-    const readT = el('text', { class: 'pf__sub-read pf__sub-read--t', x: 16, y: 12 }, sub)
+    el('circle', { class: 'pf__sub-glow', r: 30 }, subG)
+    // Vesper side on, nose to the right (time runs right): her lamps throw
+    // a cone of light ahead and down, white above 6,000 m and red below
+    el('path', { class: 'pf__sub-beam', d: 'M8.5 2.6 L46 10 Q47 25 34 38 Z' }, subG)
+    el('path', { class: 'pf__sub-fin', d: 'M-9.5 -1.4 L-14.5 -5 Q-15.3 0 -14.5 5 L-9.5 1.4 Z' }, subG)
+    el('path', { class: 'pf__sub-body', d: 'M-10 0 C-10 -3.6 -7.4 -5 -3 -5 L3.5 -5 C8.4 -5 10.6 -2.6 10.6 0.2 C10.6 3.2 8 4.8 3.2 4.8 L-3 4.8 C-7.4 4.8 -10 3.6 -10 0 Z' }, subG)
+    el('rect', { class: 'pf__sub-body', x: -5.2, y: -8, width: 6.2, height: 3.6, rx: 1.4 }, subG)
+    el('circle', { class: 'pf__sub-port', cx: 6.4, cy: 0.2, r: 1.7 }, subG)
+    el('circle', { class: 'pf__sub-lamp', cx: 8.6, cy: 2.8, r: 1.05 }, subG)
+    const readD = el('text', { class: 'pf__sub-read', x: 18, y: -2 }, sub)
+    const readT = el('text', { class: 'pf__sub-read pf__sub-read--t', x: 18, y: 12 }, sub)
 
-    G = { W, H, m, pw, ph, X, Y, curves, sub, subG, scan, readD, readT, clipRect }
+    G = { W, H, m, pw, ph, X, Y, curves, sub, subG, scan, readD, readT, clipRect, fade }
     for (const id in drawnState) drawnState[id] = false // fresh DOM: re-apply classes
 
     // label boxes for collision checks (measured once per build)
@@ -486,6 +568,25 @@ export function init(ctx) {
     ctx.emit('sonar', { x: r.left + r.width / 2, y: r.top + r.height / 2, strength: 0.35 })
   }
 
+  // a chosen line answers with a run of light from the surface to the end
+  function sweep(c) {
+    if (reduced || !c?.lut || !drawnState[c.id]) return
+    const total = c.lut.total
+    const o = { s: 0 }
+    gsap.killTweensOf(c.sweepP)
+    gsap.fromTo(c.sweepP, { opacity: 1 }, { opacity: 0, duration: 0.5, delay: 1.05, ease: 'power2.in' })
+    c.sweepTw?.kill()
+    c.sweepTw = gsap.to(o, {
+      s: total + 40,
+      duration: 1.5,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        dashTo(c.sweepP[0], o.s, 120, total)
+        dashTo(c.sweepP[1], o.s, 46, total)
+      },
+    })
+  }
+
   /* ----------------------------------------------------------- draw on scroll */
   function setDrawn(id, on) {
     if (drawnState[id] === on) return
@@ -524,6 +625,7 @@ export function init(ctx) {
       onUpdate: () => {
         const t = tl.progress()
         for (const id in WINDOWS) setDrawn(id, t >= WINDOWS[id][1] - 0.005)
+        drawTips(t)
         const all = t >= WINDOWS.hadal[1] - 0.005
         if (all !== drawnAll) {
           drawnAll = all
@@ -550,12 +652,36 @@ export function init(ctx) {
     for (const p of PROFILES) {
       const c = curves[p.id]
       const [a, b] = WINDOWS[p.id]
-      tl.fromTo([c.line, c.halo], { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: b - a, ease: 'power1.inOut' }, a)
+      tl.fromTo([c.bloom, c.halo, c.line, c.fil], { drawSVG: '0% 0%' }, { drawSVG: '0% 100%', duration: b - a, ease: DRAW_EASE }, a)
       tl.fromTo(c.tag, { opacity: 0 }, { opacity: 1, duration: 0.04 }, b - 0.03)
     }
     tl.to({}, { duration: 0.03 }, 0.97) // the stage holds for the ride
     gsap.set(tags, { opacity: 0 })
     tl.progress(0).progress(tl.scrollTrigger ? tl.scrollTrigger.progress : 0)
+  }
+
+  // the point of light at the end of each line while it draws
+  const drawEase = gsap.parseEase(DRAW_EASE)
+  function drawTips(t) {
+    if (!G) return
+    for (const id in WINDOWS) {
+      const c = G.curves[id]
+      const [a, b] = WINDOWS[id]
+      const k = (t - a) / (b - a)
+      const on = k > 0.004 && k < 0.996
+      if (on !== c.tipOn) {
+        c.tipOn = on
+        c.tip.classList.toggle('is-on', on)
+      }
+      if (!on) continue
+      const pt = atS(c.lut, drawEase(k) * c.lut.total)
+      c.tip.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`)
+      const red = (pt.y - G.m.t) / G.ph * Y_MAX >= RED_FROM
+      if (red !== c.tipRed) {
+        c.tipRed = red
+        c.tip.classList.toggle('is-red', red)
+      }
+    }
   }
 
   /* ------------------------------------------------------------ the sub */
@@ -580,7 +706,7 @@ export function init(ctx) {
   function placeSub() {
     if (!G) return
     const c = G.curves[selected]
-    const { X, m, pw, ph, subG, sub, scan, readD, readT, clipRect, curves } = G
+    const { X, m, pw, ph, subG, sub, scan, readD, readT, clipRect, fade, curves } = G
     const on = !reduced && drawnAll
     if (on !== G.subOn) {
       G.subOn = on
@@ -596,7 +722,13 @@ export function init(ctx) {
     const h = ride * c.p.hours
     let x = X(h)
     let y = yAtX(c.lut, x)
-    clipRect.setAttribute('width', (reduced ? G.W : Math.max(0, x - m.l + 1)).toFixed(1))
+    if (!reduced) {
+      // a soft leading edge, closing up as the ride ends
+      const soft = 64 * (1 - Math.pow(ride, 6))
+      clipRect.setAttribute('width', Math.max(0, x + 1).toFixed(1))
+      fade.setAttribute('x1', (x - soft).toFixed(1))
+      fade.setAttribute('x2', (x + 1).toFixed(1))
+    }
     if (scanOn) {
       scan.setAttribute('x1', x.toFixed(1))
       scan.setAttribute('x2', x.toFixed(1))
@@ -613,6 +745,19 @@ export function init(ctx) {
         }
       }
     }
+    // the wake of light the sub leaves along the line behind it
+    const waking = on && glide.k < 0.02 && ride > 0.004 && ride < 0.996
+    if (waking !== G.waking) {
+      G.waking = waking
+      svg.classList.toggle('has-wake', waking)
+    }
+    if (waking) {
+      const sNow = sAtX(c.lut, x)
+      const total = c.lut.total
+      dashTo(c.wake[0], sNow, 150, total)
+      dashTo(c.wake[1], sNow, 80, total)
+      dashTo(c.wake[2], sNow, 34, total)
+    }
     if (!on) {
       setHidden(c, null)
       return
@@ -624,6 +769,12 @@ export function init(ctx) {
     }
     subG.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`)
     const depth = clamp((y - m.t) / ph) * Y_MAX
+    // below 6,000 m Vesper's lamps are red
+    const red = depth >= RED_FROM
+    if (red !== G.subRed) {
+      G.subRed = red
+      sub.classList.toggle('is-red', red)
+    }
     const shown = depth > c.p.depth - 15 ? c.p.depth : Math.round(depth / 10) * 10
     const mins = Math.round(h * 60)
     readD.textContent = `${fmt(shown)} m`
@@ -632,7 +783,7 @@ export function init(ctx) {
     // readout sits above the sub (below it near the surface), on the open side
     const left = x > m.l + pw - 92
     const below = y < m.t + 34
-    const rx = x + (left ? -14 : 14)
+    const rx = x + (left ? -18 : 18)
     const y1 = below ? y + 22 : y - 22
     for (const t of [readD, readT]) {
       t.setAttribute('text-anchor', left ? 'end' : 'start')

@@ -46,3 +46,104 @@ html.no-webgl #ocean {
   mask-image: linear-gradient(to bottom, #000 12%, rgb(0 0 0 / 0.6) 48%, transparent 92%);
   will-change: opacity, transform;
 }
+
+/* ==========================================================================
+   ATMOSPHERE — created by ocean.js
+   ========================================================================== */
+
+/* Under the content, over the light: the water closes in at the edges as
+   you sink (a vignette in the water's own near-black, opacity driven by
+   depth), and near the surface the column below you reads darker than the
+   light above. Being under <main>, neither ever dims a word of text. */
+.ocean-atmos {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-ocean);
+  pointer-events: none;
+}
+
+.ocean-atmos__vig,
+.ocean-atmos__floor {
+  position: absolute;
+  inset: 0;
+  will-change: opacity;
+}
+
+.ocean-atmos__vig {
+  opacity: 0.42;
+  background: radial-gradient(
+    ellipse 82% 78% at 50% 44%,
+    transparent 40%,
+    rgb(1 7 18 / 0.2) 66%,
+    rgb(1 5 13 / 0.52) 86%,
+    rgb(1 4 11 / 0.72) 100%
+  );
+}
+
+.ocean-atmos__floor {
+  opacity: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent 34%,
+    rgb(3 18 36 / 0.12) 58%,
+    rgb(2 13 28 / 0.3) 82%,
+    rgb(1 9 21 / 0.42) 100%
+  );
+}
+
+/* Film grain: a small tile of soft monochrome noise, overlay-blended (so
+   black water stays black and mid-tones barely move) and shifted to a new
+   offset ~12 times a second by the compositor (transform only, never a
+   repaint). Over the content, under the instruments and the nav. */
+.ocean-grain {
+  position: fixed;
+  inset: -128px;
+  z-index: calc(var(--z-hud) - 1);
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: overlay;
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  transition: opacity 1.6s var(--ease-out);
+  animation: ocean-grain 0.72s steps(1, end) infinite;
+}
+
+.ocean-grain.is-ready {
+  opacity: 0.07;
+}
+
+@media (max-width: 767px) {
+  .ocean-grain.is-ready {
+    opacity: 0.055;
+  }
+}
+
+.ocean-grain.is-still {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocean-grain {
+    animation: none;
+  }
+}
+
+@keyframes ocean-grain {
+  0% { transform: translate3d(0, 0, 0); }
+  11% { transform: translate3d(-41px, 67px, 0); }
+  22% { transform: translate3d(-93px, 11px, 0); }
+  33% { transform: translate3d(-17px, 103px, 0); }
+  44% { transform: translate3d(-111px, 79px, 0); }
+  55% { transform: translate3d(-59px, 29px, 0); }
+  66% { transform: translate3d(-7px, 47px, 0); }
+  77% { transform: translate3d(-83px, 113px, 0); }
+  88% { transform: translate3d(-29px, 89px, 0); }
+}
+
+/* Windows high contrast & co.: no decorative layers */
+@media (forced-colors: active) {
+  .ocean-atmos,
+  .ocean-grain {
+    display: none;
+  }
+}

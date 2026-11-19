@@ -57,6 +57,81 @@
   translate: 0 -2vh;
 }
 
+/* ------------------------------------------------- sunlight on the type */
+/* Once the intro has settled, hero.js generates a small tileable caustic
+   texture (rays refracted through a rippling surface, then binned) and adds
+   .is-lit. The letters are then filled with the light of the water they sit
+   in: brightest at the top of each line, where the sun falls, cooler toward
+   the baseline, with two drifting layers of caustic network playing across
+   the strokes. The top layer is the plain ink again, and it returns as the
+   title takes on the pressure (--squeeze), so the light leaves the letters
+   as you leave the surface. --lit (0 → 1) is the light coming on. */
+.hero__title {
+  --lit: 0;
+}
+
+.hero__title.is-lit {
+  --lit-cover: rgb(234 246 244 / calc(1 - var(--lit) * (1 - var(--squeeze))));
+  /* one tile per line, nudged up so each cap line catches the bright band;
+     the same tone at both ends of the tile, so the tight leading (where one
+     line's descenders meet the next line's ascenders) never shows a seam */
+  --line: calc((var(--lh) - 0.06 * var(--squeeze)) * 1em);
+  --line-y: -0.05em;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image:
+    linear-gradient(var(--lit-cover), var(--lit-cover)),
+    var(--caustic),
+    var(--caustic),
+    linear-gradient(to bottom, #bde0e4 0%, #f4ffff 9%, #d0ebed 38%, #b0d9de 76%, #a9d5db 88%, #bde0e4 100%);
+  background-size:
+    100% 100%,
+    6em 6em,
+    8.2em 8.2em,
+    100% var(--line);
+  background-position: 0 0, 0 0, 0 0, 0 var(--line-y);
+  background-repeat: no-repeat, repeat, repeat, repeat-y;
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* the light drifts ~30 px/s: stepping it at 30 fps (46 s × 30) halves the
+     repaints of the title and is invisible */
+  animation: hero-caustic 46s steps(1380, end) infinite paused;
+}
+
+/* the light only moves while it can be seen */
+#surface.is-near .hero__title.is-lit {
+  animation-play-state: running;
+}
+
+#surface.is-static .hero__title.is-lit {
+  animation: none;
+  background-position: 0 0, 1.7em 0.9em, -2.6em 3.1em, 0 var(--line-y);
+}
+
+/* two layers of the network drifting across each other, as the real
+   pattern shifts with every passing ripple */
+@keyframes hero-caustic {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 var(--line-y);
+  }
+  to {
+    background-position: 0 0, 6em 6em, -8.2em 8.2em, 0 var(--line-y);
+  }
+}
+
+.hero__title.is-lit ::selection,
+.hero__title.is-lit::selection {
+  -webkit-text-fill-color: #001a1a;
+}
+
+@media (forced-colors: active) {
+  .hero__title.is-lit {
+    color: CanvasText;
+    -webkit-text-fill-color: currentColor;
+    background: none;
+  }
+}
+
 /* designed line breaks: "Go all the / way down." on wide screens,
    "Go all / the way / down." on phones */
 .hero__br--m {
@@ -155,6 +230,21 @@ html.is-loading #surface.is-armed [data-hero-reveal] {
 .hero__plumb-bob path {
   fill: var(--c-snell);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c-snell) 80%, transparent));
+}
+
+/* --------------------------------------------------- very wide screens */
+/* Past ~1800 px the page column stops growing (--maxw) and the title would
+   sit small in a sea of water. Let the title's own stage run a little wider
+   than the column (same centre line: same asymmetric .wrap padding), so the
+   headline keeps its presence. */
+@media (min-width: 1800px) and (min-height: 760px) {
+  #surface .hero__stage {
+    --maxw: 1840px;
+  }
+
+  .hero__title {
+    font-size: min(17.5rem, calc(100cqi / 7.7));
+  }
 }
 
 /* ------------------------------------------- phones + portrait tablets */

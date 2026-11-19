@@ -2,11 +2,15 @@
   <!-- the drawn title's outline: the outer edge of the glyphs only, so the
        variable font's overlapping contours never show as seams -->
   <svg class="vessel__defs" width="0" height="0" aria-hidden="true" focusable="false">
-    <filter id="vessel-outline" x="-2%" y="-4%" width="104%" height="108%" color-interpolation-filters="sRGB">
+    <filter id="vessel-outline" x="-3%" y="-7%" width="106%" height="114%" color-interpolation-filters="sRGB">
       <feMorphology in="SourceAlpha" operator="dilate" radius="1" result="grown" />
       <feComposite in="grown" in2="SourceAlpha" operator="out" result="edge" />
       <feFlood flood-color="#6cf8e8" />
-      <feComposite in2="edge" operator="in" />
+      <feComposite in2="edge" operator="in" result="line" />
+      <!-- the line carries a little light of its own, like the 3D drawing beside it -->
+      <feGaussianBlur in="line" stdDeviation="3.2" result="bloom" />
+      <feComponentTransfer in="bloom" result="soft"><feFuncA type="linear" slope="1.6" /></feComponentTransfer>
+      <feMerge><feMergeNode in="soft" /><feMergeNode in="line" /></feMerge>
     </filter>
   </svg>
   <div class="vessel__stage">

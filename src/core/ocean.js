@@ -19,6 +19,22 @@
  *      down and they stream upward past you (motion-stretched with speed).
  *   3. Bioluminescent sparks from ~200 m — brief, scattered flashes, some in
  *      siphonophore-like chains — tinted red in the hadal zone.
+ *   4. Sun glitter: brief cyan-white glints inside Snell's window, gathered
+ *      toward the sun's image; they leave with the window as you sink.
+ *   5. Stimulated plankton glints. Below ~200 m, descending fast lights the
+ *      water (more flashes the faster you go, streaked by the motion).
+ *
+ * Layer crossings: every zone boundary (200, 1,000, 4,000, 6,000 m) is a
+ * change of water mass. Cross one, either way, and a sheet of that layer
+ * sweeps through the view over ~1.5 s (up the screen on the way down): its
+ * faces shimmer as fine strata, it lenses the light behind it, it lights
+ * the snow and the plankton it carries, and at 200 m, where sunlight still
+ * reaches, it gathers that light into a travelling band of caustic glimmer.
+ *
+ * Atmosphere (plain DOM, also without WebGL): a vignette in the water's own
+ * near-black that closes in with depth plus a darker column below you near
+ * the surface — both UNDER <main>, so they never dim text — and a fine film
+ * grain over the content (overlay blend, stepped by the compositor).
  *
  * Boot: init() only builds plain JS objects. The WebGL context, the
  * renderer and the shaders (compiled in parallel where the browser can) are
@@ -91,6 +107,12 @@ float shafts(vec2 sp, vec2 vp, float freq, float t) {
   float brk = 0.5 + 0.5 * noise1(dist * 2.1 - t * 0.22 + a * 9.0);
   return s * s * brk;
 }
+
+// A layer boundary (thermocline / halocline) seen edge-on: a slow, slightly
+// tilted undulation around its centre line. x is aspect-corrected.
+float bandOff(float x, float t) {
+  return 0.05 * sin(x * 1.3 + t * 0.9) + 0.024 * sin(x * 3.7 - t * 1.7) + 0.035 * x;
+}
 `
 
 const FULLSCREEN_VERT = /* glsl */ `
@@ -119,6 +141,8 @@ uniform float uRayFreq;
 uniform float uRays;
 uniform float uWin;
 uniform float uStir;
+uniform vec4 uBand;      // x: centre (ndc y), y: amount, z: travel (+1 up), w: sunlit
+uniform vec3 uBandCol;
 ${COMMON}
 
 vec3 camDir(vec2 ndc) {
@@ -224,9 +248,35 @@ void main() {
   float c = causticWeb(cp, uTime * 0.32);
   col += vec3(0.6, 0.96, 1.0) * c * (0.05 + 0.3 * r) * (1.0 + 1.6 * uStir) * topFade * uRays;
 
+  col *= uAmt;
+
+  // ---- Crossing a layer boundary: a sheet of denser water sweeps through
+  // the view. Its faces shimmer like heat haze (fine, broken strata); where
+  // sunlight still reaches, the lensing layer gathers it into a travelling
+  // band of caustic glimmer. In the dark it is only a faint living haze, and
+  // the plankton it carries (the glint layer) does the rest.
+  if (uBand.y > 0.002) {
+    float bd = ndc.y - uBand.x - bandOff(sp.x, uTime);
+    float bw = 0.17;
+    float prof = exp(-bd * bd / (bw * bw));
+    if (prof > 0.004) {
+      float str = 0.0;
+      for (int k = 0; k < 3; k++) {
+        float fk = float(k);
+        float o = (fk - 1.0) * 0.052 + 0.012 * sin(uTime * 1.7 + fk * 2.1 + sp.x * 2.6);
+        float w = bd - o + 0.006 * sin(sp.x * 11.0 + uTime * 2.4 + fk);
+        float brk = smoothstep(0.3, 0.85, noise1(sp.x * 3.1 + fk * 7.3 - uTime * 0.9 * uBand.z));
+        str += exp(-w * w / 0.00004) * brk * (fk == 1.0 ? 1.0 : 0.6);
+      }
+      float web = causticWeb(sp * 1.45 + vec2(uTime * 0.03, bd * 1.8), uTime * 0.9);
+      vec3 b = uBandCol * (0.06 * prof + 0.22 * str * prof);
+      b += vec3(0.8, 0.97, 1.0) * uBand.w * prof * (0.06 + 0.48 * web + 0.28 * str);
+      col += b * uBand.y;
+    }
+  }
+
   // a dome-port style falloff along the top edge keeps the glare off the nav
   col *= 1.0 - 0.38 * smoothstep(0.74, 1.0, ndc.y);
-  col *= uAmt;
   col += (hash12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
   gl_FragColor = vec4(max(col, 0.0), 1.0);
 }
@@ -237,9 +287,20 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D uTex;
 uniform float uTime;
+uniform float uAspect;
+uniform vec4 uBand;
 ${COMMON}
 void main() {
-  vec3 c = texture2D(uTex, vUv).rgb;
+  vec2 uv = vUv;
+  // a passing layer is a weak lens: it bends the light behind it
+  if (uBand.y > 0.002) {
+    vec2 ndc = vUv * 2.0 - 1.0;
+    float bd = ndc.y - uBand.x - bandOff(ndc.x * uAspect, uTime);
+    float e = exp(-bd * bd / 0.029) * uBand.y;
+    uv.y -= bd * e * 0.05;
+    uv.x += 0.0035 * sin(ndc.y * 34.0 - uTime * 3.6 * uBand.z + ndc.x * 4.0) * e;
+  }
+  vec3 c = texture2D(uTex, uv).rgb;
   c += (hash12(gl_FragCoord.xy + fract(uTime * 7.0) * 113.0) - 0.5) / 255.0;
   gl_FragColor = vec4(max(c, 0.0), 1.0);
 }
@@ -261,6 +322,8 @@ uniform vec2 uMouse;
 uniform float uMouseAmt;
 uniform vec4 uSonar;
 uniform vec3 uCol;
+uniform vec4 uBand;
+uniform vec3 uBandCol;
 varying float vA;
 varying float vS;
 varying float vSoft;
@@ -306,9 +369,14 @@ void main() {
   float lit = shafts(sp, uVP, uRayFreq, uTime);
   a *= 1.0 + uLight * (0.6 + 3.2 * lit) * smoothstep(-1.2, 0.8, sp.y);
   a *= 1.0 + 7.0 * ring;
+  // a passing layer catches the motes it carries
+  float bd = sp.y - uBand.x - bandOff(sp.x, uTime);
+  float bx = exp(-bd * bd / 0.016) * uBand.y * (0.35 + 0.65 * aRand.w);
+  a *= 1.0 + 3.2 * bx;
   vA = a * uAmt;
   // the ping briefly tints what it touches with living blue-green
   vC = mix(uCol, vec3(0.42, 0.97, 0.91), clamp(ring, 0.0, 1.0) * 0.7);
+  vC = mix(vC, uBandCol, clamp(bx, 0.0, 1.0) * 0.55);
 }
 `
 
@@ -412,6 +480,145 @@ void main() {
 }
 `
 
+// Stimulated light. Small plankton flash when the water around them is
+// disturbed: descend fast through dark water and the sub's wake lights up
+// (uBloom), and a layer boundary passing through the view lights the
+// plankton it carries (uBand). Each glint fires on its own short cycle,
+// somewhere new each time, and is swept past like the snow.
+const GLINT_VERT = /* glsl */ `
+attribute vec4 aRand;
+uniform float uTime;
+uniform float uFlow;
+uniform float uVel;
+uniform float uPR;
+uniform float uAspect;
+uniform float uScale;
+uniform float uBloom;
+uniform float uHadal;
+uniform vec4 uBand;
+uniform vec3 uBandCol;
+uniform vec3 uColA;
+uniform vec3 uColB;
+uniform vec3 uColR;
+varying float vA;
+varying float vS;
+varying vec3 vC;
+${COMMON}
+
+void main() {
+  float P = mix(0.8, 2.2, aRand.x);
+  float tt = uTime + aRand.y * P;
+  float cyc = floor(tt / P);
+  float l = tt - cyc * P;
+  vec3 h = hash31(aRand.w * 37.1 + cyc * 2.93);
+
+  float z = aRand.z;
+  float near = 1.0 - z;
+  float par = mix(0.25, 1.9, near * near);
+  float y = fract(h.y + uFlow * par * 0.6);
+  vec2 sp = vec2((h.x * 2.0 - 1.0) * uAspect * 1.04, y * 2.3 - 1.15);
+  gl_Position = vec4(sp.x / uAspect, sp.y, 0.0, 1.0);
+
+  // the faster the descent, the more of them answer
+  float thr = 1.0 - 0.75 * uBloom;
+  float fire = smoothstep(thr, thr + 0.06, h.z) * uBloom;
+  float env = smoothstep(0.0, 0.035, l) * exp(-l * mix(6.5, 3.0, aRand.x));
+  float bloom = fire * env;
+
+  float bd = sp.y - uBand.x - bandOff(sp.x, uTime);
+  float bp = exp(-bd * bd / 0.014) * uBand.y * step(0.2, aRand.w);
+  float tw = 0.5 + 0.5 * sin(uTime * (13.0 + 21.0 * aRand.x) + aRand.y * 40.0);
+  float band = bp * (0.25 + 0.75 * tw * tw);
+
+  float stretch = 1.0 + min(abs(uVel) * par * 1.25, 6.0);
+  vS = stretch;
+  float a = (bloom * mix(0.7, 1.5, near) + band * 1.35) / pow(stretch, 0.3);
+  vA = a;
+  float size = mix(2.6, 8.5, near * near) * (1.0 + 0.9 * clamp(bp, 0.0, 1.0));
+  gl_PointSize = a < 0.004 ? 0.0 : size * stretch * uScale * uPR;
+
+  vec3 c = mix(uColA, uColB, fract(h.z * 7.13));
+  // living light stays blue-green, even under the red lamps
+  c = mix(c, uColR, uHadal * 0.1);
+  vC = mix(c, uBandCol, clamp(band / max(a, 1e-3), 0.0, 1.0));
+}
+`
+
+const GLINT_FRAG = /* glsl */ `
+precision highp float;
+varying float vA;
+varying float vS;
+varying vec3 vC;
+void main() {
+  vec2 q = gl_PointCoord * 2.0 - 1.0;
+  float r = 1.0 / vS;
+  float d = length(vec2(q.x, max(abs(q.y) - (1.0 - r), 0.0))) / r;
+  if (d > 1.0) discard;
+  float core = exp(-d * d * 12.0);
+  float halo = exp(-d * d * 3.2) * 0.45;
+  float f = (core + halo) * mix(1.0, 1.0 - smoothstep(0.1, 1.0, abs(q.y)), 1.0 - r);
+  gl_FragColor = vec4(mix(vC, vec3(1.0), core * 0.3), vA * f);
+}
+`
+
+// Sun glitter. Where a ripple tilts just right, the sun flashes through the
+// surface for an instant: glints gather toward the sun's image and only
+// happen inside Snell's window, so they leave with the window as you sink.
+const GLITTER_VERT = /* glsl */ `
+attribute vec4 aRand;
+uniform float uTime;
+uniform float uPR;
+uniform float uAspect;
+uniform float uAmt;
+uniform float uScale;
+uniform float uPitch;
+uniform float uYaw;
+uniform float uTanFov;
+uniform vec3 uSunW;
+uniform vec2 uVP;
+varying float vA;
+${COMMON}
+
+void main() {
+  float P = mix(0.7, 2.4, aRand.x);
+  float tt = uTime + aRand.y * P;
+  float cyc = floor(tt / P);
+  float l = tt - cyc * P;
+  float dur = mix(0.12, 0.36, aRand.z);
+  float env = smoothstep(0.0, dur * 0.25, l) * (1.0 - smoothstep(dur * 0.25, dur, l));
+  vec3 h = hash31(aRand.w * 29.3 + cyc * 3.77);
+  vec2 ndc = vec2(uVP.x / uAspect + (h.x - 0.5) * 1.7, mix(0.2, 1.02, sqrt(h.y)));
+
+  float s = sin(uPitch), c = cos(uPitch);
+  vec3 d = normalize(vec3(0.0, s, c) + ndc.x * uTanFov * uAspect * vec3(1.0, 0.0, 0.0) + ndc.y * uTanFov * vec3(0.0, c, -s));
+  float sy = sin(uYaw), cy = cos(uYaw);
+  d = vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy);
+  float win = smoothstep(0.66, 0.78, d.y);
+  float toSun = pow(max(dot(d, uSunW), 0.0), 9.0);
+
+  float a = env * win * toSun * uAmt * (0.7 + 0.9 * h.z);
+  vA = a;
+  gl_Position = vec4(ndc, 0.0, 1.0);
+  gl_PointSize = a < 0.004 ? 0.0 : mix(9.0, 30.0, h.z * toSun) * uScale * uPR;
+}
+`
+
+const GLITTER_FRAG = /* glsl */ `
+precision highp float;
+varying float vA;
+void main() {
+  vec2 q = gl_PointCoord * 2.0 - 1.0;
+  float r2 = dot(q, q);
+  if (r2 > 1.0) discard;
+  float core = exp(-r2 * 26.0) * 1.4;
+  float fade = 1.0 - sqrt(r2);
+  float arms = exp(-abs(q.x) * 26.0 - q.y * q.y * 1.5) + exp(-abs(q.y) * 26.0 - q.x * q.x * 1.5);
+  float f = core + 0.45 * arms * fade * fade;
+  // seen through blue-green water: cyan-white, white-hot at the centre
+  gl_FragColor = vec4(mix(vec3(0.66, 0.95, 1.0), vec3(1.0), min(core, 1.0) * 0.6), vA * f);
+}
+`
+
 /* ------------------------------------------------------------- module */
 
 export function init(ctx) {
@@ -464,6 +671,11 @@ function createOcean(ctx, canvas) {
   const sunA = new Vector3(-Math.sin(thA) * Math.sin(AZ), Math.cos(thA), Math.sin(thA) * Math.cos(AZ))
   const TAN_FOV = Math.tan(36 * DEG)
 
+  // ---- a layer boundary passing through the view (shared by every pass):
+  // x centre (ndc y), y amount, z travel direction (+1 = up), w sunlit
+  const band = new Vector4(0, 0, 1, 0)
+  const bandCol = new Vector3(0.42, 0.97, 0.91)
+
   // ---- light pass
   const lightRT = new WebGLRenderTarget(2, 2, {
     minFilter: LinearFilter,
@@ -487,6 +699,8 @@ function createOcean(ctx, canvas) {
     uRays: { value: 1 },
     uWin: { value: 1 },
     uStir: { value: 0 },
+    uBand: { value: band },
+    uBandCol: { value: bandCol },
   }
   const lightScene = new Scene()
   const lightMesh = new Mesh(
@@ -505,7 +719,12 @@ function createOcean(ctx, canvas) {
 
   // ---- main scene: composite + snow + sparks
   const scene = new Scene()
-  const compU = { uTex: { value: lightRT.texture }, uTime: { value: 0 } }
+  const compU = {
+    uTex: { value: lightRT.texture },
+    uTime: { value: 0 },
+    uAspect: lightU.uAspect,
+    uBand: lightU.uBand,
+  }
   const comp = new Mesh(
     quad,
     new ShaderMaterial({
@@ -550,6 +769,8 @@ function createOcean(ctx, canvas) {
     uMouseAmt: { value: 0 },
     uSonar: { value: new Vector4(0, 0, -99, 0) },
     uCol: { value: new Vector3(0.84, 0.97, 1) },
+    uBand: lightU.uBand,
+    uBandCol: lightU.uBandCol,
   }
   const snow = new Points(
     snowGeo,
@@ -564,7 +785,7 @@ function createOcean(ctx, canvas) {
     }),
   )
   snow.frustumCulled = false
-  snow.renderOrder = 1
+  snow.renderOrder = 2
   scene.add(snow)
 
   // bioluminescent sparks (solo flashes + a few chains)
@@ -618,8 +839,139 @@ function createOcean(ctx, canvas) {
     }),
   )
   sparks.frustumCulled = false
-  sparks.renderOrder = 2
+  sparks.renderOrder = 3
   scene.add(sparks)
+
+  // stimulated plankton glints (descent blooms + passing layers)
+  const GLINTS = mobile ? 230 : 520
+  const glRand = new Float32Array(GLINTS * 4)
+  for (let i = 0; i < GLINTS * 4; i++) glRand[i] = Math.random()
+  const glintGeo = new BufferGeometry()
+  glintGeo.setAttribute('position', new BufferAttribute(new Float32Array(GLINTS * 3), 3))
+  glintGeo.setAttribute('aRand', new BufferAttribute(glRand, 4))
+  const glintU = {
+    uTime: snowU.uTime,
+    uFlow: snowU.uFlow,
+    uVel: snowU.uVel,
+    uPR: snowU.uPR,
+    uAspect: snowU.uAspect,
+    uScale: snowU.uScale,
+    uBloom: { value: 0 },
+    uHadal: sparkU.uHadal,
+    uBand: lightU.uBand,
+    uBandCol: lightU.uBandCol,
+    uColA: sparkU.uColA,
+    uColB: sparkU.uColB,
+    uColR: sparkU.uColR,
+  }
+  const glints = new Points(
+    glintGeo,
+    new ShaderMaterial({
+      vertexShader: GLINT_VERT,
+      fragmentShader: GLINT_FRAG,
+      uniforms: glintU,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    }),
+  )
+  glints.frustumCulled = false
+  glints.renderOrder = 4
+  scene.add(glints)
+
+  // sun glitter in Snell's window
+  const GLITTER = mobile ? 70 : 170
+  const gtRand = new Float32Array(GLITTER * 4)
+  for (let i = 0; i < GLITTER * 4; i++) gtRand[i] = Math.random()
+  const glitterGeo = new BufferGeometry()
+  glitterGeo.setAttribute('position', new BufferAttribute(new Float32Array(GLITTER * 3), 3))
+  glitterGeo.setAttribute('aRand', new BufferAttribute(gtRand, 4))
+  const glitterU = {
+    uTime: snowU.uTime,
+    uPR: snowU.uPR,
+    uAspect: snowU.uAspect,
+    uAmt: { value: 0 },
+    uScale: snowU.uScale,
+    uPitch: lightU.uPitch,
+    uYaw: lightU.uYaw,
+    uTanFov: lightU.uTanFov,
+    uSunW: lightU.uSunW,
+    uVP: lightU.uVP,
+  }
+  const glitter = new Points(
+    glitterGeo,
+    new ShaderMaterial({
+      vertexShader: GLITTER_VERT,
+      fragmentShader: GLITTER_FRAG,
+      uniforms: glitterU,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: AdditiveBlending,
+    }),
+  )
+  glitter.frustumCulled = false
+  glitter.renderOrder = 1
+  scene.add(glitter)
+
+  // ---- atmosphere (plain DOM, works without WebGL too). A vignette in the
+  // water's own colour that closes in as you sink, and a darker water column
+  // below you near the surface: both sit UNDER the content (between this
+  // canvas and <main>), so they deepen the water and never dim the text.
+  // Over everything but the instruments: a fine, slow film grain.
+  const atmos = document.createElement('div')
+  atmos.className = 'ocean-atmos'
+  atmos.setAttribute('aria-hidden', 'true')
+  const vigEl = document.createElement('div')
+  vigEl.className = 'ocean-atmos__vig'
+  const floorEl = document.createElement('div')
+  floorEl.className = 'ocean-atmos__floor'
+  atmos.append(vigEl, floorEl)
+  canvas.after(atmos)
+  const grainEl = document.createElement('div')
+  grainEl.className = 'ocean-grain' + (ctx.reducedMotion ? ' is-still' : '')
+  grainEl.setAttribute('aria-hidden', 'true')
+  atmos.after(grainEl)
+  let grainUrl = ''
+  let lastVig = ''
+  let lastFloor = ''
+  function atmosAt(depth) {
+    const f = clamp(Math.log1p(depth / 60) / Math.log1p(6000 / 60))
+    const v = (0.42 + 0.58 * f).toFixed(2)
+    const fl = (1 - 0.6 * f).toFixed(2)
+    if (v !== lastVig) vigEl.style.opacity = lastVig = v
+    if (fl !== lastFloor) floorEl.style.opacity = lastFloor = fl
+  }
+  // a small tile of soft, roughly gaussian monochrome noise
+  function makeGrain() {
+    if (disposed) return
+    try {
+      const S = 128
+      const c = document.createElement('canvas')
+      c.width = c.height = S
+      const g = c.getContext('2d')
+      const im = g.createImageData(S, S)
+      const d = im.data
+      for (let i = 0; i < S * S; i++) {
+        const n = (Math.random() + Math.random() + Math.random()) / 3 - 0.5
+        const v = Math.max(0, Math.min(255, Math.round(128 + n * 420)))
+        d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v
+        d[i * 4 + 3] = 255
+      }
+      g.putImageData(im, 0, 0)
+      const apply = (url) => {
+        if (disposed) return
+        grainUrl = url
+        grainEl.style.backgroundImage = `url("${url}")`
+        grainEl.classList.add('is-ready')
+      }
+      if (c.toBlob) c.toBlob((b) => b && apply(URL.createObjectURL(b)))
+      else apply(c.toDataURL())
+    } catch {
+      /* no grain: fine */
+    }
+  }
 
   // ---- sizing
   function resize(force = false) {
@@ -706,13 +1058,51 @@ function createOcean(ctx, canvas) {
   let lastDepth = -1
   const depthState = { depth: 0, sun: 1, hadal: 0, section: null }
 
+  // ---- layer crossings. Each zone boundary is a real change of water mass
+  // (the thermocline under the mixed layer at ~200 m, the colder deep water
+  // below 1,000 m, …). Cross one and a sheet of that layer sweeps through
+  // the view over ~1.5 s: up the screen on the way down, down it on the way
+  // up. Colour by boundary: sunlit glimmer at 200 m, living blue-green and
+  // then blue below, and the first red of the observation lamps at 6,000 m.
+  const BAND_COL = [null, [0.58, 0.98, 0.96], [0.42, 0.97, 0.91], [0.3, 0.7, 1.0], [1.0, 0.34, 0.27]]
+  const bandFx = { p: 1, on: false, dir: 1, sunlit: 0, amp: 1 }
+  let bloom = 0
+  let zoneIdx = -1
+  let bandsArmed = false
+  // not on load, deep links or layout re-aims: only once the visitor dives
+  ctx.ready.then(() => gsap.delayedCall(0.8, () => (bandsArmed = true)))
+  function crossLayer(dir, b) {
+    if (ctx.reducedMotion || !renderer || !bandsArmed) return
+    // a quick run through several layers (a nav jump) shows one sweep
+    if (bandFx.on && bandFx.p < 0.72) return
+    const c = BAND_COL[b] || BAND_COL[2]
+    bandCol.set(c[0], c[1], c[2])
+    bandFx.dir = dir
+    bandFx.sunlit = b === 1 ? Math.pow(clamp(depthState.sun), 1.15) * fx.intro : 0
+    bandFx.amp = b === 1 ? 1 : 0.92
+    bandFx.on = true
+    gsap.killTweensOf(bandFx)
+    gsap.fromTo(
+      bandFx,
+      { p: 0 },
+      { p: 1, duration: 1.55, ease: 'none', onComplete: () => (bandFx.on = false) },
+    )
+    dirty = true
+  }
+
   const offDepth = ctx.depth.onChange((s) => {
+    const zi = s.zone ? ctx.depth.ZONES.findIndex((z) => z.id === s.zone.id) : -1
+    if (zoneIdx >= 0 && zi >= 0 && zi !== zoneIdx && Math.abs(s.depth - lastDepth) < 1500) {
+      crossLayer(zi > zoneIdx ? 1 : -1, Math.max(zi, zoneIdx))
+    }
+    zoneIdx = zi
     depthState.depth = s.depth
     depthState.sun = s.sun
     depthState.hadal = s.hadal
     depthState.section = s.section
     if (Math.abs(s.depth - lastDepth) > 0.01) dirty = true
     lastDepth = s.depth
+    atmosAt(s.depth)
   })
 
   // The light comes up with the flood (or, without the loader, as the page
@@ -833,7 +1223,10 @@ function createOcean(ctx, canvas) {
     if (!ctx.reducedMotion) {
       const dRush = fx.rush - lastRush
       lastRush = fx.rush
-      const v = clamp(((y - lastY) / stableVh + dRush) / Math.max(dt, 1 / 240), -10, 10)
+      // an instant jump (deep link, layout re-aim) is not a descent: no
+      // streaking snow, no bloom
+      const jumped = Math.abs(y - lastY) > stableVh * 1.5
+      const v = jumped ? vel : clamp(((y - lastY) / stableVh + dRush) / Math.max(dt, 1 / 240), -10, 10)
       vel += (v - vel) * (1 - Math.exp(-dt * 7))
       snowU.uFlow.value = y / stableVh + fx.rush
     }
@@ -859,17 +1252,36 @@ function createOcean(ctx, canvas) {
     snowU.uMouse.value.lerp(mouse, 1 - Math.exp(-dt * 6))
     snowU.uMouseAmt.value += (mouseTarget - snowU.uMouseAmt.value) * (1 - Math.exp(-dt * 3))
 
-    sparkU.uAmt.value = smooth(160, 520, depth) * 1.4
+    // sun glitter lives in Snell's window
+    glitterU.uAmt.value = sunAmt * fx.intro * lightU.uWin.value
+
+    // a layer sweeping through the view (sine in-out, fading at both ends)
+    if (bandFx.on) {
+      const p = bandFx.p
+      const e = 0.5 - 0.5 * Math.cos(Math.PI * p)
+      band.set(lerp(-1.45, 1.45, e) * bandFx.dir, bandFx.amp * Math.pow(Math.sin(Math.PI * p), 0.65), bandFx.dir, bandFx.sunlit)
+    } else band.y = 0
+
+    // the descent lights the water: below the sunlight, speed stirs up
+    // flashes from the plankton (fast to answer, slow to settle)
+    const tgt = ctx.reducedMotion ? 0 : smooth(200, 520, depth) * smooth(0.12, 1.9, Math.abs(vel))
+    bloom += (tgt - bloom) * (1 - Math.exp(-dt * (tgt > bloom ? 5 : 1.3)))
+    if (bloom < 0.001) bloom = 0
+    glintU.uBloom.value = bloom
+
+    sparkU.uAmt.value = smooth(160, 520, depth) * 1.4 * (1 + 0.7 * bloom)
     sparkU.uHadal.value = hadal
   }
 
   function render(warm = false) {
-    const lightOn = warm || lightU.uAmt.value > 0.004
+    const lightOn = warm || lightU.uAmt.value > 0.004 || band.y > 0.002
     if (lightOn) {
       renderer.setRenderTarget(lightRT)
       renderer.render(lightScene, camera)
     }
     comp.visible = lightOn
+    glitter.visible = warm || glitterU.uAmt.value > 0.01
+    glints.visible = warm || bloom > 0.003 || band.y > 0.002
     sparks.visible = warm || sparkU.uAmt.value > 0.002
     renderer.setRenderTarget(null)
     renderer.clear(true, false, false)
@@ -904,6 +1316,8 @@ function createOcean(ctx, canvas) {
     const still =
       lightU.uAmt.value <= 0.004 &&
       Math.abs(vel) < 0.02 &&
+      bloom < 0.003 &&
+      !bandFx.on &&
       now - movedAt > 800 &&
       time - snowU.uSonar.value.z > 6
     frame++
@@ -1012,9 +1426,15 @@ function createOcean(ctx, canvas) {
   }
 
   idle(build, 500)
+  // the grain arrives with the page, never during the intro's first frames
+  ctx.ready.then(() => idle(makeGrain, 1200))
 
   return () => {
     disposed = true
+    gsap.killTweensOf(bandFx)
+    atmos.remove()
+    grainEl.remove()
+    if (grainUrl.startsWith('blob:')) URL.revokeObjectURL(grainUrl)
     gsap.ticker.remove(tick)
     if (fbTick) gsap.ticker.remove(fbTick)
     cancelAnimationFrame(resizeRaf)

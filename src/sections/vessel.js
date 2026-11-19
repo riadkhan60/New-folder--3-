@@ -25,7 +25,6 @@ import {
   Group,
   Mesh,
   InstancedMesh,
-  LineSegments,
   Points,
   BufferGeometry,
   BufferAttribute,
@@ -273,7 +272,9 @@ function elevationSVG(variant) {
   const S = SPHERE
   const out = []
   out.push(`<svg class="ve ve--${variant}" viewBox="0 0 ${W.toFixed(0)} ${H.toFixed(0)}" fill="none" aria-hidden="true" focusable="false">`)
-  out.push(`<defs><clipPath id="ve-clip-${variant}"><path d="${poly(sil, true)}"/></clipPath></defs>`)
+  out.push(`<defs><clipPath id="ve-clip-${variant}"><path d="${poly(sil, true)}"/></clipPath>`)
+  // the sphere and her viewport are drawn in light: a soft bloom under the line
+  out.push(`<filter id="ve-glow-${variant}" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="2.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`)
   // waterline grid
   out.push('<g class="ve-grid">')
   for (let x = -2.5; x <= 2.51; x += 0.5) out.push(`<line x1="${X(x)}" y1="${Y(1.62)}" x2="${X(x)}" y2="${Y(-1.62)}"/>`)
@@ -312,13 +313,16 @@ function elevationSVG(variant) {
   out.push(`<circle class="ve-part" cx="${X(2.125)}" cy="${Y(-0.02)}" r="4"/>`)
   out.push(`<path class="ve-part" d="${poly(ARM.map((a) => [a[0], a[1]]))}L${X(2.32)} ${Y(-1.44)}"/>`)
   out.push(`<rect class="ve-part" x="${X(-1.08)}" y="${Y(-1.08)}" width="${(0.52 * K).toFixed(1)}" height="${(0.17 * K).toFixed(1)}" rx="3"/>`)
-  // sphere
+  // sphere, on its centre line
+  out.push(`<line class="ve-cl" x1="${X(S.x)}" y1="${Y(S.y - S.r - 0.2)}" x2="${X(S.x)}" y2="${Y(S.y + S.inner)}"/>`)
+  out.push(`<g filter="url(#ve-glow-${variant})">`)
   out.push(`<circle class="ve-sphere" cx="${X(S.x)}" cy="${Y(S.y)}" r="${(S.r * K).toFixed(1)}"/>`)
   out.push(`<circle class="ve-sphere-in" cx="${X(S.x)}" cy="${Y(S.y)}" r="${(S.inner * K).toFixed(1)}"/>`)
   out.push(`<line class="ve-sphere-in" x1="${X(S.x - S.r)}" y1="${Y(S.y)}" x2="${X(S.x + S.r)}" y2="${Y(S.y)}"/>`)
   const vd = VIEWPORT_DIRS[0]
   const vp = (r, a) => [S.x + Math.cos(Math.atan2(vd.y, vd.x) + a) * r, S.y + Math.sin(Math.atan2(vd.y, vd.x) + a) * r]
   out.push(`<path class="ve-port" d="${poly([vp(S.r + 0.01, -0.2), vp(S.r - 0.17, -0.09), vp(S.r - 0.17, 0.09), vp(S.r + 0.01, 0.2)])}"/>`)
+  out.push('</g>')
   // dimensions
   const dy = -1.86
   const xl = -2.28
@@ -439,13 +443,17 @@ float vsNoise(vec3 x) {
 float vsSeam(float d) { float w = fwidth(d); return 1.0 - smoothstep(0.0035, 0.0035 + w * 1.6, abs(d)); }
 `
 
-function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed = false, cabin = false } = {}) {
+function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed = false, cabin = false, rim = 0, fog = true } = {}) {
   mat.customProgramCacheKey = () => 'vesper-' + variant
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uBuild = U.uBuild
     sh.uniforms.uRootInv = U.uRootInv
     sh.uniforms.uCore = U.uCore
     sh.uniforms.uEdge = U.uEdge
+    sh.uniforms.uWater = U.uWater
+    sh.uniforms.uFog = U.uFog
+    sh.uniforms.uRimA = U.uRimA
+    sh.uniforms.uRimB = U.uRimB
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nuniform mat4 uRootInv;\nvarying vec3 vLocal;')
       .replace(
@@ -467,7 +475,10 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed 
         ${lens ? '#define VESPER_LENS' : ''}
         ${brushed ? '#define VESPER_BRUSHED' : ''}
         ${cabin ? '#define VESPER_CABIN' : ''}
+        ${rim ? '#define VESPER_RIM ' + rim.toFixed(3) : ''}
+        ${fog ? '#define VESPER_FOG' : ''}
         uniform float uBuild; uniform vec3 uCore; uniform vec3 uEdge; varying vec3 vLocal;
+        uniform vec3 uWater; uniform vec3 uFog; uniform vec3 uRimA; uniform vec3 uRimB;
         ${GLSL_NOISE}`,
       )
       .replace(
@@ -489,7 +500,11 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed 
           // axis and a matte grain, never a mirror
           vec3 vsQ = vLocal - uCore;
           float vsLat = atan(vsQ.y, length(vsQ.xz));
-          vsStreak = vsNoise(vec3(vsLat * 160.0, vsQ.x * 1.5, vsQ.z * 1.5)) * 0.7 + vsNoise(vLocal * 55.0) * 0.3;
+          // (rings at a pitch the screen can resolve, so they hold still
+          // while she moves; finer than ~2 px they blend into an even sheen)
+          float vsRing = vsLat * 38.0;
+          vsStreak = vsNoise(vec3(vsRing, vsQ.x * 1.5, vsQ.z * 1.5)) * 0.7 + vsNoise(vLocal * 55.0) * 0.3;
+          vsStreak = mix(0.5, vsStreak, 1.0 - smoothstep(0.5, 1.0, fwidth(vsRing)));
           diffuseColor.rgb *= 0.9 + 0.16 * vsStreak;
         #endif
         #ifdef VESPER_SEAMS
@@ -512,7 +527,22 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed 
         #ifdef VESPER_CABIN
           totalEmissiveRadiance *= smoothstep(-0.7, 0.85, (vLocal.y - uCore.y) / 0.75);
         #endif
+        #ifdef VESPER_RIM
+          // the water's own faint light, caught at grazing angles: cool
+          // blue from above, photophore green-blue from below
+          float vsFr = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+          vsFr *= vsFr * vsFr * vsFr;
+          totalEmissiveRadiance += mix(uRimA, uRimB, normal.y * 0.5 + 0.5) * vsFr * VESPER_RIM;
+        #endif
         totalEmissiveRadiance += uEdge * vsEdge * 2.6;`,
+      )
+      .replace(
+        '#include <fog_fragment>',
+        `#include <fog_fragment>
+        #ifdef VESPER_FOG
+          // water between her and the eye: the far side sinks into it
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, uWater, smoothstep(uFog.x, uFog.y, length(vViewPosition)) * uFog.z);
+        #endif`,
       )
       .replace(
         '#include <aomap_fragment>',
@@ -537,7 +567,7 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed 
       frag = frag.replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
-        roughnessFactor = clamp(roughnessFactor + vsSm * 0.5 + (vsNoise(vLocal * 22.0) - 0.5) * 0.08, 0.0, 1.0);`,
+        roughnessFactor = clamp(roughnessFactor + vsSm * 0.5 + (vsNoise(vLocal * 70.0) - 0.5) * 0.04 + (vsNoise(vLocal * 1.6) - 0.5) * 0.14, 0.0, 1.0);`,
       )
     } else if (brushed) {
       frag = frag.replace(
@@ -555,23 +585,26 @@ function patch(mat, U, variant, { seams = false, ao = '', lens = false, brushed 
    Blueprint: slice every part with stations, waterlines and buttocks
    ========================================================================== */
 
+// [nx, ny, nz, d, pen]: the centre-plane buttock is the profile, drawn with
+// the heaviest pen; the outer buttocks are the lightest
 const PLANES = (() => {
   const P = []
-  for (let x = -2.2; x <= 2.32; x += 0.22) P.push([1, 0, 0, x])
-  for (let y = -1.46; y <= 1.4; y += 0.24) P.push([0, 1, 0, y])
-  for (const z of [0, -0.38, 0.38, -0.64, 0.64]) P.push([0, 0, 1, z])
+  for (let x = -2.2; x <= 2.32; x += 0.22) P.push([1, 0, 0, x, 1])
+  for (let y = -1.46; y <= 1.4; y += 0.24) P.push([0, 1, 0, y, 1])
+  for (const z of [0, -0.38, 0.38, -0.64, 0.64]) P.push([0, 0, 1, z, z === 0 ? 1.55 : 0.8])
   return P
 })()
 
-function sliceInto(out, src) {
+function sliceInto(out, pens, src, pen = 1) {
   const geo = src.index ? src.toNonIndexed() : src
   const pos = geo.attributes.position.array
   geo.computeBoundingBox()
   const bb = geo.boundingBox
-  for (const [nx, ny, nz, d] of PLANES) {
+  for (const [nx, ny, nz, d, pw] of PLANES) {
     const lo = nx * bb.min.x + ny * bb.min.y + nz * bb.min.z
     const hi = nx * bb.max.x + ny * bb.max.y + nz * bb.max.z
     if (d < lo || d > hi) continue
+    const before = out.length
     for (let i = 0; i < pos.length; i += 9) {
       const da = nx * pos[i] + ny * pos[i + 1] + nz * pos[i + 2] - d
       const db = nx * pos[i + 3] + ny * pos[i + 4] + nz * pos[i + 5] - d
@@ -590,14 +623,36 @@ function sliceInto(out, src) {
       if (sc !== sa && n < 2) pt(i + 6, i, dc / (dc - da))
       if (n !== 2) out.length -= n * 3
     }
+    for (let k = (out.length - before) / 6; k > 0; k--) pens.push(pen * pw)
   }
 }
 
+/** The draughtsman's layout, drawn before anything else: centre lines
+ *  through the sphere (chain lines), the baseline with its station ticks,
+ *  and the two perpendiculars. [a, b, delay, alpha, chain] */
+function constructionLines() {
+  const S = SPHERE
+  const L = []
+  const z = 0
+  L.push([[S.x - 1.3, S.y, z], [S.x + 1.42, S.y, z], 0.0, 0.5, 1])
+  L.push([[S.x, S.y - 1.22, z], [S.x, S.y + 1.86, z], 0.012, 0.5, 1])
+  L.push([[-2.62, -1.64, z], [2.62, -1.64, z], 0.03, 0.42, 0])
+  L.push([[-2.28, -1.78, z], [-2.28, 1.48, z], 0.05, 0.3, 0])
+  L.push([[2.13, -1.78, z], [2.13, 1.48, z], 0.05, 0.3, 0])
+  let k = 0
+  for (let x = -2.2; x <= 2.32; x += 0.22) L.push([[x, -1.64, z], [x, -1.71 - (k++ % 5 === 0 ? 0.05 : 0), z], 0.07 + k * 0.004, 0.5, 0])
+  return L
+}
+
+/** Lines as screen-space ribbons, so each can carry a pen weight and a
+ *  soft photophore bloom. Four vertices per segment, no joins (the segments
+ *  are short and continuous, so overlapping caps would bead with light). */
 async function blueprintGeometry(geos, step) {
   const seg = []
+  const pens = []
   let n = 0
-  for (const g of geos) {
-    sliceInto(seg, g)
+  for (const { g, pen } of geos) {
+    sliceInto(seg, pens, g, pen)
     // the hull and the sphere are the big ones: yield after each large part
     n += g.attributes.position.count
     if (n > 60000) {
@@ -605,24 +660,61 @@ async function blueprintGeometry(geos, step) {
       await step()
     }
   }
-  const count = seg.length / 3
-  const aSeg = new Float32Array(count * 2)
+  await step()
+  const sliced = seg.length / 6
+  const cons = constructionLines()
+  const count = sliced + cons.length
+  const P = new Float32Array(count * 12)
+  const O = new Float32Array(count * 12)
+  const aSeg = new Float32Array(count * 8)
+  const aQ = new Float32Array(count * 16)
+  const idx = new Uint32Array(count * 6)
   const maxD = 3.5
   let seed = 7
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
-  for (let i = 0; i < count; i += 2) {
-    const mx = (seg[i * 3] + seg[i * 3 + 3]) / 2 - CORE.x
-    const my = (seg[i * 3 + 1] + seg[i * 3 + 4]) / 2 - CORE.y
-    const mz = (seg[i * 3 + 2] + seg[i * 3 + 5]) / 2 - CORE.z
-    const delay = clamp(Math.hypot(mx, my, mz) / maxD) * 0.86 + rnd() * 0.012
-    aSeg[i * 2] = delay
-    aSeg[i * 2 + 1] = 0
-    aSeg[i * 2 + 2] = delay
-    aSeg[i * 2 + 3] = 1
+  // four corners per segment: A, A, B, B (each knows the other end), on
+  // either side of the line
+  const put = (i, src, ia, ib, delay, pen, alpha, chain) => {
+    for (let k = 0; k < 4; k++) {
+      const v = i * 4 + k
+      const p = k < 2 ? ia : ib
+      const o = k < 2 ? ib : ia
+      P[v * 3] = src[p]
+      P[v * 3 + 1] = src[p + 1]
+      P[v * 3 + 2] = src[p + 2]
+      O[v * 3] = src[o]
+      O[v * 3 + 1] = src[o + 1]
+      O[v * 3 + 2] = src[o + 2]
+      aSeg[v * 2] = delay
+      aSeg[v * 2 + 1] = k < 2 ? 0 : 1
+      aQ[v * 4] = k % 2 ? 1 : -1
+      aQ[v * 4 + 1] = pen
+      aQ[v * 4 + 2] = alpha
+      aQ[v * 4 + 3] = chain
+    }
+    const v = i * 4
+    idx[i * 6] = v
+    idx[i * 6 + 1] = v + 2
+    idx[i * 6 + 2] = v + 1
+    idx[i * 6 + 3] = v + 1
+    idx[i * 6 + 4] = v + 2
+    idx[i * 6 + 5] = v + 3
   }
+  for (let i = 0; i < sliced; i++) {
+    const j = i * 6
+    const d = Math.hypot((seg[j] + seg[j + 3]) / 2 - CORE.x, (seg[j + 1] + seg[j + 4]) / 2 - CORE.y, (seg[j + 2] + seg[j + 5]) / 2 - CORE.z)
+    put(i, seg, j, j + 3, clamp(d / maxD) * 0.86 + rnd() * 0.012, pens[i], 1, 0)
+  }
+  cons.forEach(([a, b, delay, alpha, chain], k) => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    put(sliced + k, [...a, ...b], 0, 3, delay, 0.8, alpha, chain ? len : 0)
+  })
   const g = new BufferGeometry()
-  g.setAttribute('position', new BufferAttribute(new Float32Array(seg), 3))
+  g.setAttribute('position', new BufferAttribute(P, 3))
+  g.setAttribute('aOther', new BufferAttribute(O, 3))
   g.setAttribute('aSeg', new BufferAttribute(aSeg, 2))
+  g.setAttribute('aQ', new BufferAttribute(aQ, 4))
+  g.setIndex(new BufferAttribute(idx, 1))
   return g
 }
 
@@ -630,29 +722,67 @@ async function blueprintGeometry(geos, step) {
    Shaders for light: blueprint lines, beams, snow, lamp flares
    ========================================================================== */
 
-function lineMaterial() {
+function lineMaterial(dpr) {
   return new ShaderMaterial({
-    uniforms: { uDraw: { value: 0 }, uAlpha: { value: 1 }, uDist: { value: 20 }, uColor: { value: new Color(PHOTOPHORE) } },
+    uniforms: {
+      uDraw: { value: 0 },
+      uAlpha: { value: 1 },
+      uDist: { value: 20 },
+      uRes: { value: new Vector2(1, 1) },
+      uPx: { value: dpr },
+      uColor: { value: new Color(PHOTOPHORE) },
+      uColorFar: { value: new Color(PHOTOPHORE_2) },
+    },
     vertexShader: /* glsl */ `
-      attribute vec2 aSeg;
-      uniform float uDist;
+      attribute vec3 aOther; attribute vec2 aSeg; attribute vec4 aQ;
+      uniform float uDist; uniform vec2 uRes; uniform float uPx;
       varying float vT; varying float vDelay; varying float vFade;
+      varying float vAcross; varying float vCore; varying float vAlphaK; varying float vChain;
       void main() {
         vT = aSeg.y; vDelay = aSeg.x;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec4 mo = modelViewMatrix * vec4(aOther, 1.0);
         // near side bright, far side dim: depth read the way a draughtsman would
         vFade = smoothstep(uDist + 3.5, uDist - 3.0, -mv.z);
-        gl_Position = projectionMatrix * mv;
+        vec4 c = projectionMatrix * mv;
+        vec4 co = projectionMatrix * mo;
+        vec2 h = uRes * 0.5;
+        vec2 d = (co.xy / co.w - c.xy / c.w) * h;
+        float l = length(d);
+        d = l > 1e-5 ? d / l : vec2(1.0, 0.0);
+        d *= 1.0 - 2.0 * aSeg.y; // both ends agree on which way is A → B
+        // pen weight: the plane's pen, heavier on the near side
+        float core = aQ.y * uPx * (0.56 + 0.52 * vFade);
+        float hw = core * 0.5 + 3.6 * uPx; // room for the bloom
+        c.xy += vec2(-d.y, d.x) * aQ.x * hw / h * c.w;
+        vAcross = aQ.x * hw;
+        vCore = core * 0.5;
+        vAlphaK = aQ.z;
+        vChain = aQ.w;
+        gl_Position = c;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uDraw; uniform float uAlpha; uniform vec3 uColor;
+      uniform float uDraw; uniform float uAlpha; uniform float uPx; uniform vec3 uColor; uniform vec3 uColorFar;
       varying float vT; varying float vDelay; varying float vFade;
+      varying float vAcross; varying float vCore; varying float vAlphaK; varying float vChain;
       void main() {
         float local = clamp((uDraw - vDelay) / 0.16, 0.0, 1.0);
         if (local <= 0.0 || vT > local) discard;
+        if (vChain > 0.0) {
+          // a chain line: long dash, gap, dot, gap
+          float m = mod(vT * vChain, 0.46);
+          if ((m > 0.3 && m < 0.36) || m > 0.4) discard;
+        }
         float tip = (1.0 - smoothstep(0.0, 0.3, local - vT)) * (1.0 - step(0.999, local));
-        float a = uAlpha * (0.28 + 0.72 * vFade) * (0.62 + tip * 1.8);
-        gl_FragColor = vec4(uColor * (1.0 + tip), a);
+        float x = abs(vAcross);
+        float ink = 1.0 - smoothstep(vCore - 0.55, vCore + 0.55, x);
+        ink *= min(1.0, vCore * 2.0 + 0.25);
+        float r = x / (2.6 * uPx);
+        float bloom = exp(-r * r) * 0.17 + exp(-r * r * 6.0) * 0.14;
+        float a = uAlpha * vAlphaK * (0.28 + 0.72 * vFade) * (0.62 + tip * 1.8) * (ink * 0.92 + bloom);
+        if (a < 0.002) discard;
+        vec3 col = mix(uColorFar, uColor, 0.35 + 0.65 * vFade);
+        gl_FragColor = vec4(col * (1.0 + tip), a);
       }`,
     transparent: true,
     depthWrite: false,
@@ -660,26 +790,36 @@ function lineMaterial() {
   })
 }
 
+/** A lamp's beam through the water: white at the lens, bluer as the water
+ *  takes the red out of it, brightest near the lamp, and never quite even
+ *  (slow drifting turbidity). */
 function beamMaterial() {
   return new ShaderMaterial({
-    uniforms: { uI: { value: 0 }, uTime: { value: 0 }, uColor: { value: new Color('#d8f4ff') } },
+    uniforms: { uI: { value: 0 }, uTime: { value: 0 }, uColor: { value: new Color('#eef9ff') }, uFar: { value: new Color('#3f9fd8') } },
     vertexShader: /* glsl */ `
-      varying float vAlong; varying vec3 vN; varying vec3 vV;
+      varying float vAlong; varying vec3 vN; varying vec3 vV; varying vec3 vW;
       void main() {
         vAlong = -position.y;
         vN = normalize(normalMatrix * normal);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vV = -mv.xyz;
+        vW = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uI; uniform float uTime; uniform vec3 uColor;
-      varying float vAlong; varying vec3 vN; varying vec3 vV;
+      uniform float uI; uniform float uTime; uniform vec3 uColor; uniform vec3 uFar;
+      varying float vAlong; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+      ${GLSL_NOISE}
       void main() {
         float f = abs(dot(normalize(vN), normalize(vV)));
-        float dust = 0.78 + 0.22 * sin(vAlong * 23.0 - uTime * 0.7) * sin(vAlong * 9.0 + uTime * 0.4 + f * 3.0);
-        float a = uI * pow(f, 2.4) * pow(1.0 - vAlong, 2.0) * smoothstep(0.0, 0.07, vAlong) * dust * 0.2;
-        gl_FragColor = vec4(uColor, a);
+        float body = pow(f, 2.2);
+        // inverse-square-ish near the lens, a long soft tail beyond
+        float fall = pow(1.0 - vAlong, 1.7) * (1.0 + 1.6 * exp(-vAlong * 11.0));
+        float turb = vsNoise(vW * 1.7 + vec3(uTime * 0.03, uTime * 0.05, 0.0));
+        float dust = 0.82 + 0.18 * sin(vAlong * 23.0 - uTime * 0.7) * sin(vAlong * 9.0 + uTime * 0.4 + f * 3.0);
+        float a = uI * body * fall * smoothstep(0.0, 0.06, vAlong) * dust * (0.62 + 0.62 * turb) * 0.19;
+        vec3 col = mix(uColor, uFar, smoothstep(0.0, 0.75, vAlong));
+        gl_FragColor = vec4(col, a);
       }`,
     transparent: true,
     depthWrite: false,
@@ -694,11 +834,13 @@ function snowMaterial(dpr) {
     uniforms: {
       uTime: { value: 0 },
       uMin: { value: new Vector3(1.6, -6.4, -3.2) },
-      uSize: { value: new Vector3(8.0, 7.8, 6.4) },
+      uSize: { value: new Vector3(8.0, 7.8, 8.6) },
       uBO: { value: zeros() },
       uBD: { value: zeros() },
       uBL: { value: new Array(6).fill(8) },
       uPx: { value: 26 * dpr },
+      uDpr: { value: dpr },
+      uFocus: { value: 20 },
       uBase: { value: 0.0 },
       uColor: { value: new Color('#e4fbff') },
     },
@@ -706,8 +848,8 @@ function snowMaterial(dpr) {
       attribute vec4 aRand;
       uniform float uTime; uniform vec3 uMin; uniform vec3 uSize;
       uniform vec4 uBO[6]; uniform vec4 uBD[6]; uniform float uBL[6];
-      uniform float uPx;
-      varying float vI;
+      uniform float uPx; uniform float uDpr; uniform float uFocus;
+      varying float vI; varying float vBlur;
       void main() {
         vec3 p = position;
         p.y = uMin.y + mod(p.y - uMin.y - uTime * (0.02 + 0.05 * aRand.x), uSize.y);
@@ -722,20 +864,30 @@ function snowMaterial(dpr) {
           float fall = clamp(1.0 - along / uBL[i], 0.0, 1.0);
           I += uBO[i].w * cone * fall * fall * step(0.0, along);
         }
-        vI = I;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uPx * 2.4 * (0.6 + 1.6 * aRand.w) / -mv.z, 1.0, 26.0);
+        float sharp = clamp(uPx * 2.4 * (0.6 + 1.6 * aRand.w) / -mv.z, 1.0, 26.0);
+        // depth of field: motes off the focal plane open into soft discs,
+        // their light spread over the larger area
+        // (one mote in five is large enough to show it; the rest only soften)
+        float coc = abs(-mv.z - uFocus) * uDpr * (aRand.x > 0.8 ? 3.6 : 0.45);
+        float size = min(sqrt(sharp * sharp + coc * coc), 34.0 * uDpr);
+        vBlur = clamp((size - sharp) / (10.0 * uDpr), 0.0, 1.0);
+        vI = I * clamp(sharp * sharp / (size * size) * 2.4, 0.035, 1.0);
+        gl_PointSize = I > 0.004 ? size : 0.0;
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor; uniform float uBase;
-      varying float vI;
+      varying float vI; varying float vBlur;
       void main() {
         float d = length(gl_PointCoord - 0.5);
-        float a = smoothstep(0.5, 0.05, d);
+        float soft = smoothstep(0.5, 0.05, d);
+        // a lens-blurred mote: a flat disc with a slightly brighter rim
+        float disc = smoothstep(0.5, 0.43, d) * (0.7 + 0.45 * smoothstep(0.22, 0.45, d));
+        float a = mix(soft, disc, vBlur);
         float k = a * (min(vI, 1.4) * 1.7 + uBase);
         if (k < 0.002) discard;
-        gl_FragColor = vec4(uColor, k);
+        gl_FragColor = vec4(mix(uColor, vec3(0.62, 0.86, 1.0), vBlur * 0.5), k);
       }`,
     transparent: true,
     depthWrite: false,
@@ -869,15 +1021,17 @@ function capMaterial(U, { fill, line, pitch, weight, planes, ring = false }) {
   return m
 }
 
-function glowMaterial() {
+function glowMaterial(color = PHOTOPHORE, size = 3.2, lift = 0) {
   return new ShaderMaterial({
-    uniforms: { uI: { value: 0 }, uSize: { value: 3.2 }, uColor: { value: new Color(PHOTOPHORE) } },
+    uniforms: { uI: { value: 0 }, uSize: { value: size }, uLift: { value: lift }, uColor: { value: new Color(color) } },
     vertexShader: /* glsl */ `
-      uniform float uSize;
+      uniform float uSize; uniform float uLift;
       varying vec2 vP;
       void main() {
         vP = position.xy * 2.0;
         vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        // (a lamp's halo is lifted toward the eye, clear of the frame it sits in)
+        mv.xyz += normalize(-mv.xyz) * uLift;
         mv.xy += position.xy * uSize;
         gl_Position = projectionMatrix * mv;
       }`,
@@ -954,6 +1108,12 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     uEdge: { value: new Color(PHOTOPHORE) },
     uCam: { value: new Vector3() },
     uCut: { value: 9 },
+    // the water colour where she is (sRGB, from depth.js), and how far
+    // behind the focus her far side starts to sink into it
+    uWater: { value: new Vector3(0.02, 0.08, 0.17) },
+    uFog: { value: new Vector3(20, 23, 0) },
+    uRimA: { value: new Color(PHOTOPHORE) },
+    uRimB: { value: new Color(PHOTOPHORE_2) },
   }
 
   const root = new Group()
@@ -993,7 +1153,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
         }),
         U,
         'hull',
-        { seams: true, ao: 'hull' },
+        { seams: true, ao: 'hull', rim: 0.34 },
       ),
     ),
     // Titanium as it really leaves the shop: machined and bead-blasted, a
@@ -1003,7 +1163,10 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
         new MeshPhysicalMaterial({
           color: '#8e9196',
           metalness: 1,
-          roughness: 0.5,
+          roughness: 0.48,
+          // turned on a lathe: the highlight runs along the meridians
+          anisotropy: 0.42,
+          anisotropyRotation: 0,
           envMap: envTex,
           envMapIntensity: 0.4,
           polygonOffset: true,
@@ -1012,11 +1175,11 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
         }),
         U,
         'sphere',
-        { ao: 'sphere', brushed: true },
+        { ao: 'sphere', brushed: true, rim: 0.3 },
       ),
     ),
-    satin: cuttable(patch(new MeshPhysicalMaterial({ color: '#8f959c', metalness: 1, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'satin')),
-    dark: patch(new MeshPhysicalMaterial({ color: '#23282e', metalness: 0.6, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'dark'),
+    satin: cuttable(patch(new MeshPhysicalMaterial({ color: '#8f959c', metalness: 1, roughness: 0.32, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'satin', { rim: 0.24 })),
+    dark: patch(new MeshPhysicalMaterial({ color: '#23282e', metalness: 0.6, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }), U, 'dark', { rim: 0.22 }),
     acrylic: cuttable(
       patch(
         new MeshPhysicalMaterial({
@@ -1032,15 +1195,16 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
         }),
         U,
         'acrylic',
-        { lens: true },
+        { lens: true, rim: 0.16 },
       ),
     ),
   }
-  const add = (geo, mat, slice = true) => {
+  // pen: the weight its lines are drawn with in the lines plan (0: not drawn)
+  const add = (geo, mat, pen = 1) => {
     const m = new Mesh(geo, mat)
     root.add(m)
     surfaces.push(m)
-    if (slice) sliceSrc.push(geo)
+    if (pen) sliceSrc.push({ g: geo, pen })
     return m
   }
 
@@ -1107,7 +1271,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
   const sphereMesh = new Mesh(sphereGeo, M.sphere)
   root.add(sphereMesh)
   surfaces.push(sphereMesh)
-  sliceSrc.push(prep(new SphereGeometry(SPHERE.r, 56, 40).translate(S.x, S.y, 0)))
+  sliceSrc.push({ g: prep(new SphereGeometry(SPHERE.r, 56, 40).translate(S.x, S.y, 0)), pen: 1.3 })
   const flange = placed(new TorusGeometry(SPHERE.r + 0.004, 0.02, 10, 140), S, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2))
   const ports = []
   const portRings = []
@@ -1116,7 +1280,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     ports.push(placed(new CylinderGeometry(0.165, 0.07, 0.18, 40, 1), S.clone().addScaledVector(d, SPHERE.r + 0.014 - 0.09), q))
     portRings.push(placed(new TorusGeometry(0.172, 0.018, 10, 48), S.clone().addScaledVector(d, SPHERE.r + 0.01), q.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2))))
   }
-  add(merge(ports), M.acrylic, false)
+  add(merge(ports), M.acrylic, 0)
 
   await step()
 
@@ -1149,7 +1313,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
   interior.add(new Mesh(merge(seatParts), seatMat))
   const deck = new CircleGeometry(Math.sqrt(SPHERE.inner ** 2 - 0.5 ** 2) - 0.01, 48).rotateX(-Math.PI / 2).translate(S.x, floorY, 0)
   interior.add(new Mesh(deck, patch(new MeshPhysicalMaterial({ color: '#171c20', roughness: 0.9 }), U, 'deck')))
-  const screenMat = patch(new MeshBasicMaterial({ color: new Color(PHOTOPHORE).multiplyScalar(1.25), toneMapped: false }), U, 'screen')
+  const screenMat = patch(new MeshBasicMaterial({ color: new Color(PHOTOPHORE).multiplyScalar(1.25), toneMapped: false }), U, 'screen', { fog: false })
   const screens = []
   for (const [d, w] of [
     [new Vector3(0.62, 0.2, 0), 0.26],
@@ -1202,7 +1366,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
   const mastB = new Vector3(2.18, 1.17, -0.35)
   satin.push(rod(mastA, mastB, 0.03))
   satin.push(rod(new Vector3(2.2, 1.11, -0.52), new Vector3(2.2, 1.11, -0.18), 0.02))
-  add(merge(satin), M.satin)
+  add(merge(satin), M.satin, 0.75)
 
   const dark = []
   dark.push(new CylinderGeometry(0.29, 0.3, 0.06, 48).translate(SPHERE.x, deckTop + 0.09, 0))
@@ -1223,7 +1387,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
   dark.push(new SphereGeometry(0.07, 20, 14).translate(A[0].x, A[0].y, A[0].z))
   dark.push(new SphereGeometry(0.058, 20, 14).translate(A[1].x, A[1].y, A[1].z))
   dark.push(new SphereGeometry(0.045, 16, 12).translate(A[2].x, A[2].y, A[2].z))
-  add(merge(dark), M.dark)
+  add(merge(dark), M.dark, 0.75)
   const arm = [rod(A[0], A[1], 0.045, 16, 0.04), rod(A[1], A[2], 0.038, 16, 0.034)]
   const wristDir = new Vector3(0.35, -1, 0).normalize()
   arm.push(rod(A[2], A[2].clone().addScaledVector(wristDir, 0.12), 0.03))
@@ -1231,7 +1395,7 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     const j = A[2].clone().addScaledVector(wristDir, 0.12)
     arm.push(rod(j, j.clone().add(new Vector3(0.05, -0.1, s * 0.035)), 0.012, 8))
   }
-  add(merge(arm), M.satin)
+  add(merge(arm), M.satin, 0.7)
 
   await step()
 
@@ -1254,11 +1418,11 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     const m = new Matrix4().compose(p, aim(dir), new Vector3(t.s, t.s, t.s))
     tSat.setMatrixAt(i, m)
     tDark.setMatrixAt(i, m)
-    sliceSrc.push(T.dark.clone().applyMatrix4(m))
+    sliceSrc.push({ g: T.dark.clone().applyMatrix4(m), pen: 0.75 })
   })
   root.add(tSat, tDark)
   surfaces.push(tSat, tDark)
-  add(merge(throats), patch(new MeshPhysicalMaterial({ color: '#000000', roughness: 1, metalness: 0 }), U, 'void'), false)
+  add(merge(throats), patch(new MeshPhysicalMaterial({ color: '#000000', roughness: 1, metalness: 0 }), U, 'void'), 0)
 
   /* ---- lamps: heads, lenses (instanced, coloured per bank), flares */
   const lampBody = merge([new CylinderGeometry(0.036, 0.044, 0.08, 16), new TorusGeometry(0.034, 0.006, 6, 20).rotateX(Math.PI / 2).translate(0, 0.04, 0)])
@@ -1287,6 +1451,22 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
   const flares = new Points(flareGeo, flareMaterial(dpr))
   flares.renderOrder = 6
   root.add(flares)
+  // a soft bloom around each bank, the water itself lit around the lenses
+  const quad = new PlaneGeometry(1, 1)
+  const halos = [
+    { p: [2.16, -0.1, 0], bank: 0, size: 2.6, k: 0.62 },
+    { p: [2.02, -0.72, SKID_Z + 0.04], bank: 1, size: 1.5, k: 0.42 },
+    { p: [2.02, -0.72, -SKID_Z - 0.04], bank: 1, size: 1.5, k: 0.42 },
+    { p: [2.22, 1.1, -0.35], bank: 2, size: 1.3, k: 0.4 },
+  ].map((h) => {
+    const m = new Mesh(quad, glowMaterial('#d4f1ff', h.size, 0.55))
+    m.position.copy(v3(h.p))
+    m.frustumCulled = false
+    m.renderOrder = 6
+    m.visible = false
+    root.add(m)
+    return { m, bank: h.bank, k: h.k }
+  })
 
   /* ---- light beams */
   const coneGeo = new ConeGeometry(1, 1, 48, 10, true).translate(0, -0.5, 0)
@@ -1332,8 +1512,8 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
 
   /* ---- blueprint */
   await step()
-  const lineMat = lineMaterial()
-  const lines = new LineSegments(await blueprintGeometry(sliceSrc, step), lineMat)
+  const lineMat = lineMaterial(dpr)
+  const lines = new Mesh(await blueprintGeometry(sliceSrc, step), lineMat)
   lines.renderOrder = 3
   lines.frustumCulled = false
   root.add(lines)
@@ -1399,12 +1579,16 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     if (!asleep) renderer.setSize(W, H, false)
     camera.aspect = W / H
     camera.updateProjectionMatrix()
+    lineMat.uniforms.uRes.value.set(W * renderer.getPixelRatio(), H * renderer.getPixelRatio())
   }
   function setDpr(d) {
     renderer.setPixelRatio(d)
     if (!asleep) renderer.setSize(W, H, false)
     flares.material.uniforms.uPx.value = 46 * d
     snowU.uniforms.uPx.value = 26 * d
+    snowU.uniforms.uDpr.value = d
+    lineMat.uniforms.uPx.value = d
+    lineMat.uniforms.uRes.value.set(W * d, H * d)
   }
   /** Off screen, hand the backing store back (a full-size buffer is tens of MB). */
   function sleep() {
@@ -1434,6 +1618,8 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
     camera.setViewOffset(W, H, -c.sx * W, -c.sy * H, W, H)
     camera.updateMatrixWorld()
     lineMat.uniforms.uDist.value = dist
+    U.uFog.value.set(dist - 1.1, dist + 2.4, 0.5 * s.fog)
+    if (s.water) U.uWater.value.set(s.water.r / 255, s.water.g / 255, s.water.b / 255)
     // the vessel hovers
     root.position.y = s.bob
     root.rotation.z = s.roll
@@ -1507,8 +1693,14 @@ async function createVesper(canvas, { context, dpr, mobile }, step) {
       beams[i].visible = I > 0.005
       snowU.uniforms.uBO.value[i].w = I
     })
+    for (const h of halos) {
+      const I = b[h.bank] * h.k
+      h.m.material.uniforms.uI.value = I
+      h.m.visible = I > 0.004
+    }
     snow.visible = b[0] + b[1] + b[2] > 0.005
     snowU.uniforms.uTime.value = t
+    snowU.uniforms.uFocus.value = dist - 1.4
     spot.intensity = b[0] * 26
   }
 
@@ -1727,6 +1919,26 @@ export function init(ctx) {
   }
   new ResizeObserver(fitDims).observe(elevation)
 
+  /* ---- the title's construction guides sit on the font's own metrics */
+  const measureGuides = () => {
+    if (!pinned) return
+    const cs = getComputedStyle(title)
+    const fs = parseFloat(cs.fontSize)
+    const g = document.createElement('canvas').getContext('2d')
+    if (!g || !fs) return
+    g.font = `${cs.fontWeight} ${fs}px ${cs.fontFamily}`
+    const mV = g.measureText('V')
+    const mx = g.measureText('x')
+    const A = mV.fontBoundingBoxAscent
+    const D = mV.fontBoundingBoxDescent
+    if (!A || !mV.actualBoundingBoxAscent) return
+    const lh = parseFloat(cs.lineHeight) || fs * 0.8
+    const base = parseFloat(cs.paddingTop) + (lh - (A + D)) / 2 + A
+    title.style.setProperty('--g-base', Math.round(base) + 'px')
+    title.style.setProperty('--g-cap', Math.round(base - mV.actualBoundingBoxAscent) + 'px')
+    title.style.setProperty('--g-x', Math.round(base - mx.actualBoundingBoxAscent) + 'px')
+  }
+
   /* ---- 3D: the context is checked now (it decides the layout); three.js,
      the geometry, the environment map and the shaders wait until the intro
      is over or she is about to come on screen. */
@@ -1919,6 +2131,13 @@ export function init(ctx) {
     const cam = camAt(c, e)
     cam.az += (S.yaw + S.mx * 3.5) * (1 - e) + (stacked && !reduced ? Math.sin(time * 0.16) * 6 : 0)
     cam.el += -S.my * 2 * (1 - e)
+    // a slow, cinematic drift: the camera breathes around her, never still,
+    // and settles exactly for the hand-off to the drawing
+    if (pinned) {
+      cam.az += (Math.sin(time * 0.13) * 1.5 + Math.sin(time * 0.051 + 2.0) * 1.1) * still
+      cam.el += Math.sin(time * 0.089 + 0.7) * 0.8 * still
+      cam.f *= 1 + Math.sin(time * 0.067 + 1.3) * 0.014 * still
+    }
     return {
       draw: c < 0 ? 0.42 * ease(range(c, -0.85, -0.03)) : 0.42 + 0.8 * range(p, 0, 0.2),
       build: ease(range(p, 0.2, 0.4)) * (1 - dissolve),
@@ -1929,6 +2148,8 @@ export function init(ctx) {
       cut: p >= CUT_AT[0] ? lerp(0.95, 0, ease(range(p, CUT_AT[0], CUT_AT[1]))) : 9,
       banks: banks.map((b) => b.v * (1 - lampsOut)),
       cam,
+      fog: 1 - e,
+      water: ctx.depth?.get?.()?.color,
       bob: Math.sin(time * 0.42) * 0.035 * still,
       roll: Math.sin(time * 0.31 + 1.2) * 0.008 * still,
     }
@@ -2218,6 +2439,7 @@ export function init(ctx) {
       measureCallouts()
       resize()
       measureActs()
+      measureGuides()
       const undo = () => {
         if (actsEl.parentElement !== copy) copy.append(actsEl)
         actEls.forEach((a) => a.classList.remove('is-active'))
@@ -2336,6 +2558,10 @@ export function init(ctx) {
       { '--rule': 0 },
       { '--rule': 1, ease: 'none', stagger: 0.06, scrollTrigger: { trigger: '.vessel__specs', start: 'top 85%', end: 'bottom 70%', scrub: true } },
     )
+    // a band of light crosses the plate as it rises, the way it would
+    // catch a lamp on brushed metal
+    const sp = $('.vessel__specplate')
+    gsap.fromTo(sp, { '--sweep': 0 }, { '--sweep': 1, ease: 'none', scrollTrigger: { trigger: sp, start: 'top 100%', end: 'bottom 10%', scrub: true } })
   }
 
   /* ---- pointer: a little parallax, and drag to turn her (fine pointers) */
@@ -2446,6 +2672,7 @@ export function init(ctx) {
     measureActs()
     measureHandoff()
     fitDims()
+    measureGuides()
     dirty = true
     blank = false
   })
