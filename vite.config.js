@@ -72,5 +72,7 @@ export default defineConfig({
   base: './',
   plugins: [htmlPartials(), preloadFirstScreen()],
   server: { host: '127.0.0.1' },
+  // ground/ is a separate project with its own dependencies
+  optimizeDeps: { entries: ['index.html'] },
   build: { target: 'es2022', chunkSizeWarningLimit: 1200 },
 })

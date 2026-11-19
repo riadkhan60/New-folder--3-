@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en-GB" class="is-loading">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Ground Pigments</title>
+    <meta
+      name="description"
+      content="Ground makes historic artists’ pigments by hand in London, from earth, stone, shell, insect, plant and bone."
+    />
+    <meta name="theme-color" content="#f3f2ee" />
+    <meta property="og:title" content="Ground Pigments" />
+    <meta property="og:description" content="Colour, ground by hand from the materials it has always come from." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Hanken+Grotesk:ital,wght@0,100..900;1,100..900&display=swap"
+    />
+    <noscript>
+      <style>
+        .loader { display: none !important; }
+        html.is-loading body { overflow: auto !important; }
+        [data-field] { background-color: var(--field); }
+      </style>
+    </noscript>
+    <script>
+      /* Watchdog: if the page's JavaScript never starts, show the static page. */
+      setTimeout(function () {
+        var h = document.documentElement
+        if (!window.__groundBooting && !h.classList.contains('is-ready')) {
+          h.classList.remove('is-loading')
+          h.classList.add('skip-intro', 'no-dish')
+        }
+      }, 8000)
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <!-- The dish: a live fluid simulation that every pigment is poured into -->
+    <canvas id="dish" aria-hidden="true"></canvas>
+
+    <!-- @include loader -->
+    <!-- @include nav -->
+
+    <main id="main" tabindex="-1">
+      <!-- @include hero -->
+      <!-- @include intro -->
+      <!-- @include chapters -->
+      <!-- @include library -->
+      <!-- @include grind -->
+      <!-- @include mix -->
+      <!-- @include shop -->
+    </main>
+
+    <!-- @include footer -->
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

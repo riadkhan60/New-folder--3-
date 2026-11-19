@@ -1,0 +1,261 @@
+/* ==========================================================================
+   GROUND — base tokens, reset, typography, layout primitives
+   Owned by the scaffold. Sections read these; they never redefine :root.
+   Field colours (--field, --tint, --ink, --ink-2, --ink-3, --line) are set
+   per [data-field] by src/core/palette.js — use them for all text/lines.
+   ========================================================================== */
+
+:root {
+  /* Paper and ink: the ground everything is painted on */
+  --paper: #f3f2ee;
+  --ink-black: #151413;
+
+  /* Field defaults (= paper). palette.js overrides these per [data-field]. */
+  --field: var(--paper);
+  --tint: var(--paper);
+  --ink: var(--ink-black);
+  --ink-2: rgb(21 20 19 / 0.76);
+  --ink-3: rgb(21 20 19 / 0.54);
+  --line: rgb(21 20 19 / 0.2);
+
+  /* Type */
+  --font-display: 'Bodoni Moda', 'Didot', 'Bodoni 72', Georgia, serif;
+  --font-text: 'Hanken Grotesk', 'Helvetica Neue', Arial, system-ui, sans-serif;
+
+  --fs-mega: clamp(4.2rem, 15vw, 16rem);
+  --fs-display: clamp(3.2rem, 9vw, 9.5rem);
+  --fs-h2: clamp(2.4rem, 5.6vw, 5.8rem);
+  --fs-h3: clamp(1.5rem, 2.4vw, 2.3rem);
+  --fs-lead: clamp(1.2rem, 1.7vw, 1.65rem);
+  --fs-body: clamp(1rem, 1.06vw, 1.12rem);
+  --fs-small: 0.875rem;
+  --fs-micro: 0.75rem;
+
+  /* Space */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --s-8: clamp(3rem, 6vw, 5rem);
+  --s-9: clamp(4.5rem, 10vw, 8rem);
+  --s-10: clamp(6rem, 16vw, 14rem);
+
+  /* Layout */
+  --rail: max(clamp(20px, 4.6vw, 80px), env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  --gap: clamp(16px, 2vw, 32px);
+  --maxw: 1560px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-pour: cubic-bezier(0.3, 0, 0.1, 1);
+
+  /* Layers */
+  --z-dish: 0;
+  --z-content: 1;
+  --z-nav: 50;
+  --z-menu: 60;
+  --z-cursor: 90;
+  --z-loader: 100;
+
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------- reset */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, picture, video, canvas, svg { display: block; max-width: 100%; }
+input, button, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; padding: 0; }
+p, h1, h2, h3, h4 { overflow-wrap: break-word; }
+[hidden] { display: none !important; }
+
+/* ----------------------------------------------------------------- page */
+html {
+  background: var(--paper);
+  scroll-padding-top: 88px;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+main { position: relative; z-index: var(--z-content); }
+main:focus, main:focus-visible { outline: none; }
+
+#dish {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-dish);
+  pointer-events: none;
+}
+
+/* Every field section is transparent by default: the dish paints the colour.
+   Without a running dish (no WebGL, reduced motion fallback) the section
+   paints its own field. */
+html.no-dish [data-field] { background-color: var(--field); }
+
+::selection { background: var(--ink); color: var(--field); }
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  left: var(--rail);
+  top: var(--s-4);
+  z-index: calc(var(--z-loader) + 1);
+  padding: var(--s-2) var(--s-4);
+  background: var(--ink-black);
+  color: var(--paper);
+  font-size: var(--fs-small);
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible { transform: none; }
+
+/* ----------------------------------------------------------- typography */
+/* Display: Bodoni Moda with optical sizing, so big type gets hairline
+   contrast. Italic is the house voice for names of colours. */
+.t-mega,
+.t-display,
+.t-h2,
+.t-h3 {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.t-mega { font-size: var(--fs-mega); line-height: 0.86; letter-spacing: -0.035em; }
+.t-display { font-size: var(--fs-display); line-height: 0.9; letter-spacing: -0.03em; }
+.t-h2 { font-size: var(--fs-h2); line-height: 0.98; letter-spacing: -0.02em; }
+.t-h3 { font-size: var(--fs-h3); line-height: 1.08; letter-spacing: -0.01em; }
+.t-italic { font-style: italic; }
+
+.t-lead {
+  font-family: var(--font-text);
+  font-size: var(--fs-lead);
+  line-height: 1.42;
+  font-weight: 350;
+  color: var(--ink);
+  max-width: 34ch;
+}
+.t-body {
+  font-size: var(--fs-body);
+  line-height: 1.62;
+  font-weight: 400;
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+.t-label {
+  font-size: var(--fs-small);
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--ink-2);
+}
+.t-caption {
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.t-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+/* Chemical formulas: set in the display face, with real sub/superscripts */
+.t-formula {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: 1.05em;
+  letter-spacing: 0.01em;
+}
+.t-formula sub { font-size: 0.66em; vertical-align: -0.28em; line-height: 0; }
+
+/* --------------------------------------------------------------- layout */
+.wrap {
+  width: 100%;
+  max-width: calc(var(--maxw) + var(--rail) * 2);
+  margin-inline: auto;
+  padding-inline: var(--rail);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gap);
+}
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Shared button: a printed label in ink, lettered in the field colour. */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  min-height: 48px;
+  padding: 0.9em 1.5em;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--field);
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-size: var(--fs-small);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px var(--ink); }
+.btn:active { transform: translateY(0); }
+.btn--ghost {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.btn--ghost:hover { box-shadow: inset 0 0 0 1px var(--ink); }
+
+.rule { height: 1px; border: 0; background: var(--line); }
+
+/* ------------------------------------------------------------ loading */
+html.is-loading body { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

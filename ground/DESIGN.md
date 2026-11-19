@@ -1,0 +1,162 @@
+# Ground — design & build spec
+
+> Read this whole file before writing a line. It keeps seven sections built
+> in parallel looking like one site.
+
+## 1. The idea
+
+**The page is a dish of water, and every colour is poured into it.**
+
+Ground is a (fictional) London artists' colourman that makes historic
+pigments by hand, from the materials colour has always come from: earth,
+stone, shell, insect, plant, bone. Behind every section runs one live fluid
+simulation — the dish (`canvas#dish`). As the visitor scrolls into a chapter,
+that chapter's pigment is poured in: it blooms, swirls and settles until the
+whole screen is a full-bleed field of that one colour, like a painter's
+swatch. The cursor (or finger) always stirs the water.
+
+The one bold thing is colour itself: six huge saturated fields (ochre,
+Egyptian blue, Tyrian purple, ultramarine, carmine, bone black), separated
+by paper. Everything else — type, layout, chrome — is quiet, precise and
+printed, like an old colourman's catalogue.
+
+## 2. Brand facts (fictional — keep consistent)
+
+- **Name:** Ground. Wordmark "Ground" in Bodoni Moda italic. Line: "Pigments,
+  ground by hand."
+- **Workshop:** Clerkenwell, London. Est. 2011. Two people grind every batch
+  on a glass slab with a glass muller.
+- **What they sell:** loose dry pigment in glass jars (prices and jar sizes in
+  `src/core/pigments.js`), plus three sets: "The earths" (yellow ochre, red
+  ochre, bone black, £36), "The blues" (Egyptian blue, ultramarine, indigo,
+  £220), "The full library" (every pigment that is sold, £2,940 — Tyrian purple
+  included). UK prices in pounds. Ships worldwide.
+- **Archive only:** toxic historic pigments (orpiment, vermilion, lead white)
+  appear in the library with their story but are never sold. Say so plainly.
+- **Primary action:** "Order pigments" (nav) → the shop. Shop buttons:
+  "Add to order". The order form submit: "Place order"; confirmation:
+  "Order placed" (no backend; never take real payment details — ask only for
+  name, email, country; say "We'll email a payment link").
+- **Required footer disclaimer:** "Ground is a design concept. The company,
+  its workshop and its prices are fictional. The history and chemistry are real."
+
+All pigment facts live in `src/core/pigments.js`. Use them; don't invent new
+facts. If you add one, it must be accurate and conservative.
+
+## 3. Section map and ownership
+
+`palette.js` decides the current field from `data-field` on each top-level
+section (probe = viewport centre; the first 32% of a section blends from the
+previous field). **Keep every `id` and `data-field` below.**
+
+| Order | Partial / module | `id` | `data-field` | Job |
+| --- | --- | --- | --- | --- |
+| — | `core/loader` | — | — | intro: one drop of ultramarine falls into clear water |
+| — | `core/nav` | — | — | wordmark, anchors, "Order pigments" |
+| — | `core/cursor` | — | — | the stirring cursor (fine pointers) |
+| — | `core/dish` | — | — | the global WebGL fluid simulation |
+| 1 | `hero` | `top` | paper | the h1, a bloom of ultramarine in water |
+| 2 | `intro` | `intro` | paper | where colour comes from: the six sources |
+| 3 | `chapters` (one partial, six sections inside `#chapters`) | `yellow-ochre`, `egyptian-blue`, `tyrian-purple`, `ultramarine`, `carmine`, `bone-black` | same as id | six full-bleed colour chapters, oldest to newest |
+| 4 | `library` | `library` | paper | all twelve pigments as a swatch library |
+| 5 | `grind` | `grind` | paper | lab: grind lapis into ultramarine yourself |
+| 6 | `mix` | `mix` | paper | lab: mix two pigments like paint, not like light |
+| 7 | `shop` | `shop` | paper | jars on a shelf, sets, the order form |
+| 8 | `footer` | `footer` | bone-black | small print, disclaimer |
+
+## 4. Colour
+
+- The dish paints the page. **Sections are transparent** and use the field
+  variables for everything: `--ink` (text), `--ink-2`, `--ink-3`, `--line`,
+  `--field` (the field colour), `--tint` (a thin wash of it). palette.js sets
+  these per `[data-field]`, so text is always legible on its own field.
+- Pigment colours come only from `pigments.js` (`hex` masstone, `tint`
+  wash). Paper is `#f3f2ee`, ink `#151413`. No other hues, no gradients as
+  decoration, no grey drop shadows. Depth comes from the medium: powder,
+  wet paint, glass, paper grain, light.
+- Without WebGL (`html.no-dish`), sections paint their own `--field`.
+
+## 5. Type
+
+- **Bodoni Moda** (variable, optical sizes 6–96, weights 400–900, real
+  italics) for display: `.t-mega`, `.t-display`, `.t-h2`, `.t-h3`. Colour names
+  are set in *italic* — that is the house voice. Formulas: `.t-formula` with
+  real `<sub>`.
+- **Hanken Grotesk** for text and UI: `.t-lead`, `.t-body`, `.t-label`,
+  `.t-caption`, `.t-num` (tabular numbers for prices/dates).
+- Sentence case everywhere; UK English ("colour", "grey", "centre").
+  **No all-caps labels, no tracked eyebrows, no "→" on buttons, no
+  "A · B · C" meta strings, no "WORD — fragment" labels, no exclamation marks.**
+- Numbers that are a real sequence (chapter order by age, dates) may be
+  shown; don't number things that aren't a sequence.
+
+## 6. Layout
+
+- `.wrap` + `.grid` (12 columns). Asymmetric, generous, editorial. Big type,
+  few elements per screen. Full-bleed colour fields; content sits in them like
+  type on a swatch card.
+- Avoid the SaaS card kit (rows of identical rounded cards with shadows).
+  When content is a set, give it a form from the subject: a swatch book, a
+  drawdown, a specimen jar, a catalogue page, a label.
+- Mobile (≤ 767 px) is first-class: one column, touch-friendly, no
+  horizontal overflow (check `scrollWidth` vs `clientWidth`).
+
+## 7. Motion
+
+- Liquid, never bouncy. Eases: `"pour"`, `"settle"`, `power3.out`, `expo.out`;
+  0.8–1.6 s for entrances. The fluid is the main motion; DOM motion supports it.
+- One orchestrated intro (loader → hero). Each section gets one signature
+  motion idea from its content — no generic fade-up on every block.
+- `ctx.reducedMotion === true` → no smooth scroll, no pins, no scrubbed
+  transforms, the dish renders calm still fields; show final states.
+
+## 8. The dish contract (core/dish)
+
+- `canvas#dish` is fixed, full-screen, behind `<main>`. It runs a GPU fluid
+  simulation (velocity + dye, advection, pressure projection, vorticity).
+- It follows `ctx.palette.onChange(state)`: when the field changes it **pours**
+  the new pigment (splats from an edge or a point, then relaxes the whole dish
+  towards the new field colour over ~1.5–2.5 s, keeping marbled streaks of
+  `--tint` for a while). On paper it relaxes to paper slowly, so drops linger.
+- It listens to `ctx.on('drop', { id, x, y, amount, radius, vx, vy })` — x/y in
+  0..1 viewport units (default centre) — to drop pigment anywhere (hero bloom,
+  library hover, mix lab…).
+- It listens to pointer movement itself (stirring) and to
+  `ctx.on('stir', { x, y, dx, dy, strength })` for programmatic stirring.
+- Text must stay readable: dye under content settles to the uniform field.
+- Exposes nothing else. If WebGL is missing it adds `html.no-dish` and stops.
+
+Bus events: `drop`, `stir` (above), `order` — `{ id, qty }` an item was added
+to the order (shop listens; anything may emit), `select-pigment` — `{ id }`
+(library → mix lab, optional).
+
+## 9. Engineering contract
+
+- Each agent writes **only** its own files:
+  `src/partials/<name>.html`, `src/sections/<name>.js` (or `src/core/<name>.js`),
+  `src/styles/<name>.css`. Everything else is read-only.
+- Each module starts with `import '../styles/<name>.css'` and exports
+  `init(ctx)`. Scope all CSS under your section root or a prefix
+  (`.hero__…`, `#mix …`). Never style bare elements globally.
+- No external images, video or fonts beyond those loaded. Everything is
+  generated: SVG, canvas, WebGL, CSS.
+- Dependencies: `gsap` (ScrollTrigger, SplitText, CustomEase, DrawSVG
+  registered), `lenis`, `spectral.js` (Kubelka–Munk pigment mixing, MIT). No
+  other packages.
+- `ctx`: `gsap, ScrollTrigger, SplitText, lenis, palette, pigments,
+  reducedMotion, skipIntro, isTouch, isMobile(), dpr, ready, emit, on,
+  scrollTo`. `ctx.pigments` = `{ PIGMENTS, BY_ID, CHAPTERS, PAPER, SOURCES,
+  formatPrice }`.
+- Heavy work (WebGL, big canvases) never runs synchronously in `init()`:
+  defer to `ctx.ready` or near-view. Render only while on screen; pause when
+  the tab is hidden; cap DPR at `ctx.dpr`.
+- Accessibility: one `<h1>` (hero); one `<h2>` per section (each chapter's
+  pigment name is its h2). Real buttons/links/form controls, visible
+  `:focus-visible`, decorative canvases `aria-hidden`, all facts as real text.
+
+## 10. QA
+
+Build your own frozen copy (`cd ground && npx vite build --outDir <scratch>/dist`)
+and serve it with `npx vite preview --outDir <scratch>/dist --port <yours>
+--strictPort --host 127.0.0.1`. `?skipintro` skips the loader, `?reduced`
+forces reduced motion. `window.__ground` exposes ctx.
