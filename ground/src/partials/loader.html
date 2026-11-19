@@ -1,1 +1,41 @@
-<!-- loader (stub) -->
+<!-- The intro: clean paper, a glass pipette, one drop of ultramarine.
+     Decorative only (aria-hidden); the page beneath carries the content. -->
+<div class="loader" aria-hidden="true">
+  <div class="loader__paper"></div>
+  <svg class="loader__svg" focusable="false">
+    <defs>
+      <clipPath id="loader-below-tip"><rect class="loader__tipclip" x="0" y="0" width="0" height="0" /></clipPath>
+    </defs>
+    <g class="loader__rings" fill="none">
+      <circle class="loader__ring" r="0" />
+      <circle class="loader__ring" r="0" />
+      <circle class="loader__ring" r="0" />
+    </g>
+    <circle class="loader__stain" r="0" />
+    <g class="loader__pipette">
+      <path class="loader__liquid" />
+      <path class="loader__shine" />
+      <path class="loader__meniscus" />
+      <path class="loader__wall" />
+      <path class="loader__wall" />
+      <path class="loader__glass" />
+      <path class="loader__glass" />
+      <path class="loader__glint" />
+      <path class="loader__ticks" />
+      <g clip-path="url(#loader-below-tip)">
+        <path class="loader__bead" />
+        <ellipse class="loader__bead-glint" rx="0" ry="0" />
+      </g>
+    </g>
+    <path class="loader__leader" />
+    <g class="loader__fall">
+      <ellipse class="loader__drop" rx="0" ry="0" />
+      <ellipse class="loader__drop-glint" rx="0" ry="0" />
+    </g>
+  </svg>
+  <p class="loader__label">
+    <span class="loader__label-name">Ultramarine</span>
+    <span class="loader__label-note">Lapis lazuli, Badakhshan</span>
+  </p>
+  <p class="loader__mark"><span>G</span><span>r</span><span>o</span><span>u</span><span>n</span><span>d</span></p>
+</div>

@@ -1,0 +1,380 @@
+/* ==========================================================================
+   Nav — a printed bar that takes the ink of whichever field it floats over.
+   Tokens come from [data-tone] (injected by nav.js, same values as the
+   palette's [data-field] rules). On scroll it becomes a thin band of frosted
+   glass filled with the current field; it slips away on the way down and
+   returns on the way up. On phones the menu opens as a swatch book.
+   ========================================================================== */
+
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-nav);
+  color: var(--ink);
+  pointer-events: none;
+  transition: color 0.7s var(--ease-out);
+}
+.nav.is-open {
+  z-index: var(--z-menu);
+}
+html.is-loading .nav {
+  visibility: hidden;
+}
+
+.nav__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ bar */
+.nav__bar {
+  position: relative;
+  pointer-events: auto;
+  transition: transform 0.8s var(--ease-out);
+}
+/* the band: frosted glass, filled with the current field */
+.nav__bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgb(243 242 238 / 0.82);
+  background-color: color-mix(in srgb, var(--field) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15);
+  box-shadow: inset 0 -1px 0 var(--line);
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-out), background-color 0.7s var(--ease-out), box-shadow 0.7s var(--ease-out);
+  pointer-events: none;
+}
+.nav.is-scrolled .nav__bar::before {
+  opacity: 1;
+}
+.nav.is-hidden:not(.is-open):not(:focus-within) .nav__bar {
+  transform: translateY(-104%);
+}
+.nav.is-open .nav__bar::before {
+  opacity: 0;
+}
+
+.nav__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--gap);
+  height: 76px;
+}
+
+/* ------------------------------------------------------------- wordmark */
+.nav__mark {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.75rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  transition: opacity 0.6s var(--ease-out);
+}
+.nav__mark-text {
+  display: inline-block;
+  line-height: 1;
+  transition: transform 0.6s var(--ease-out);
+}
+.nav__mark:hover .nav__mark-text {
+  transform: translateY(-1px) skewX(-4deg);
+}
+
+/* ---------------------------------------------------------------- links */
+.nav__links {
+  position: relative;
+  justify-self: center;
+}
+.nav__list {
+  display: flex;
+  align-items: center;
+  gap: clamp(1.2rem, 2.3vw, 2.6rem);
+}
+.nav__link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.9375rem;
+  font-weight: 450;
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+}
+/* hover: the grotesque rolls away and the word returns in Bodoni italic */
+.nav__roll {
+  display: inline-grid;
+  overflow: hidden;
+  padding: 0.16em 0.12em;
+  margin: -0.16em -0.12em;
+}
+.nav__word {
+  grid-area: 1 / 1;
+  align-self: center;
+  justify-self: center;
+  white-space: nowrap;
+  transition: transform 0.7s var(--ease-out);
+}
+.nav__word--alt {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-size: 1.14em;
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  transform: translateY(115%);
+}
+.nav__link:hover .nav__word:not(.nav__word--alt),
+.nav__link:focus-visible .nav__word:not(.nav__word--alt) {
+  transform: translateY(-115%);
+}
+.nav__link:hover .nav__word--alt,
+.nav__link:focus-visible .nav__word--alt {
+  transform: none;
+}
+
+/* the current section: a single drop of ink that slides between links */
+.nav__drop {
+  position: absolute;
+  left: 0;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: scale(0);
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ the button */
+.nav .nav__cta {
+  justify-self: end;
+  min-height: 44px;
+  padding: 0.85em 1.35em;
+  transition:
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s var(--ease-out),
+    background-color 0.7s var(--ease-out),
+    color 0.7s var(--ease-out);
+}
+
+/* ----------------------------------------------------------- the toggle */
+.nav__toggle {
+  display: none;
+  justify-self: end;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 44px;
+  margin-right: -0.5rem;
+  padding: 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1;
+}
+.nav__toggle-icon {
+  position: relative;
+  width: 22px;
+  height: 9px;
+}
+.nav__toggle-icon i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 0.6s var(--ease-out);
+}
+.nav__toggle-icon i:first-child {
+  top: 0;
+}
+.nav__toggle-icon i:last-child {
+  bottom: 0;
+}
+.nav.is-open .nav__toggle-icon i:first-child {
+  transform: translateY(3.75px) rotate(32deg) scaleX(0.82);
+}
+.nav.is-open .nav__toggle-icon i:last-child {
+  transform: translateY(-3.75px) rotate(-32deg) scaleX(0.82);
+}
+
+/* -------------------------------------------------------- the entrance */
+.nav__list > li,
+.nav__cta,
+.nav__toggle {
+  transition-property: opacity, transform;
+  transition-duration: 0.9s, 1.1s;
+  transition-timing-function: var(--ease-out);
+  transition-delay: var(--in, 0.2s);
+}
+.nav__list > li:nth-child(1) { --in: 0.32s; }
+.nav__list > li:nth-child(2) { --in: 0.38s; }
+.nav__list > li:nth-child(3) { --in: 0.44s; }
+.nav__list > li:nth-child(4) { --in: 0.5s; }
+.nav__list > li:nth-child(5) { --in: 0.56s; }
+.nav .nav__cta { --in: 0.62s; }
+.nav__toggle { --in: 0.4s; }
+html.is-loading .nav__mark {
+  opacity: 0;
+}
+html.is-loading .nav__list > li,
+html.is-loading .nav .nav__cta,
+html.is-loading .nav__toggle {
+  opacity: 0;
+  transform: translateY(-14px);
+}
+/* once in, the button keeps only its own hover transitions */
+html.is-ready .nav .nav__cta {
+  transition-delay: 0s;
+}
+
+/* --------------------------------------------------- the swatch-book menu */
+.nav__menu {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--field);
+  color: var(--ink);
+  pointer-events: auto;
+}
+.nav__menu.is-closing {
+  pointer-events: none;
+}
+.nav__menu-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s-8);
+  min-height: 100%;
+  padding-top: calc(64px + var(--s-5));
+  padding-bottom: max(var(--s-6), env(safe-area-inset-bottom, 0px));
+}
+
+.swatchbook {
+  border-top: 1px solid var(--line);
+}
+.swatch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  border-bottom: 1px solid var(--line);
+  transform-origin: 0 100%;
+}
+.swatch__link {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 4.5vw, 1.75rem);
+  min-height: 78px;
+  padding-block: var(--s-3);
+}
+.swatch__chip {
+  flex: none;
+  width: 64px;
+  height: 40px;
+  overflow: visible;
+}
+.swatch__mass {
+  fill: var(--c, var(--ink));
+}
+.swatch__wash {
+  fill: var(--t, var(--line));
+}
+.swatch__name {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-size: clamp(2rem, 9.4vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  transition: transform 0.6s var(--ease-out);
+}
+.swatch__link:hover .swatch__name,
+.swatch__link:focus-visible .swatch__name {
+  transform: translateX(6px);
+  font-style: italic;
+}
+.swatch__pigment {
+  flex: none;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.nav__menu-foot {
+  display: grid;
+  gap: var(--s-4);
+}
+.nav__menu-cta {
+  width: 100%;
+  min-height: 54px;
+  font-size: 1rem;
+}
+.nav__menu-note {
+  font-size: var(--fs-small);
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+/* -------------------------------------------------------------- layouts */
+@media (max-width: 899px) {
+  .nav__links,
+  .nav .nav__cta {
+    display: none;
+  }
+  .nav__toggle {
+    display: inline-flex;
+  }
+  .nav__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    height: 64px;
+  }
+  .nav__mark {
+    font-size: 1.6rem;
+  }
+}
+@media (min-width: 900px) {
+  .nav__menu {
+    display: none;
+  }
+}
+@media (max-width: 359px) {
+  .swatch__pigment {
+    display: none;
+  }
+}
+@media (max-height: 560px) and (max-width: 899px) {
+  .swatch__link {
+    min-height: 56px;
+  }
+  .swatch__name {
+    font-size: 1.75rem;
+  }
+}
+
+/* No scrolling the page under an open menu (Lenis stops itself; this is for
+   the reduced-motion page, which scrolls natively). */
+html.nav-open,
+html.nav-open body {
+  overflow: hidden;
+}

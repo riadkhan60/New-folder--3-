@@ -1,3 +1,71 @@
-<section id="top" class="hero" data-field="paper" aria-label="Ground">
-  <div class="wrap" style="min-height:100vh;display:grid;place-items:center;opacity:.5">[hero: paper]</div>
+<section id="top" class="hero" data-field="paper" aria-labelledby="hero-title">
+  <!-- Without the live dish (no WebGL, reduced motion) the three drops are
+       shown still, as a wash on the paper. Positioned by hero.js. -->
+  <div class="hero__still" aria-hidden="true">
+    <svg class="hero__still-defs" width="0" height="0" focusable="false">
+      <defs>
+        <!-- a drop of watercolour: ragged edge, cloudy body, granulation, and
+             the darker rim where the pigment gathers as the water stops -->
+        <filter id="hero-wc" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.009" numOctaves="4" seed="4" result="warp" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="56" xChannelSelector="R" yChannelSelector="G" result="shape0" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="9" result="warp2" />
+          <feDisplacementMap in="shape0" in2="warp2" scale="7" xChannelSelector="G" yChannelSelector="B" result="shape" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="3" seed="21" result="cloud" />
+          <feColorMatrix in="cloud" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.5 0 0 0 -0.3" result="cloudA" />
+          <feComposite in="shape" in2="cloudA" operator="in" result="cloudy" />
+          <feComponentTransfer in="cloudy" result="body"><feFuncA type="linear" slope="0.72" /></feComponentTransfer>
+          <feComponentTransfer in="shape" result="base"><feFuncA type="linear" slope="0.4" /></feComponentTransfer>
+          <feMorphology in="shape" operator="erode" radius="3" result="inner" />
+          <feGaussianBlur in="inner" stdDeviation="5" result="innerSoft" />
+          <feComposite in="shape" in2="innerSoft" operator="out" result="rim0" />
+          <feGaussianBlur in="rim0" stdDeviation="0.7" result="rim" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed="2" result="grain" />
+          <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -3 0 0 0 1.75" result="grainA" />
+          <feComposite in="shape" in2="grainA" operator="in" result="grainy0" />
+          <feComponentTransfer in="grainy0" result="grainy"><feFuncA type="linear" slope="0.4" /></feComponentTransfer>
+          <feMerge>
+            <feMergeNode in="base" />
+            <feMergeNode in="body" />
+            <feMergeNode in="grainy" />
+            <feMergeNode in="rim" />
+          </feMerge>
+        </filter>
+      </defs>
+    </svg>
+    <span class="hero__blot hero__blot--1" style="--blot:#1e3a9e">
+      <svg viewBox="-120 -120 240 240" focusable="false"><g filter="url(#hero-wc)"><circle r="76" /></g></svg>
+    </span>
+    <span class="hero__blot hero__blot--2" style="--blot:#c8922e">
+      <svg viewBox="180 -120 240 240" focusable="false"><g filter="url(#hero-wc)"><circle cx="300" r="70" /></g></svg>
+    </span>
+    <span class="hero__blot hero__blot--3" style="--blot:#a3123a">
+      <svg viewBox="-120 230 240 240" focusable="false"><g filter="url(#hero-wc)"><circle cy="350" r="70" /></g></svg>
+    </span>
+  </div>
+
+  <div class="hero__inner wrap">
+    <h1 id="hero-title" class="hero__title">
+      <span class="visually-hidden">Colour was once a stone, a shell, an insect or a bone.</span>
+      <span class="hero__lines" aria-hidden="true">
+        <span class="hero__line hero__line--1"><span class="hero__w">Colour</span> <span class="hero__w"><span class="hero__k">w</span>as</span> <span class="hero__w">once</span></span>
+        <span class="hero__line hero__line--2"><span class="hero__w">a</span> <span class="hero__w"><i class="hero__word" data-pigment="ultramarine">stone</i>,</span> <span class="hero__w">a</span> <span class="hero__w"><i class="hero__word" data-pigment="tyrian-purple">shell</i>,</span></span>
+        <span class="hero__line hero__line--3"><span class="hero__w">an</span> <span class="hero__w"><i class="hero__word" data-pigment="carmine">insect</i></span> <span class="hero__w">or</span> <span class="hero__w">a</span> <span class="hero__w"><i class="hero__word" data-pigment="bone-black">bone</i>.</span></span>
+      </span>
+    </h1>
+
+    <p class="hero__caption t-caption">
+      <i>Ultramarine</i>, <i>yellow ochre</i> and <i>carmine</i>, dropped into clear water.
+    </p>
+
+    <div class="hero__foot">
+      <p class="hero__lead t-lead" data-hero-in>
+        Ground makes historic pigments by hand in Clerkenwell, London, from the materials colour has always come from.
+      </p>
+      <a class="hero__cue" href="#intro" data-hero-in>
+        <span class="hero__cue-rule" aria-hidden="true"><span class="hero__cue-drop"></span></span>
+        <span class="hero__cue-label">Where colour comes from</span>
+      </a>
+    </div>
+  </div>
 </section>

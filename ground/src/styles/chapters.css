@@ -1,0 +1,499 @@
+/* ==========================================================================
+   CHAPTERS — six full-bleed colour fields, oldest to newest.
+   Sections are transparent: the dish pours each field. Every colour here
+   comes from the field variables (--ink, --ink-2, --ink-3, --line, --field)
+   except the drawdown card, which is paper and so carries paper ink.
+   ========================================================================== */
+
+.chapters {
+  position: relative;
+}
+
+.chapter {
+  /* sized by width, but never so tall that the poster leaves the screen */
+  --name-fs: clamp(4.6rem, min(14.2vw, 23vh), 16.5rem);
+  --era-fs: clamp(3.4rem, min(8vw, 13vh), 8.8rem);
+  --paper-ink: rgb(21 20 19 / 0.62);
+  position: relative;
+  overflow-x: clip; /* a spreading name or a tilted card never widens the page */
+  min-height: 178vh;
+  padding-block: clamp(6.5rem, 15vh, 10rem) clamp(6rem, 16vh, 11rem);
+  color: var(--ink);
+}
+.chapter#ultramarine { --name-fs: clamp(4.2rem, min(14vw, 26vh), 16rem); }
+.chapter#carmine { --name-fs: clamp(5rem, min(17.5vw, 30vh), 19.5rem); }
+
+.chapter__inner {
+  position: relative;
+}
+
+/* ------------------------------------------------------------- the stage */
+/* Screen one is a poster: the era and the story stacked on one side, the
+   heap standing on the other, and the name crossing both at the foot. */
+.chapter__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: auto auto minmax(1.5rem, 1fr) auto;
+  column-gap: var(--gap);
+  min-height: calc(100vh - clamp(6.5rem, 15vh, 10rem) - 9vh);
+}
+
+.chapter__era {
+  grid-row: 1;
+  grid-column: 1 / span 6;
+  align-self: start;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.9rem;
+  will-change: transform;
+}
+.chapter__years {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-size: var(--era-fs);
+  line-height: 0.82;
+  letter-spacing: -0.035em;
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: 'lnum' 1, 'pnum' 1;
+  color: var(--ink);
+}
+.chapter__ago {
+  font-family: var(--font-text);
+  font-size: var(--fs-lead);
+  font-weight: 350;
+  line-height: 1.2;
+  color: var(--ink-2);
+}
+
+.chapter__fact {
+  grid-row: 2;
+  grid-column: 1 / span 5;
+  align-self: start;
+  position: relative;
+  z-index: 2;
+  margin-top: clamp(1.4rem, 4.2vh, 2.8rem);
+  max-width: 31ch;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.chapter__name {
+  grid-row: 4;
+  grid-column: 1 / -1;
+  align-self: end;
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-weight: 400;
+  font-size: var(--name-fs);
+  line-height: 0.84;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chapter__word {
+  display: block;
+  width: max-content;
+}
+.chapter--l .chapter__word--2 { margin-left: 1.15em; }
+.chapter--r .chapter__name { justify-self: end; text-align: right; }
+.chapter--r .chapter__word { margin-left: auto; }
+.chapter--r .chapter__word--1 { margin-right: 0.9em; }
+
+.chapter__heap {
+  grid-row: 1 / -1;
+  grid-column: 6 / -1;
+  position: relative;
+  z-index: 1;
+  align-self: end;
+  width: 100%;
+  aspect-ratio: 10 / 7.4;
+  margin-bottom: calc(var(--name-fs) * 0.42);
+  pointer-events: none;
+  will-change: transform;
+}
+.chapter__heap-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* mirrored chapters */
+.chapter--r .chapter__era { grid-column: 7 / -1; justify-self: end; justify-content: flex-end; text-align: right; }
+.chapter--r .chapter__fact { grid-column: 8 / -1; justify-self: end; }
+.chapter--r .chapter__heap { grid-column: 1 / span 7; }
+
+/* a few chapters lean differently, inside one system */
+#tyrian-purple .chapter__heap { grid-column: 6 / -1; margin-bottom: calc(var(--name-fs) * 0.55); }
+#tyrian-purple .chapter__word--2 { margin-left: 0.7em; }
+#ultramarine .chapter__heap { grid-column: 1 / span 7; margin-bottom: calc(var(--name-fs) * 0.5); }
+#carmine .chapter__heap { grid-column: 5 / -1; margin-bottom: calc(var(--name-fs) * 0.36); }
+#bone-black .chapter__word--1 { margin-right: 1.3em; }
+
+/* ---------------------------------------------------------- the specimen */
+.chapter__specimen {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: var(--gap);
+  align-items: end;
+  margin-top: clamp(5rem, 18vh, 12rem);
+}
+.chapter__drawdown {
+  grid-row: 1;
+  grid-column: 1 / span 7;
+  margin: 0;
+}
+.chapter__data {
+  grid-row: 1;
+  grid-column: 9 / -1;
+}
+.chapter--r .chapter__drawdown { grid-column: 6 / -1; }
+.chapter--r .chapter__data { grid-column: 1 / span 4; }
+
+/* the drawdown card: a strip of paper on the field */
+.chapter__card {
+  --tilt: -0.8deg;
+  position: relative;
+  aspect-ratio: 5 / 2;
+  width: 100%;
+  border-radius: 1px;
+  background: var(--paper);
+  transform: rotate(var(--tilt));
+  box-shadow:
+    0 1px 1px color-mix(in oklab, var(--field), #000 40%),
+    0 28px 50px -30px color-mix(in oklab, var(--field), #000 70%);
+}
+.chapter__card-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.chapter__card-name,
+.chapter__card-medium,
+.chapter__card-end {
+  position: absolute;
+  z-index: 1;
+  color: var(--paper-ink);
+  line-height: 1;
+  white-space: nowrap;
+}
+.chapter__card-name {
+  top: 7.5%;
+  left: 4%;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(0.95rem, 1.35vw, 1.3rem);
+  color: rgb(21 20 19 / 0.82);
+}
+.chapter__card-medium {
+  top: 8.5%;
+  right: 4%;
+  font-size: clamp(0.66rem, 0.78vw, 0.78rem);
+}
+.chapter__card-end {
+  bottom: 8%;
+  font-size: clamp(0.66rem, 0.78vw, 0.78rem);
+}
+.chapter__card-end--thick { left: 4%; }
+.chapter__card-end--thin { right: 4%; }
+.chapter__drawdown[data-pull='rtl'] .chapter__card-end--thick { left: auto; right: 4%; }
+.chapter__drawdown[data-pull='rtl'] .chapter__card-end--thin { right: auto; left: 4%; }
+
+/* the catalogue entry */
+.chapter__spec {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.chapter__row {
+  display: grid;
+  grid-template-columns: 6.6rem minmax(0, 1fr);
+  column-gap: var(--s-4);
+  align-items: baseline;
+  padding-block: 0.72rem 0.78rem;
+  border-top: 1px solid var(--line);
+}
+.chapter__row dt {
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.chapter__row dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.42;
+  color: var(--ink);
+}
+.chapter__row--formula dd {
+  font-size: clamp(1.15rem, 1.4vw, 1.45rem);
+  line-height: 1.3;
+}
+.chapter__row--formula dd i { font-style: italic; }
+
+.chapter__buy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4) var(--s-5);
+  margin-top: var(--s-6);
+}
+.chapter__rare {
+  flex: 1 0 100%;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-style: italic;
+  font-size: var(--fs-h3);
+  line-height: 1.05;
+  color: var(--ink);
+}
+.chapter__price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  color: var(--ink);
+}
+.chapter__amount {
+  font-family: var(--font-display);
+  font-variant-numeric: lining-nums proportional-nums;
+  font-feature-settings: 'lnum' 1, 'pnum' 1;
+  font-optical-sizing: auto;
+  font-size: clamp(2.2rem, 3.2vw, 3.3rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.chapter__unit {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chapter__add {
+  min-width: 11.5rem;
+}
+.chapter__add-label {
+  display: inline-block;
+}
+.chapter__add.is-added .chapter__add-label {
+  animation: chapter-added 0.6s var(--ease-out);
+}
+@keyframes chapter-added {
+  from { opacity: 0; transform: translateY(40%); }
+  to { opacity: 1; transform: none; }
+}
+.chapter__add:focus-visible { outline-color: var(--ink); }
+
+/* -------------------------------------------------------------- ribbon */
+/* A thin timeline in the right margin: oldest at the top, today at the
+   foot, on a log scale of years. Each colour is a tiny swatch on the line;
+   the ring glides between them as the dish pours the next field. */
+.chapters__ribbon {
+  --mx: 0;
+  position: fixed;
+  right: 0;
+  top: 22vh;
+  bottom: 22vh;
+  z-index: 5;
+  width: var(--rail);
+  color: var(--rb-ink, var(--ink));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s var(--ease-out), color 0.6s linear;
+}
+.chapters__ribbon.is-on,
+.chapters__ribbon:focus-within {
+  opacity: 1;
+}
+.chapters__ribbon.is-on .ribbon__link { pointer-events: auto; }
+.ribbon__scale,
+.ribbon__stops {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  margin: 0;
+}
+.ribbon__line,
+.ribbon__fill,
+.ribbon__span {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  background: currentColor;
+}
+.ribbon__line { top: 0; bottom: 0; opacity: 0.24; }
+.ribbon__fill {
+  top: 0;
+  height: 100%;
+  transform-origin: 50% 0;
+  transform: scaleY(var(--mx));
+  opacity: 0.8;
+}
+.ribbon__span {
+  top: calc(var(--from) * 100%);
+  bottom: 0;
+  left: -5px;
+  opacity: 0.4;
+  background: repeating-linear-gradient(180deg, currentColor 0 2px, transparent 2px 5px);
+}
+.ribbon__tick {
+  position: absolute;
+  left: 0;
+  top: calc(var(--x) * 100%);
+  width: 5px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.5;
+}
+.ribbon__end {
+  position: absolute;
+  left: 50%;
+  writing-mode: vertical-rl;
+  font-size: 0.66rem;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0.66;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.ribbon__end--from { bottom: calc(100% + 10px); transform: translateX(-50%); }
+.ribbon__end--to { top: calc(100% + 10px); transform: translateX(-50%); }
+.ribbon__marker {
+  position: absolute;
+  left: 0;
+  top: calc(var(--mx) * 100%);
+  width: 17px;
+  height: 17px;
+  margin: -8.5px 0 0 -8px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.ribbon__stop {
+  position: absolute;
+  left: 0;
+  top: calc(var(--x) * 100%);
+  width: 0;
+  height: 0;
+}
+.ribbon__link {
+  position: absolute;
+  left: -11.5px;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.ribbon__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px currentColor;
+  transition: transform 0.5s var(--ease-out);
+}
+.ribbon__stop.is-active .ribbon__dot { transform: scale(0.55); }
+.ribbon__link:hover .ribbon__dot { transform: scale(1.35); }
+/* labels run along the line, like titles on a row of spines */
+.ribbon__label {
+  position: absolute;
+  right: calc(100% + 2px);
+  top: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  writing-mode: vertical-rl;
+  transform: translateY(calc(var(--x) * -100%));
+  white-space: nowrap;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.5s var(--ease-out);
+  pointer-events: none;
+}
+.ribbon__name {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: 1.02rem;
+}
+.ribbon__when { font-size: 0.7rem; opacity: 0.75; }
+.ribbon__stop.is-active .ribbon__label,
+.ribbon__link:hover .ribbon__label,
+.ribbon__link:focus-visible .ribbon__label {
+  opacity: 1;
+}
+.ribbon__link:hover .ribbon__label,
+.ribbon__link:focus-visible .ribbon__label { z-index: 2; }
+/* while another stop is hovered, the active label steps aside */
+.ribbon__stops:has(.ribbon__link:hover) .ribbon__stop.is-active .ribbon__label { opacity: 0; }
+.ribbon__stops:has(.ribbon__link:hover) .ribbon__stop.is-active .ribbon__link:hover .ribbon__label { opacity: 1; }
+.ribbon__link:focus-visible { outline-offset: 1px; }
+
+/* --------------------------------------------------------- mid widths */
+@media (max-width: 1100px) and (min-width: 768px) and (orientation: landscape), (min-width: 1024px) and (max-width: 1100px) {
+  .chapter__data { grid-column: 8 / -1; }
+  .chapter--r .chapter__data { grid-column: 1 / span 5; }
+  .chapter__drawdown { grid-column: 1 / span 7; }
+  .chapter--r .chapter__drawdown { grid-column: 6 / -1; }
+  .chapter__fact { grid-column: 1 / span 6; }
+  .chapter--r .chapter__fact { grid-column: 7 / -1; }
+}
+
+/* -------------------------------------------------------------- mobile */
+/* phones, and tablets held upright: one column, still a poster */
+@media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+  .chapter {
+    --name-fs: clamp(3.4rem, 19.6vw, 8rem);
+    --era-fs: clamp(3rem, 15vw, 5.5rem);
+    min-height: 0;
+    padding-block: 6.5rem 5.5rem;
+  }
+  .chapter#ultramarine { --name-fs: clamp(3rem, 16.6vw, 6.6rem); }
+  .chapter#carmine { --name-fs: clamp(3.6rem, 23.5vw, 9rem); }
+  #ultramarine .chapter__word--1 { margin-right: 0; }
+  .chapter__stage,
+  .chapter__specimen {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+  }
+  .chapter__era { order: 1; margin-bottom: 1.2rem; }
+  .chapter__name { order: 2; align-self: flex-start; }
+  .chapter__heap { order: 3; margin: -21% 0 -4%; width: 100%; }
+  .chapter__fact { order: 4; margin-top: 1.25rem; max-width: 34ch; }
+  .chapter--r .chapter__era,
+  .chapter--r .chapter__fact { align-self: flex-end; justify-content: flex-end; }
+  .chapter--r .chapter__name { align-self: flex-end; }
+  .chapter--l .chapter__word--2 { margin-left: 0.9em; }
+  .chapter--r .chapter__word--1 { margin-right: 0.7em; }
+  .chapter__specimen { margin-top: 3.5rem; gap: 2.5rem; }
+  .chapter__card { aspect-ratio: 5 / 2.3; transform: rotate(calc(var(--tilt) * 0.6)); }
+  .chapter__card-name { font-size: 0.95rem; }
+  .chapter__row { grid-template-columns: 5.6rem minmax(0, 1fr); }
+  .chapter__add { flex: 1 1 100%; max-width: 26rem; }
+
+  .chapters__ribbon { top: 30vh; bottom: 30vh; }
+  .ribbon__end,
+  .ribbon__label,
+  .ribbon__span { display: none; }
+  .chapters__ribbon { right: 0; width: 14px; }
+  .ribbon__dot { width: 5px; height: 5px; }
+  .ribbon__tick { display: none; }
+  .ribbon__marker { width: 11px; height: 11px; margin: -5.5px 0 0 -5px; }
+  .chapters__ribbon.is-on .ribbon__link { pointer-events: none; }
+}
+
+/* ------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .chapter__era,
+  .chapter__heap { will-change: auto; }
+}

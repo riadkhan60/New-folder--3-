@@ -1,0 +1,141 @@
+/* ==========================================================================
+   Cursor — a drop of water (fine pointers only; cursor.js decides).
+   A lens ring that trails and stretches, a dot exactly on the pointer. Ink
+   from [data-tone]. Sits above the loader so it is there from the first
+   frame of the intro.
+   ========================================================================== */
+
+/* The native cursor steps aside while the drop runs, except where the
+   native one does a job the drop can't: text fields, selects, sliders,
+   open dialogs, and anything marked data-cursor="hide". */
+html.has-cursor,
+html.has-cursor
+  :where(
+    body
+      *:not(
+        input:not([type='checkbox'], [type='radio'], [type='button'], [type='submit'], [type='reset']),
+        textarea,
+        select,
+        [contenteditable='true'],
+        [contenteditable='true'] *,
+        dialog[open],
+        dialog[open] *,
+        [data-cursor='hide'],
+        [data-cursor='hide'] *
+      )
+  ) {
+  cursor: none !important;
+}
+
+.cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: calc(var(--z-loader) + 2);
+  color: var(--ink);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease-out), color 0.6s var(--ease-out);
+}
+.cursor.is-on {
+  opacity: 1;
+}
+.cursor.is-native {
+  opacity: 0;
+}
+
+.cursor__lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+/* The lens: a hairline ring with a bead's light inside, and the colour under
+   it a little richer, as through a drop of water. */
+.cursor__shape {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 1px solid rgb(21 20 19 / 0.55);
+  border-color: color-mix(in srgb, currentColor 58%, transparent);
+  background-color: transparent;
+  box-shadow:
+    inset -2px -3px 6px -3px color-mix(in srgb, currentColor 30%, transparent),
+    inset 2px 3px 5px -3px rgb(255 255 255 / 0.6);
+  -webkit-backdrop-filter: saturate(1.6) contrast(1.06);
+  backdrop-filter: saturate(1.6) contrast(1.06);
+  will-change: transform;
+  transition:
+    width 0.6s var(--ease-out),
+    height 0.6s var(--ease-out),
+    scale 0.35s var(--ease-out),
+    background-color 0.45s var(--ease-out),
+    border-color 0.45s var(--ease-out),
+    box-shadow 0.45s var(--ease-out);
+}
+
+.cursor__dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: currentColor;
+  will-change: transform;
+  transition: scale 0.45s var(--ease-out), opacity 0.3s var(--ease-out);
+}
+
+.cursor__label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  scale: 0.6;
+  opacity: 0;
+  font-family: var(--font-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--field);
+  transition: opacity 0.3s var(--ease-out), scale 0.55s var(--ease-out);
+}
+
+/* over links and buttons: the drop opens up */
+.cursor.is-hover .cursor__shape {
+  width: 58px;
+  height: 58px;
+  border-color: currentColor;
+  background-color: color-mix(in srgb, currentColor 7%, transparent);
+}
+.cursor.is-hover .cursor__dot,
+.cursor.is-label .cursor__dot {
+  scale: 0;
+}
+
+/* a word: the drop fills with ink */
+.cursor.is-label .cursor__shape {
+  width: 84px;
+  height: 84px;
+  border-color: currentColor;
+  background-color: currentColor;
+  box-shadow:
+    inset -3px -4px 10px -4px rgb(21 20 19 / 0.3),
+    inset 3px 4px 8px -4px rgb(255 255 255 / 0.35);
+}
+.cursor.is-label .cursor__label {
+  opacity: 1;
+  scale: 1;
+}
+
+.cursor.is-down .cursor__shape {
+  scale: 0.84;
+}

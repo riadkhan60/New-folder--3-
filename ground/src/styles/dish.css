@@ -1,0 +1,25 @@
+/* ==========================================================================
+   The dish — canvas#dish, the fluid simulation behind the page.
+   base.css fixes it full-screen behind <main>; this file only sizes it to
+   the large viewport (so a phone's collapsing toolbar never resizes the
+   water) and fades it in once the first frame has been painted.
+   ========================================================================== */
+
+canvas#dish {
+  height: 100vh;
+  height: 100lvh;
+  bottom: auto;
+  opacity: 0;
+  transition: opacity 0.7s var(--ease-out);
+  contain: strict;
+}
+
+html.dish-on canvas#dish {
+  opacity: 1;
+}
+
+/* No WebGL2, no float textures or reduced motion: sections paint their own
+   fields (base.css) and the canvas steps aside. */
+html.no-dish canvas#dish {
+  display: none;
+}

@@ -1,1 +1,116 @@
-<!-- nav (stub) -->
+<!-- Nav: a printed bar that takes the ink of whichever field it floats over.
+     It carries data-tone (not data-field: palette.js measures every top-level
+     [data-field] element as a section, fixed ones included). -->
+<header class="nav" data-tone="paper">
+  <svg class="nav__defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- A swatch drawn down with a knife: ragged edges, a streaky wash, grain -->
+      <filter id="nav-brush-1" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.045 0.55" numOctaves="2" seed="3" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.9" numOctaves="2" seed="11" result="s" />
+        <feColorMatrix in="s" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 0.62" result="sa" />
+        <feComposite in="sa" in2="d" operator="in" result="streak" />
+        <feMerge><feMergeNode in="d" /><feMergeNode in="streak" /></feMerge>
+      </filter>
+      <filter id="nav-brush-2" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05 0.5" numOctaves="2" seed="17" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5.5" xChannelSelector="R" yChannelSelector="G" result="d" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.014 0.85" numOctaves="2" seed="5" result="s" />
+        <feColorMatrix in="s" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 0.62" result="sa" />
+        <feComposite in="sa" in2="d" operator="in" result="streak" />
+        <feMerge><feMergeNode in="d" /><feMergeNode in="streak" /></feMerge>
+      </filter>
+      <filter id="nav-brush-3" x="-12%" y="-25%" width="124%" height="150%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04 0.6" numOctaves="2" seed="29" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" result="d" />
+        <feTurbulence type="fractalNoise" baseFrequency="0.011 0.95" numOctaves="2" seed="23" result="s" />
+        <feColorMatrix in="s" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 0.62" result="sa" />
+        <feComposite in="sa" in2="d" operator="in" result="streak" />
+        <feMerge><feMergeNode in="d" /><feMergeNode in="streak" /></feMerge>
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="nav__bar">
+    <div class="nav__row wrap">
+      <a class="nav__mark" href="#top" aria-label="Ground, back to the top"><span class="nav__mark-text">Ground</span></a>
+
+      <nav class="nav__links" aria-label="Main">
+        <ul class="nav__list">
+          <li><a class="nav__link" href="#yellow-ochre" data-nav="colours"><span class="nav__roll"><span class="nav__word">Colours</span><span class="nav__word nav__word--alt" aria-hidden="true">Colours</span></span></a></li>
+          <li><a class="nav__link" href="#library" data-nav="library"><span class="nav__roll"><span class="nav__word">Library</span><span class="nav__word nav__word--alt" aria-hidden="true">Library</span></span></a></li>
+          <li><a class="nav__link" href="#grind" data-nav="grind"><span class="nav__roll"><span class="nav__word">Grind</span><span class="nav__word nav__word--alt" aria-hidden="true">Grind</span></span></a></li>
+          <li><a class="nav__link" href="#mix" data-nav="mix"><span class="nav__roll"><span class="nav__word">Mix</span><span class="nav__word nav__word--alt" aria-hidden="true">Mix</span></span></a></li>
+          <li><a class="nav__link" href="#shop" data-nav="shop"><span class="nav__roll"><span class="nav__word">Shop</span><span class="nav__word nav__word--alt" aria-hidden="true">Shop</span></span></a></li>
+        </ul>
+        <span class="nav__drop" aria-hidden="true"></span>
+      </nav>
+
+      <a class="btn nav__cta" href="#shop">Order pigments</a>
+
+      <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-label">Menu</span>
+        <span class="nav__toggle-icon" aria-hidden="true"><i></i><i></i></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- The phone menu, set like a swatch book: a painted chip beside each link -->
+  <div class="nav__menu" id="nav-menu" data-tone="paper" data-lenis-prevent hidden>
+    <nav class="nav__menu-inner wrap" aria-label="Main">
+      <ul class="swatchbook">
+        <li class="swatch" data-pigment="yellow-ochre">
+          <a class="swatch__link" href="#yellow-ochre">
+            <svg class="swatch__chip" viewBox="0 0 64 40" aria-hidden="true" focusable="false">
+              <g filter="url(#nav-brush-1)"><rect class="swatch__wash" x="4" y="5" width="56" height="30" /><rect class="swatch__mass" x="4" y="5" width="36" height="30" /></g>
+            </svg>
+            <span class="swatch__name">Colours</span>
+          </a>
+          <span class="swatch__pigment" aria-hidden="true">Yellow ochre</span>
+        </li>
+        <li class="swatch" data-pigment="malachite">
+          <a class="swatch__link" href="#library">
+            <svg class="swatch__chip" viewBox="0 0 64 40" aria-hidden="true" focusable="false">
+              <g filter="url(#nav-brush-2)"><rect class="swatch__wash" x="4" y="5" width="56" height="30" /><rect class="swatch__mass" x="4" y="5" width="34" height="30" /></g>
+            </svg>
+            <span class="swatch__name">Library</span>
+          </a>
+          <span class="swatch__pigment" aria-hidden="true">Malachite</span>
+        </li>
+        <li class="swatch" data-pigment="ultramarine">
+          <a class="swatch__link" href="#grind">
+            <svg class="swatch__chip" viewBox="0 0 64 40" aria-hidden="true" focusable="false">
+              <g filter="url(#nav-brush-3)"><rect class="swatch__wash" x="4" y="5" width="56" height="30" /><rect class="swatch__mass" x="4" y="5" width="38" height="30" /></g>
+            </svg>
+            <span class="swatch__name">Grind</span>
+          </a>
+          <span class="swatch__pigment" aria-hidden="true">Ultramarine</span>
+        </li>
+        <li class="swatch" data-pigment="carmine">
+          <a class="swatch__link" href="#mix">
+            <svg class="swatch__chip" viewBox="0 0 64 40" aria-hidden="true" focusable="false">
+              <g filter="url(#nav-brush-1)"><rect class="swatch__wash" x="4" y="5" width="56" height="30" /><rect class="swatch__mass" x="4" y="5" width="33" height="30" /></g>
+            </svg>
+            <span class="swatch__name">Mix</span>
+          </a>
+          <span class="swatch__pigment" aria-hidden="true">Carmine</span>
+        </li>
+        <li class="swatch" data-pigment="tyrian-purple">
+          <a class="swatch__link" href="#shop">
+            <svg class="swatch__chip" viewBox="0 0 64 40" aria-hidden="true" focusable="false">
+              <g filter="url(#nav-brush-2)"><rect class="swatch__wash" x="4" y="5" width="56" height="30" /><rect class="swatch__mass" x="4" y="5" width="37" height="30" /></g>
+            </svg>
+            <span class="swatch__name">Shop</span>
+          </a>
+          <span class="swatch__pigment" aria-hidden="true">Tyrian purple</span>
+        </li>
+      </ul>
+
+      <div class="nav__menu-foot">
+        <a class="btn nav__menu-cta" href="#shop">Order pigments</a>
+        <p class="nav__menu-note">Pigments, ground by hand in Clerkenwell, London.</p>
+      </div>
+    </nav>
+  </div>
+</header>
