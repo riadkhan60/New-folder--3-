@@ -8,6 +8,8 @@
  * engraving with its pigment and drops that pigment into the dish right
  * there; a click or tap drops more.
  *
+ * Facts (names, materials, archive only) are read from pigments.js.
+ *
  * Emits: 'drop' (via ctx.palette.drop). Listens to nothing.
  */
 import '../styles/intro.css'
@@ -18,12 +20,37 @@ export function init(ctx) {
   const { gsap, ScrollTrigger, pigments, reducedMotion } = ctx
   const specs = [...root.querySelectorAll('.spec')]
 
-  // pigment colours come from pigments.js
+  // Colours and facts come from pigments.js. The partial carries the same
+  // words for a first paint (and keeps its italics where they still match);
+  // anything that has changed in pigments.js is rewritten here.
+  const norm = (s) => s.replace(/\s+/g, ' ').trim()
   for (const el of specs) {
     const p = pigments.BY_ID[el.dataset.pigment]
     if (!p) continue
     el.style.setProperty('--pig', p.hex)
     el.style.setProperty('--pig-tint', p.tint)
+
+    const src = el.querySelector('.spec__source')
+    const srcName = pigments.SOURCES[el.dataset.source]
+    if (src && srcName && src.firstChild?.nodeType === 3 && norm(src.firstChild.data) !== srcName) src.firstChild.data = srcName
+
+    const name = el.querySelector('.spec__pigment')
+    if (name && norm(name.textContent) !== p.name) name.textContent = p.name
+
+    const mat = el.querySelector('.spec__material')
+    if (mat && p.material) {
+      const material = `${p.material.replace(/\.$/, '')}.`
+      const archive = p.sold ? '' : 'Toxic, so archive only.'
+      if (norm(mat.textContent) !== norm(`${material} ${archive}`)) {
+        mat.textContent = archive ? `${material} ` : material
+        if (archive) {
+          const note = document.createElement('span')
+          note.className = 'spec__archive'
+          note.textContent = archive
+          mat.append(note)
+        }
+      }
+    }
   }
 
   /* ------------------------------------------------- colour goes in */

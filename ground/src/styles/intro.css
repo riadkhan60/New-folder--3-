@@ -7,10 +7,16 @@
    ========================================================================== */
 
 #intro {
+  /* The empty tail the first chapter is poured over: palette.js hands the
+     field over while the next section's top runs from 85% to 65% of the
+     screen, so the drawer has left by the time the colour reaches it. */
+  --tail: 66vh;
   position: relative;
-  padding-block: clamp(6rem, 16vh, 11rem) clamp(6rem, 18vh, 13rem);
+  padding-block: clamp(6rem, 16vh, 11rem) var(--tail);
   color: var(--ink);
 }
+/* no dish, no pour to watch: the next field simply begins */
+html.no-dish #intro { --tail: clamp(6rem, 18vh, 13rem); }
 #intro .intro__defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* ------------------------------------------------------------- the head */

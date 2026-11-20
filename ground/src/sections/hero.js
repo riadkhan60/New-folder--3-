@@ -5,16 +5,24 @@
  * character drifts down from a soft blur into a crisp Bodoni letter. As it
  * settles, three drops go into the dish above it, ultramarine first, then
  * yellow ochre and carmine, so the blooms open and marble into each other.
- * A slow current keeps them moving for a while; scrolling away lifts the
- * headline and the water keeps drifting.
+ * A slow current keeps them moving; scrolling away lifts the headline and
+ * the water keeps drifting.
+ *
+ * The water is never left to dry out while the hero is on screen: every few
+ * seconds the headline gives up one of its colour words in turn (shell,
+ * insect, bone, stone). The word pales as its pigment drops into the open
+ * water beside the bloom, a slow current marbles it in, and the word inks
+ * up again. The plate caption keeps the record of what is in the water.
+ * Pointing at a colour word (or tapping it) lets a wisp of it rise.
  *
  * After the loader, its hand-over drop of ultramarine (which lands right
  * behind the headline) is adopted as the hero's ultramarine: a current
  * carries it up into open water and clear-water drops lift it off the type.
  *
  * Emits: 'drop' (via ctx.palette.drop, incl. id 'water') and 'stir'.
- * Listens: 'drop', only until ctx.ready, to notice the loader's hand-over.
- * Without the dish (html.no-dish) the three drops are shown still in SVG.
+ * Listens: 'drop' (to keep the caption true, and to notice the loader's
+ * hand-over). Without the dish (html.no-dish) the three drops are shown
+ * still in SVG; with reduced motion nothing moves.
  */
 import '../styles/hero.css'
 
@@ -26,11 +34,29 @@ const DROPS = [
   { id: 'carmine', at: 1.8, amount: 0.95, radius: 0.046, dx: -0.21, dy: -0.05, vx: 0.04, vy: -0.012, size: 0.17 },
 ]
 
+// Where the headline's own drops land, round the bloom (short-side units),
+// so each one opens in fresh water at the edge of the last.
+const RING = [
+  [-0.14, -0.04],
+  [0.12, -0.1],
+  [0.13, 0.09],
+  [-0.04, -0.15],
+  [0.02, 0.13],
+]
+// how much of each goes in: the dark ones are let in more sparingly
+const DRIP = { 'bone-black': 0.62, 'tyrian-purple': 0.85, carmine: 0.9, ultramarine: 0.95 }
+// The dish dries on paper at about this rate (per second). Only used to
+// judge which colours are still visible in the water, for the caption.
+const DRY = 0.14
+// pigment names that keep their capital inside a sentence
+const PROPER = /^(Egyptian|Tyrian)\b/
+
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 
 export function init(ctx) {
   const root = document.getElementById('top')
   if (!root) return
+  const html = document.documentElement
   const { gsap, SplitText, pigments, reducedMotion } = ctx
   const title = root.querySelector('.hero__title')
   const lines = [...root.querySelectorAll('.hero__line')]
@@ -38,6 +64,7 @@ export function init(ctx) {
   const blots = [...root.querySelectorAll('.hero__blot')]
   const cueRule = root.querySelector('.hero__cue-rule')
   const caption = root.querySelector('.hero__caption')
+  const capText = caption?.querySelector('.hero__caption-text') ?? null
 
   // colour words are set in their own pigment (pigments.js is the source)
   for (const w of root.querySelectorAll('.hero__word')) {
@@ -49,6 +76,24 @@ export function init(ctx) {
     if (!p) return
     b.style.setProperty('--blot', p.hex)
   })
+
+  /* ---------------------------------------------------- the plate caption */
+  // It names what is in the water, from pigments.js.
+  const nameOf = (id, first) => {
+    const n = pigments.BY_ID[id]?.name
+    if (!n) return null
+    return first || PROPER.test(n) ? n : n.charAt(0).toLowerCase() + n.slice(1)
+  }
+  function captionHTML(ids) {
+    const names = ids
+      .filter((id) => pigments.BY_ID[id])
+      .map((id, i) => `<i>${nameOf(id, i === 0)}</i>`)
+    if (!names.length) return ''
+    const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
+    return `${list}, dropped into clear water.`
+  }
+  let capHTML = captionHTML(DROPS.map((d) => d.id))
+  if (capText && capHTML) capText.innerHTML = capHTML
 
   /* ------------------------------------------------------- where they land */
   // The open water above the headline, to the right of its short first line.
@@ -94,6 +139,54 @@ export function init(ctx) {
     return
   }
 
+  /* -------------------------------------------- what is in the water now */
+  // A clock that stops while the tab is hidden (so does the dish).
+  let hiddenAt = 0
+  let hiddenFor = 0
+  const clock = () => (performance.now() - hiddenFor - (hiddenAt ? performance.now() - hiddenAt : 0)) / 1000
+  const water = new Map() // id → { t, a: amount, w: amount × radius² }
+  const left = (e, t) => Math.exp(-DRY * (t - e.t))
+  ctx.on('drop', (d) => {
+    const id = d?.id
+    if (!id || !pigments.BY_ID[id]) return // clear water lifts colour; it adds none
+    const t = clock()
+    const a = d.amount ?? 1
+    const r = d.radius ?? 0.12
+    const prev = water.get(id)
+    // a wisp of a colour that is already blooming doesn't replace the bloom
+    if (prev && prev.w * left(prev, t) > a * r * r) return
+    water.set(id, { t, a, w: a * r * r })
+  })
+  // pouring a field washes the paper's drops away
+  ctx.palette.onChange((st) => {
+    if (st.field !== 'paper' && water.size) water.clear()
+  })
+  function inWater() {
+    const t = clock()
+    return [...water]
+      .map(([id, e]) => ({ id, t: e.t, a: e.a * left(e, t), w: e.w * left(e, t) }))
+      .filter((e) => e.a > 0.16)
+      .sort((x, y) => y.w - x.w)
+      .slice(0, 3)
+      .sort((x, y) => x.t - y.t)
+      .map((e) => e.id)
+  }
+  let capTl = null
+  function setCaption(ids) {
+    if (!capText || !ids.length) return
+    const next = captionHTML(ids)
+    if (!next || next === capHTML) return
+    capHTML = next
+    capTl?.kill()
+    capTl = gsap
+      .timeline()
+      .to(capText, { opacity: 0, duration: 0.45, ease: 'power1.in' })
+      .add(() => {
+        capText.innerHTML = next
+      })
+      .to(capText, { opacity: 1, duration: 1.3, ease: 'power2.out' })
+  }
+
   /* ------------------------------------------------- settle, like pigment */
   // Characters are split per line, so the lines themselves stay free for the
   // scroll lift. The accessible text is the visually hidden copy in the h1.
@@ -124,8 +217,40 @@ export function init(ctx) {
   if (cueRule) gsap.set(cueRule, { scaleY: 0 })
 
   /* ------------------------------------------------------------ the bloom */
-  let current = null // ambient stir, while the blooms are fresh
+  let current = null // a slow stir round the bloom, while it is fresh
   let bloomAt = null // where the drops went in
+  const heroVisible = () => root.getBoundingClientRect().bottom > window.innerHeight * 0.4
+
+  // A slow current round a point: keeps fresh drops marbling into each other.
+  // `swell` eases it in and out (for the headline's own drops); otherwise it
+  // starts at full strength and dies away.
+  function swirl(c, { delay = 0, ticks = 110, k = 0.00085, swell = false } = {}) {
+    current?.kill()
+    const s = Math.min(window.innerWidth, window.innerHeight)
+    const rx = (0.13 * s) / window.innerWidth
+    const ry = (0.13 * s) / window.innerHeight
+    const phase = swell ? Math.random() * Math.PI * 2 : 0
+    let t = 0
+    current = gsap.delayedCall(delay, function tick() {
+      if (document.hidden) return (current = gsap.delayedCall(0.5, tick))
+      t += 1
+      const life = swell ? Math.sin((Math.PI * t) / ticks) : 1 - t / ticks
+      if (t >= ticks || life <= 0) return (current = null)
+      if (heroVisible()) {
+        const a = phase + t * 0.23
+        const kk = k * life
+        ctx.emit('stir', {
+          x: c.x + Math.cos(a) * rx,
+          y: c.y + Math.sin(a) * ry,
+          dx: -Math.sin(a) * kk * (window.innerHeight / window.innerWidth),
+          dy: Math.cos(a) * kk,
+          strength: 0.85,
+          radius: 0.085,
+        })
+      }
+      current = gsap.delayedCall(0.09, tick)
+    })
+  }
 
   // The loader hands over by dropping ultramarine into the middle of the
   // dish, which is right behind the headline. If that happened, it becomes
@@ -205,32 +330,97 @@ export function init(ctx) {
       })
     })
     // a slow current round the ultramarine keeps the three marbling
-    const c = sp[0]
-    const s = Math.min(window.innerWidth, window.innerHeight)
-    const rx = (0.13 * s) / window.innerWidth
-    const ry = (0.13 * s) / window.innerHeight
-    let t = 0
-    current = gsap.delayedCall(2.4, function tick() {
-      if (document.hidden) return (current = gsap.delayedCall(0.5, tick))
-      t += 1
-      const life = 1 - t / 110
-      if (life <= 0) return (current = null)
-      const vis = root.getBoundingClientRect().bottom > window.innerHeight * 0.4
-      if (vis) {
-        const a = t * 0.23
-        const k = 0.00085 * life
-        ctx.emit('stir', {
-          x: c.x + Math.cos(a) * rx,
-          y: c.y + Math.sin(a) * ry,
-          dx: -Math.sin(a) * k * (window.innerHeight / window.innerWidth),
-          dy: Math.cos(a) * k,
-          strength: 0.85,
-          radius: 0.085,
-        })
-      }
-      current = gsap.delayedCall(0.09, tick)
-    })
+    swirl(sp[0], { delay: 2.4 })
   }
+
+  /* ------------------------------------- a colour word gives up its colour */
+  // The word pales towards its wash, as if the colour had run out of the
+  // letters into the water, then inks up again.
+  function letGo(word, p, depth) {
+    if (split || !word.isConnected) return // still settling out of the water
+    gsap.killTweensOf(word, 'color')
+    gsap
+      .timeline()
+      .to(word, { color: ctx.palette.mixHex(p.hex, p.tint, depth), duration: 0.6, ease: 'power2.out' })
+      .to(word, { color: p.hex, duration: 2.8, ease: 'power2.inOut', clearProps: 'color' }, '+=0.6')
+  }
+
+  /* -------------------------------------- the sentence feeds the water */
+  // While the hero is on screen, every few seconds the next colour word of
+  // the headline drops its pigment beside the bloom. Stops off screen and in
+  // a hidden tab; never runs without the live dish.
+  const dishLive = () => html.classList.contains('dish-on') && !html.classList.contains('no-dish')
+  let ambient = false // on once the opening has played
+  let inView = true
+  let dripT = null
+  let turn = 1 // the stone (ultramarine) went in with the bloom: the shell is next
+  let ringAt = 0
+  const every = () => (ctx.isMobile() ? 9.5 : 8) + Math.random() * 1.5
+
+  function schedule(delay) {
+    dripT?.kill()
+    dripT = gsap.delayedCall(delay, drip)
+  }
+  function rest() {
+    dripT?.kill()
+    dripT = null
+  }
+  function wake(delay = 1.4) {
+    if (!ambient || !inView || document.hidden || dripT) return
+    schedule(delay)
+  }
+
+  function drip() {
+    dripT = null
+    if (!inView || document.hidden) return
+    if (!dishLive() || ctx.palette.get().field !== 'paper') return schedule(3)
+    const words = [...root.querySelectorAll('.hero__word')] // SplitText's revert makes new nodes
+    const word = words[turn++ % words.length]
+    const p = word && pigments.BY_ID[word.dataset.pigment]
+    if (!p) return schedule(every())
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const s = Math.min(vw, vh)
+    const mobile = vw < 768
+    const sp = spots()
+    const c = sp[0]
+    bloomAt = bloomAt || sp
+    const [ox, oy] = RING[ringAt++ % RING.length]
+    const k = mobile ? 0.72 : 1
+    const x = clamp(c.x + (ox * k * s) / vw, 0.08, 0.94)
+    const y = clamp(c.y + (oy * k * s) / vh, 0.13, 0.9)
+    const len = Math.hypot(c.x - x, c.y - y) || 1
+    letGo(word, p, 0.8)
+    gsap.delayedCall(0.3, () => {
+      if (!inView) return
+      ctx.palette.drop(p.id, {
+        x,
+        y,
+        amount: DRIP[p.id] ?? 0.9,
+        radius: 0.06 * k,
+        // drawn a little towards the bloom, so they marble
+        vx: ((c.x - x) / len) * 0.03,
+        vy: ((c.y - y) / len) * 0.03,
+      })
+      swirl(c, { delay: 0.5, ticks: mobile ? 36 : 50, k: 0.0006, swell: true })
+      gsap.delayedCall(0.8, () => setCaption(inWater()))
+    })
+    schedule(every())
+  }
+
+  const io = new IntersectionObserver(
+    ([e]) => {
+      const v = e.isIntersecting && e.intersectionRatio >= 0.35
+      if (v === inView) return
+      inView = v
+      if (v) {
+        setCaption(inWater())
+        wake()
+      } else rest()
+    },
+    { threshold: [0, 0.35, 0.7] }
+  )
+  io.observe(root)
 
   /* ---------------------------------------------------- the opening move */
   function reveal() {
@@ -270,6 +460,11 @@ export function init(ctx) {
       }
       gsap.set(ins, { clearProps: 'filter,transform' })
     })
+    // once the bloom has opened, the headline starts to feed the water
+    tl.add(() => {
+      ambient = true
+      wake(0)
+    }, 7)
     return tl
   }
 
@@ -301,25 +496,37 @@ export function init(ctx) {
   }
 
   /* ------------------------------------------- touch a colour, it bleeds */
-  // A fine pointer over a colour word lets a wisp of its pigment rise.
+  // A fine pointer over a colour word (or a tap on one) lets a wisp of its
+  // pigment rise out of the letters.
+  const last = new WeakMap()
+  function bleed(w) {
+    const p = pigments.BY_ID[w.dataset.pigment]
+    if (!p) return
+    const now = performance.now()
+    if (now - (last.get(w) || 0) < 1400) return
+    last.set(w, now)
+    const r = w.getBoundingClientRect()
+    ctx.palette.drop(p.id, {
+      x: (r.left + r.width * 0.5) / window.innerWidth,
+      y: (r.top + r.height * 0.1) / window.innerHeight,
+      amount: 0.45,
+      radius: 0.032,
+      vy: -0.05,
+    })
+    letGo(w, p, 0.5)
+    // the visitor is feeding the water: the headline waits its turn
+    if (dripT) schedule(every())
+  }
   if (!ctx.isTouch) {
-    const last = new WeakMap()
     title.addEventListener('pointerover', (e) => {
       const w = e.target.closest?.('.hero__word')
-      if (!w) return
-      const now = performance.now()
-      if (now - (last.get(w) || 0) < 1400) return
-      last.set(w, now)
-      const r = w.getBoundingClientRect()
-      ctx.palette.drop(w.dataset.pigment, {
-        x: (r.left + r.width * 0.5) / window.innerWidth,
-        y: (r.top + r.height * 0.1) / window.innerHeight,
-        amount: 0.45,
-        radius: 0.032,
-        vy: -0.05,
-      })
+      if (w) bleed(w)
     })
   }
+  title.addEventListener('click', (e) => {
+    const w = e.target.closest?.('.hero__word')
+    if (w) bleed(w)
+  })
 
   ctx.ready.then(() => {
     reveal()
@@ -327,7 +534,15 @@ export function init(ctx) {
   })
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) current?.pause()
-    else current?.resume()
+    if (document.hidden) {
+      hiddenAt = performance.now()
+      current?.pause()
+      rest()
+    } else {
+      if (hiddenAt) hiddenFor += performance.now() - hiddenAt
+      hiddenAt = 0
+      current?.resume()
+      wake(2)
+    }
   })
 }

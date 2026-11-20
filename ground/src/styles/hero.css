@@ -128,6 +128,8 @@
   color: var(--ink-3);
 }
 #top .hero__caption i { font-style: italic; color: var(--ink-2); }
+/* the record changes as the headline feeds the water (hero.js crossfades it) */
+#top .hero__caption-text { display: block; }
 
 /* ------------------------------------------------------- before the intro */
 /* Until the page hands over, the headline waits (hero.js then lets it
@@ -192,13 +194,15 @@ html.no-dish #top .hero__still { display: block; }
     grid-row: 2;
     max-width: 30ch;
     margin: var(--s-4) 0 0;
+    /* room for a longer record, so the lead below never jumps */
+    min-height: 4.35em;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
   #top .hero__inner { grid-template-rows: 1fr auto auto; }
   #top .hero__foot { grid-row: 3; }
-  #top .hero__caption { grid-column: 7 / -1; grid-row: 2; margin: var(--s-4) 0 0; }
+  #top .hero__caption { grid-column: 7 / -1; grid-row: 2; margin: var(--s-4) 0 0; min-height: 4.35em; }
   #top .hero__lead { grid-column: 1 / span 6; }
   #top .hero__cue { grid-column: 8 / -1; }
 }

@@ -1093,7 +1093,9 @@ function createDish(ctx, canvas, disable) {
     flood.hold = o.paper ? 0.9 : 0.5
     rateIn = flood.rate
     rateOut = 0
+    // a pour is screen-wide: the water stops travelling with the page
     follow = Math.min(follow, 0.25)
+    lastScroll = window.scrollY
 
     // ---- the pour
     if (g.kind === 'wave') {
@@ -1695,21 +1697,18 @@ function createDish(ctx, canvas, disable) {
     text.n = tags.length
     text.version++
   }
+  // (a few hundred line boxes: a few milliseconds, off the scroll path)
   let measureT = 0
   function remeasure(ms) {
     clearTimeout(measureT)
     measureT = setTimeout(() => {
-      const run = () => {
-        if (!alive) return
-        try {
-          measureText()
-        } catch (err) {
-          text.n = 0
-          text.version++
-        }
+      if (!alive) return
+      try {
+        measureText()
+      } catch (err) {
+        text.n = 0
+        text.version++
       }
-      if (window.requestIdleCallback) window.requestIdleCallback(run, { timeout: 600 })
-      else run()
     }, ms)
   }
 
@@ -1967,6 +1966,7 @@ function createDish(ctx, canvas, disable) {
       lastScroll = window.scrollY
       const st = ctx.palette.get()
       if (field === null) field = st.field
+      follow = field === 'paper' ? 1 : 0
       setTarget(optics(field) || OPTICS.paper)
       fillDye(target)
       render()
