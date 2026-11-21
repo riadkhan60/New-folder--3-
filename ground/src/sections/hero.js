@@ -12,8 +12,10 @@
  * seconds the headline gives up one of its colour words in turn (shell,
  * insect, bone, stone). The word pales as its pigment drops into the open
  * water beside the bloom, a slow current marbles it in, and the word inks
- * up again. The plate caption keeps the record of what is in the water.
- * Pointing at a colour word (or tapping it) lets a wisp of it rise.
+ * up again. A visitor who comes back to the top finds it blooming afresh.
+ * The plate caption keeps the record of what is in the water. Pointing at a
+ * colour word (or tapping it) lets a wisp of it rise. Every drop is placed
+ * in open water, clear of the headline's words, whatever the window.
  *
  * After the loader, its hand-over drop of ultramarine (which lands right
  * behind the headline) is adopted as the hero's ultramarine: a current
@@ -97,26 +99,95 @@ export function init(ctx) {
 
   /* ------------------------------------------------------- where they land */
   // The open water above the headline, to the right of its short first line.
-  // Returns viewport fractions (what the dish takes).
+  // Everything is measured as the hero sits on the page, without the scroll
+  // lift on the lines, so the drops land with the bloom wherever the hero has
+  // scrolled to (on paper the water travels with the page). Returns viewport
+  // fractions (what the dish takes); a y above 0 is off the top of the screen.
   function textBox(el) {
     const r = document.createRange()
     r.selectNodeContents(el)
     return r.getBoundingClientRect()
   }
-  function spots() {
+  const liftOf = (el) => Number(gsap.getProperty(el, 'y')) || 0
+  function layout() {
+    const fs = parseFloat(getComputedStyle(title).fontSize) || 100
+    const words = []
+    let top1 = 0
+    lines.forEach((l, i) => {
+      const ly = liftOf(l)
+      const lr = l.getBoundingClientRect()
+      // the ink of a word: across, its own box; up and down, its line's box
+      // (a line-height of 0.9 is about the height of the capitals), which
+      // stays put while the letters are split and settling
+      for (const w of l.querySelectorAll('.hero__w')) {
+        const r = w.getBoundingClientRect()
+        words.push({ l: r.left, r: r.right, t: lr.top - ly, b: lr.bottom - ly })
+      }
+      if (i === 0) top1 = lr.top - ly - 0.3 * fs // the top of the type's ascent
+    })
+    return {
+      rt: root.getBoundingClientRect().top,
+      top1,
+      right1: textBox(lines[0]).right,
+      words,
+      navH: Math.min(document.querySelector('.nav__bar')?.offsetHeight || 72, 120),
+    }
+  }
+  // how far a bloom of this reach stays from the nearest word (px; < 0 = on it)
+  function room(x, y, reach, words) {
+    let m = Infinity
+    for (const b of words) {
+      const dx = Math.max(b.l - x, 0, x - b.r)
+      const dy = Math.max(b.t - y, 0, y - b.b)
+      m = Math.min(m, Math.hypot(dx, dy) - reach)
+    }
+    return m
+  }
+  const scale = () => (window.innerWidth < 768 ? 0.72 : 1)
+  function spots(L = layout()) {
     const vw = window.innerWidth
     const vh = window.innerHeight
     const s = Math.min(vw, vh)
     const mobile = vw < 768
-    const l1 = textBox(lines[0])
-    const top = l1.top
+    const k = scale()
+    const top = (L.top1 - L.rt) / vh // line 1, from the hero's top
     // on a phone the open water is the band between the bar and the headline
-    const ux = mobile ? 0.6 : clamp((l1.right / vw + 0.86) / 2, 0.62, 0.76)
-    const uy = mobile ? clamp(0.11 + (top / vh - 0.11) * 0.5, 0.2, 0.34) : clamp(top / vh - 0.07, 0.3, 0.44)
-    return DROPS.map((d) => ({
-      x: clamp(ux + (d.dx * s) / vw, 0.08, 0.94),
-      y: clamp(uy + (d.dy * s) / vh, 0.12, 0.9),
-    }))
+    const ux = mobile ? 0.6 : clamp((L.right1 / vw + 0.86) / 2, 0.62, 0.76)
+    const uy = mobile ? clamp(0.11 + (top - 0.11) * 0.5, 0.2, 0.34) : clamp(top - 0.07, 0.3, 0.44)
+    const off = L.rt / vh
+    const place = (cx, cy) =>
+      DROPS.map((d) => ({
+        x: clamp(cx + (d.dx * s) / vw, 0.08, 0.94),
+        y: clamp(cy + (d.dy * s) / vh, 0.12, 0.9) + off,
+      }))
+    // the worst of the three: clear of every word, and of the bar at the top
+    const fit = (sp) =>
+      Math.min(
+        ...sp.map((p, i) => {
+          const r = DROPS[i].radius * k * s
+          return Math.min(room(p.x * vw, p.y * vh, r * 1.3, L.words), (p.y - off) * vh - r * 0.6 - L.navH)
+        })
+      )
+    let best = place(ux, uy)
+    let score = fit(best)
+    if (score >= 0) return best
+    // a narrow or short window: nudge the cluster into open water, right
+    // first, then up, as little as will do
+    score -= 1e6
+    for (let j = 0; j <= 8; j++) {
+      for (let i = 0; i <= 12; i++) {
+        if (!i && !j) continue
+        const sp = place(ux + i * 0.012, uy - j * 0.015)
+        const f = fit(sp)
+        const moved = i * 0.012 * vw + j * 0.015 * vh
+        const sc = f >= 0 ? -moved : f - 1e6 - moved * 0.05
+        if (sc > score) {
+          best = sp
+          score = sc
+        }
+      }
+    }
+    return best
   }
   function placeStill() {
     const sp = spots()
@@ -213,13 +284,20 @@ export function init(ctx) {
     })
   } else gsap.set(title, { opacity: 0 })
   gsap.set(ins, { opacity: 0, y: 14, filter: 'blur(6px)' })
-  if (caption) gsap.set(caption, { opacity: 0 })
+  // the caption's words fade in (its paragraph is left to the scroll lift, so
+  // a visitor who scrolls before it has appeared still finds it on return)
+  const capIn = capText || caption
+  if (capIn) gsap.set(capIn, { opacity: 0 })
   if (cueRule) gsap.set(cueRule, { scaleY: 0 })
 
   /* ------------------------------------------------------------ the bloom */
   let current = null // a slow stir round the bloom, while it is fresh
   let bloomAt = null // where the drops went in
   const heroVisible = () => root.getBoundingClientRect().bottom > window.innerHeight * 0.4
+  // On paper the water travels with the page: a drop or a current timed for
+  // later keeps to its place in the hero, even if the page has moved since.
+  const pin = () => root.getBoundingClientRect().top
+  const moved = (top0) => (pin() - top0) / window.innerHeight
 
   // A slow current round a point: keeps fresh drops marbling into each other.
   // `swell` eases it in and out (for the headline's own drops); otherwise it
@@ -230,6 +308,7 @@ export function init(ctx) {
     const rx = (0.13 * s) / window.innerWidth
     const ry = (0.13 * s) / window.innerHeight
     const phase = swell ? Math.random() * Math.PI * 2 : 0
+    const top0 = pin()
     let t = 0
     current = gsap.delayedCall(delay, function tick() {
       if (document.hidden) return (current = gsap.delayedCall(0.5, tick))
@@ -241,7 +320,7 @@ export function init(ctx) {
         const kk = k * life
         ctx.emit('stir', {
           x: c.x + Math.cos(a) * rx,
-          y: c.y + Math.sin(a) * ry,
+          y: c.y + moved(top0) + Math.sin(a) * ry,
           dx: -Math.sin(a) * kk * (window.innerHeight / window.innerWidth),
           dy: Math.cos(a) * kk,
           strength: 0.85,
@@ -309,28 +388,35 @@ export function init(ctx) {
     )
   }
 
+  // The three drops go in one after another, and a slow current round the
+  // ultramarine keeps them marbling. `again`: the hero blooms afresh for a
+  // visitor who comes back to it, and the words give their colour up.
+  function pour(sp, { skipFirst = false, again = false } = {}) {
+    bloomAt = sp
+    const k = scale()
+    const top0 = pin()
+    DROPS.forEach((d, i) => {
+      if (i === 0 && skipFirst) return // the loader's drop is our ultramarine
+      gsap.delayedCall(d.at * (again ? 0.85 : 1), () => {
+        if (again && !inView) return
+        const y = sp[i].y + moved(top0)
+        if (y < 0 || y > 1) return // the visitor has already scrolled it away
+        ctx.palette.drop(d.id, { x: sp[i].x, y, amount: d.amount, radius: d.radius * k, vx: d.vx, vy: d.vy })
+        if (!again) return
+        const w = root.querySelector(`.hero__word[data-pigment="${d.id}"]`)
+        if (w) letGo(w, pigments.BY_ID[d.id], 0.7)
+      })
+    })
+    swirl(sp[0], { delay: again ? 2 : 2.4 })
+  }
+
   function bloom() {
     offHand()
     const r = root.getBoundingClientRect()
     if (r.bottom < window.innerHeight * 0.35) return // landed elsewhere (deep link)
     const sp = spots()
-    bloomAt = sp
     if (handed) carry(handed, sp[0])
-    DROPS.forEach((d, i) => {
-      if (i === 0 && handed) return // the loader's drop is our ultramarine
-      gsap.delayedCall(d.at, () => {
-        ctx.palette.drop(d.id, {
-          x: sp[i].x,
-          y: sp[i].y,
-          amount: d.amount,
-          radius: d.radius * (window.innerWidth < 768 ? 0.72 : 1),
-          vx: d.vx,
-          vy: d.vy,
-        })
-      })
-    })
-    // a slow current round the ultramarine keeps the three marbling
-    swirl(sp[0], { delay: 2.4 })
+    pour(sp, { skipFirst: !!handed })
   }
 
   /* ------------------------------------- a colour word gives up its colour */
@@ -347,15 +433,18 @@ export function init(ctx) {
 
   /* -------------------------------------- the sentence feeds the water */
   // While the hero is on screen, every few seconds the next colour word of
-  // the headline drops its pigment beside the bloom. Stops off screen and in
-  // a hidden tab; never runs without the live dish.
+  // the headline drops its pigment beside the bloom, so the water never dries
+  // out under the headline. A visitor who comes back to the top finds it
+  // blooming again. Stops off screen and in a hidden tab; never runs without
+  // the live dish.
   const dishLive = () => html.classList.contains('dish-on') && !html.classList.contains('no-dish')
   let ambient = false // on once the opening has played
   let inView = true
   let dripT = null
   let turn = 1 // the stone (ultramarine) went in with the bloom: the shell is next
   let ringAt = 0
-  const every = () => (ctx.isMobile() ? 9.5 : 8) + Math.random() * 1.5
+  // about every seven seconds (a little less often on a phone, to spare it)
+  const every = () => (ctx.isMobile() ? 8 : 6.2) + Math.random() * 1.5
 
   function schedule(delay) {
     dripT?.kill()
@@ -372,37 +461,66 @@ export function init(ctx) {
 
   function drip() {
     dripT = null
-    if (!inView || document.hidden) return
+    if (!inView || document.hidden || html.classList.contains('no-dish')) return
     if (!dishLive() || ctx.palette.get().field !== 'paper') return schedule(3)
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const s = Math.min(vw, vh)
+    const L = layout()
+    const sp = spots(L)
+    const c = sp[0]
+    // only while the bloom's water is on screen, clear of the bar
+    if (c.y * vh < L.navH + 0.05 * s || c.y > 0.92) return schedule(2.5)
+
+    // the water has dried, or went off with the page: bloom afresh
+    if (!inWater().length) {
+      pour(sp, { again: true })
+      gsap.delayedCall(2.4, () => setCaption(inWater()))
+      return schedule(every() + 2)
+    }
+
     const words = [...root.querySelectorAll('.hero__word')] // SplitText's revert makes new nodes
     const word = words[turn++ % words.length]
     const p = word && pigments.BY_ID[word.dataset.pigment]
     if (!p) return schedule(every())
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    const s = Math.min(vw, vh)
-    const mobile = vw < 768
-    const sp = spots()
-    const c = sp[0]
     bloomAt = bloomAt || sp
-    const [ox, oy] = RING[ringAt++ % RING.length]
-    const k = mobile ? 0.72 : 1
-    const x = clamp(c.x + (ox * k * s) / vw, 0.08, 0.94)
-    const y = clamp(c.y + (oy * k * s) / vh, 0.13, 0.9)
+    // the next place round the bloom with open water (not on a word)
+    const k = scale()
+    const r = 0.06 * k * s
+    let x = 0
+    let y = 0
+    let bestRoom = -Infinity
+    for (let n = 0; n < RING.length; n++) {
+      const [ox, oy] = RING[(ringAt + n) % RING.length]
+      const px = clamp(c.x + (ox * k * s) / vw, 0.08, 0.94)
+      const py = clamp(c.y + (oy * k * s) / vh, (L.navH + r * 0.6) / vh, 0.9)
+      const f = room(px * vw, py * vh, r * 1.3, L.words)
+      if (f > bestRoom) {
+        bestRoom = f
+        x = px
+        y = py
+      }
+      if (f >= 0) {
+        ringAt += n
+        break
+      }
+    }
+    ringAt++
     const len = Math.hypot(c.x - x, c.y - y) || 1
+    const top0 = pin()
     letGo(word, p, 0.8)
     gsap.delayedCall(0.3, () => {
       if (!inView) return
       ctx.palette.drop(p.id, {
         x,
-        y,
+        y: y + moved(top0),
         amount: DRIP[p.id] ?? 0.9,
         radius: 0.06 * k,
         // drawn a little towards the bloom, so they marble
         vx: ((c.x - x) / len) * 0.03,
         vy: ((c.y - y) / len) * 0.03,
       })
-      swirl(c, { delay: 0.5, ticks: mobile ? 36 : 50, k: 0.0006, swell: true })
+      swirl({ x: c.x, y: c.y + moved(top0) }, { delay: 0.5, ticks: k < 1 ? 36 : 50, k: 0.0006, swell: true })
       gsap.delayedCall(0.8, () => setCaption(inWater()))
     })
     schedule(every())
@@ -410,15 +528,21 @@ export function init(ctx) {
 
   const io = new IntersectionObserver(
     ([e]) => {
-      const v = e.isIntersecting && e.intersectionRatio >= 0.35
+      // (a hero taller than a short landscape screen counts once it fills most of it)
+      const v = e.isIntersecting && (e.intersectionRatio >= 0.35 || e.intersectionRect.height >= window.innerHeight * 0.6)
       if (v === inView) return
       inView = v
       if (v) {
         setCaption(inWater())
-        wake()
-      } else rest()
+        wake(inWater().length ? 1.4 : 0.6)
+      } else {
+        rest()
+        // on paper the water travels with the page: the hero's colours have
+        // gone off the top of the screen with it
+        water.clear()
+      }
     },
-    { threshold: [0, 0.35, 0.7] }
+    { threshold: [0, 0.15, 0.25, 0.35, 0.5, 0.7] }
   )
   io.observe(root)
 
@@ -451,7 +575,7 @@ export function init(ctx) {
     tl.add(() => bloom(), 0)
     tl.to(ins, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.4, ease: 'settle', stagger: 0.14 }, 1.15)
     if (cueRule) tl.to(cueRule, { scaleY: 1, duration: 1.2, ease: 'pour' }, 1.5)
-    if (caption) tl.to(caption, { opacity: 1, duration: 1.6, ease: 'power2.out' }, 2.6)
+    if (capIn) tl.to(capIn, { opacity: 1, duration: 1.6, ease: 'power2.out' }, 2.6)
     tl.add(() => {
       // crisp again: restore kerning and plain text
       if (split) {

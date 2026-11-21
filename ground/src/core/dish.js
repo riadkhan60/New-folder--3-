@@ -14,12 +14,15 @@
  *   - follows ctx.palette.onChange: a new field is poured in, then the dish
  *     relaxes to it; on paper it relaxes slowly so drops linger as blooms.
  *     Each chapter pours in its own way (GESTURES); paper is poured as clear
- *     water that lifts the last colour cleanly, never as grey dishwater
+ *     water that lifts the last colour cleanly, never as grey dishwater: a
+ *     single colour leaves tide lines of its own tint, while soot (bone
+ *     black) or a marbling of several colours is wiped off at the wet edge
  *   - on paper the water travels with the page, so a drop stays with the
  *     section it was made in; on a colour field it drifts more slowly
  *   - text stays readable: under the type of the current field (measured
- *     line boxes, rasterised to a small mask) dye settles to the field faster,
- *     and right after a pour it settles there first
+ *     line boxes, rasterised to a small mask, given a brushed, ragged edge)
+ *     dye settles to the field faster, and during a pour the type works as
+ *     a resist: it takes the new field even before the wash reaches it
  *   - indigo is dropped as the pale yellow-green of its vat and turns blue as
  *     the air reaches it (pigments.js: indigo)
  *   - ctx.on('drop', { id, x, y, amount, radius, vx, vy, mode })
@@ -269,8 +272,8 @@ uniform sampler2D uVelocity; uniform sampler2D uSource; uniform sampler2D uMask;
 uniform vec2 uVelTexel; uniform vec2 uSrcTexel;
 uniform float uDt; uniform float uRelaxDt; uniform float uShift; uniform float uLift;
 uniform vec4 uTarget; uniform float uRateIn; uniform float uRateOut;
-uniform float uMaskRate; uniform float uMaskPour;
-uniform vec4 uFlood; uniform float uFloodOn; uniform float uBandRate; uniform float uAspect; uniform float uTime;
+uniform float uMaskRate; uniform float uMaskPour; uniform float uMaskAhead;
+uniform vec4 uFlood; uniform float uFloodOn; uniform vec3 uBand; uniform float uAspect; uniform float uTime;
 ${NOISE}
 void main(){
   vec2 coord = vUv - uDt * SAMPLE(uVelocity, vUv, uVelTexel).xy * uVelTexel - vec2(0., uShift);
@@ -278,7 +281,16 @@ void main(){
   // water scrolled in from beyond the glass is clean field
   float sy = vUv.y - uShift;
   c = mix(uTarget, c, smoothstep(-2. * uSrcTexel.y, 0., sy) * smoothstep(1. + 2. * uSrcTexel.y, 1., sy));
+  // where the type sits (soft boxes round each line), given a ragged edge
+  // like a resist painted round it with a brush, never a box
   float type = texture(uMask, vUv).r;
+  if (type > .004) {
+    vec2 qm = vUv * vec2(uAspect, 1.);
+    vec2 warp = (vec2(vnoise(qm * 2.6 + 3.1), vnoise(qm * 2.6 + 41.7)) - .5) * .16
+              + (vec2(vnoise(qm * 9.1 + 17.9), vnoise(qm * 9.1 + 7.7)) - .5) * .05;
+    type = texture(uMask, vUv + warp * vec2(1. / uAspect, 1.)).r;
+    type = smoothstep(.16, .7, type + (vnoise(qm * 23.) + vnoise(qm * 51. + 9.) * .5 - .75) * .42);
+  }
   float rate = uRateIn + uMaskRate * type;
   if (uFloodOn > .5) {
     // a wet edge: ragged like a wash running into damp paper. Just inside it
@@ -288,10 +300,15 @@ void main(){
     float d = length(q - uFlood.xy) + (n - .5) * uFlood.w;
     float e = uFlood.z - d;
     float front = smoothstep(0., .035, e);
-    // tide lines: the wash takes more readily on some rings than others
+    // tide lines: the wash takes more readily on some rings than others.
+    // (uBand: rate at the wet edge, how fast it falls off behind it, rings)
     float ring = .5 + .5 * sin(d * 44.);
-    float band = front * exp(-e * 16.) * (.3 + .7 * ring * ring);
-    rate = mix(uRateOut, uRateIn + uMaskPour * type, front) + uBandRate * band;
+    float band = front * exp(-e * uBand.y) * mix(1., .3 + .7 * ring * ring, uBand.z);
+    // the type is a resist: it starts to take the new field even before the
+    // wash reaches it (soaking in unevenly, like the wash itself), so it is
+    // never left sitting on the old one
+    float soak = .4 + 1.3 * n * n;
+    rate = mix(uRateOut + uMaskAhead * soak * type, uRateIn + uMaskPour * type, front) + uBand.x * band;
   }
   float k = 1. - exp(-rate * uRelaxDt);
   vec4 r = mix(c, uTarget, k);
@@ -371,7 +388,7 @@ const UNIFORMS = {
   pressure: ['uTexel', 'uPressure', 'uDivergence'],
   gradient: ['uTexel', 'uPressure', 'uVelocity'],
   advectVelocity: ['uVelocity', 'uVelTexel', 'uDt', 'uDiss', 'uDrift', 'uTime', 'uShift'],
-  advectDye: ['uVelocity', 'uSource', 'uMask', 'uVelTexel', 'uSrcTexel', 'uDt', 'uRelaxDt', 'uShift', 'uLift', 'uTarget', 'uRateIn', 'uRateOut', 'uMaskRate', 'uMaskPour', 'uFlood', 'uFloodOn', 'uBandRate', 'uAspect', 'uTime'],
+  advectDye: ['uVelocity', 'uSource', 'uMask', 'uVelTexel', 'uSrcTexel', 'uDt', 'uRelaxDt', 'uShift', 'uLift', 'uTarget', 'uRateIn', 'uRateOut', 'uMaskRate', 'uMaskPour', 'uMaskAhead', 'uFlood', 'uFloodOn', 'uBand', 'uAspect', 'uTime'],
   display: ['uTexel', 'uDye', 'uVelocity', 'uDyeTexel', 'uVelTexel', 'uPaper', 'uDpr', 'uTexelPx', 'uVelPx', 'uRelief', 'uRim', 'uGrain', 'uGran', 'uWet'],
 }
 
@@ -386,10 +403,13 @@ const SIM = {
   relaxField: 0.5, // per second on a pigment field
   relaxFlood: 2.3, // behind a pour's front
   relaxFloodPaper: 3.4, // behind clear water poured in to lift a field off
+  relaxFloodSoot: 7, // behind clear water lifting a dark field with no hue (soot)
   relaxBand: 14, // right at the wet edge
+  relaxBandSoot: 34, // at the edge of clear water lifting soot: a clean wipe
   typePaper: 0.45, // extra per second under the type, on paper
   typeField: 0.7, // extra per second under the type, on a colour field
   typePour: 2.2, // extra per second under the type, behind a pour's front
+  typeAhead: 2.6, // per second under the type, ahead of a pour's front
   follow: 0.93, // on paper, how much of the scroll the water travels with
   driftField: 0.3, // on a field, how much the scroll drags the water
   driftPaper: 0.06, // on paper (on top of following the page), a liquid lag
@@ -501,6 +521,8 @@ function createDish(ctx, canvas, disable) {
   const flood = {
     on: false, t0: 0, delay: 0, dur: 1.8, hold: 0.5, ramp: 2.4, rate: SIM.relaxFlood,
     ox: 0, oy: 0, r0: 0, r1: 1, soft: 0.3, r: 0, tail: false,
+    band: [SIM.relaxBand, 16, 1], // rate at the wet edge, fall-off behind it, tide lines
+    ahead: 0, // rate under the type ahead of the front, now
   }
   let typeBoost = SIM.typePaper // extra relaxation under the type, now
   let drift = 0
@@ -978,9 +1000,10 @@ function createDish(ctx, canvas, disable) {
     gl.uniform1f(u.uRateOut, rateOut)
     gl.uniform1f(u.uMaskRate, typeBoost)
     gl.uniform1f(u.uMaskPour, SIM.typePour)
+    gl.uniform1f(u.uMaskAhead, flood.ahead)
     gl.uniform4f(u.uFlood, flood.ox, flood.oy, flood.r, flood.soft)
     gl.uniform1f(u.uFloodOn, flood.on ? 1 : 0)
-    gl.uniform1f(u.uBandRate, SIM.relaxBand)
+    gl.uniform3f(u.uBand, flood.band[0], flood.band[1], flood.band[2])
     gl.uniform1f(u.uAspect, aspect)
     gl.uniform1f(u.uTime, simTime)
     blit(dye.write)
@@ -1071,6 +1094,9 @@ function createDish(ctx, canvas, disable) {
       oy = edge - inward * 0.5
       soft = 0.5
     }
+    // is the last pour still running? Then the dish holds a marbling of
+    // several colours, not one (a jump down the page pours them all)
+    const busy = flood.on || (flood.tail && simTime - flood.t0 - flood.delay < flood.dur + flood.hold + 0.4)
     const fx = ox * aspect
     let far = 0
     for (let cx = 0; cx <= 1; cx++)
@@ -1087,10 +1113,21 @@ function createDish(ctx, canvas, disable) {
     flood.r1 = far + soft * 0.6 + 0.1
     flood.dur = clamp(0.45 + (flood.r1 - flood.r0) * 0.52, minDur, 2.1)
     flood.r = flood.r0
+    flood.ahead = 0
     // clear water lifts a field off faster than a colour soaks in, and holds
-    // a moment longer so nothing of the last field is left under the type
-    flood.rate = o.paper ? SIM.relaxFloodPaper : SIM.relaxFlood
+    // a moment longer so nothing of the last field is left under the type.
+    // A dark field with no hue of its own (soot), or a marbling of several
+    // colours, is wiped off right at the wet edge, with hardly a tide line:
+    // its in-between greys would only ever read as dishwater, where a single
+    // colour's in-between is its own tint.
+    const soot = o.paper && !left.paper && (busy || (!chromatic(left.tint) && maxDensity(left.mass) > 1.2))
+    flood.rate = o.paper ? (soot ? SIM.relaxFloodSoot : SIM.relaxFloodPaper) : SIM.relaxFlood
+    flood.band[0] = soot ? SIM.relaxBandSoot : SIM.relaxBand
+    flood.band[1] = soot ? 7 : 16
+    flood.band[2] = soot ? 0.2 : 1
     flood.hold = o.paper ? 0.9 : 0.5
+    // a wipe leaves nothing to ease off from: drops made just after it linger
+    flood.ramp = soot ? 0.9 : 2.4
     rateIn = flood.rate
     rateOut = 0
     // a pour is screen-wide: the water stops travelling with the page
@@ -1340,7 +1377,8 @@ function createDish(ctx, canvas, disable) {
     p.dr = rand(0.12, 0.2) * s
     p.rough = 0.7
     p.mixTo.set(o.mass)
-    p.amt = 0.2 + 0.55 * k
+    // clear water wicks in clean (a half-strength wick of it is only grey)
+    p.amt = o.paper ? 0.45 + 0.5 * k : 0.2 + 0.55 * k
     residual = Math.max(residual, maxDensity(o.mass) * 0.5)
     kick(false)
   }
@@ -1354,6 +1392,9 @@ function createDish(ctx, canvas, disable) {
       flood.r = flood.r0 + (flood.r1 - flood.r0) * e
       rateIn = flood.rate
       rateOut = 0
+      // the type starts to take the colour once the wash is on its way
+      const a = clamp(t / 0.35)
+      flood.ahead = SIM.typeAhead * a * a * (3 - 2 * a)
       if (u >= 1) {
         flood.on = false
         flood.tail = true
