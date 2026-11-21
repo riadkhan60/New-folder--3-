@@ -257,3 +257,21 @@ export const SOURCES = {
 }
 
 export const formatPrice = (p) => (p == null ? null : '£' + p.toLocaleString('en-GB'))
+
+/**
+ * The field colours as CSS: one rule per pigment (and paper), keyed by
+ * [data-field], setting --field, --tint, --ink, --ink-2, --ink-3 and --line.
+ * vite.config.js inlines this into index.html at build time, so every field
+ * has its colours before any script runs (and without JavaScript at all);
+ * palette.js injects it only if that inline copy is missing.
+ */
+export function fieldCSS() {
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ')
+  return [PAPER, ...PIGMENTS]
+    .map(
+      (p) =>
+        `[data-field="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
+        `--ink-2:rgb(${rgb(p.ink)} / 0.84);--ink-3:rgb(${rgb(p.ink)} / 0.68);--line:rgb(${rgb(p.ink)} / 0.24);}`
+    )
+    .join('\n')
+}

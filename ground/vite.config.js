@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fieldCSS } from './src/core/pigments.js'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 const partialsDir = path.join(root, 'src/partials')
@@ -34,9 +35,23 @@ function htmlPartials() {
   }
 }
 
+/**
+ * Inlines the per-field colour variables (from src/core/pigments.js) into
+ * <head>, so the colour fields exist before any script runs: no flash on
+ * first paint, and the page keeps its colours without JavaScript.
+ */
+function fieldStyles() {
+  return {
+    name: 'ground-field-styles',
+    transformIndexHtml: () => [
+      { tag: 'style', attrs: { 'data-ground': 'fields' }, children: fieldCSS(), injectTo: 'head' },
+    ],
+  }
+}
+
 export default defineConfig({
   base: './',
-  plugins: [htmlPartials()],
+  plugins: [htmlPartials(), fieldStyles()],
   server: { host: '127.0.0.1' },
   build: { target: 'es2022', chunkSizeWarningLimit: 1200 },
 })

@@ -20,7 +20,7 @@
  *   drop(id, opts)   → ask the dish to drop a pigment: ctx.emit('drop', {...})
  */
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { PIGMENTS, BY_ID, PAPER } from './pigments.js'
+import { BY_ID, PAPER, fieldCSS } from './pigments.js'
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
 const toHex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
@@ -36,19 +36,13 @@ export function mixHex(a, b, t) {
   return toHex(A.map((v, i) => lerp(v, B[i], t)))
 }
 
-function rgba(h, a) {
-  const [r, g, b] = hex(h)
-  return `rgb(${r} ${g} ${b} / ${a})`
-}
-
 function injectFieldStyles() {
-  const rule = (p) =>
-    `[data-field="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
-    `--ink-2:${rgba(p.ink, 0.84)};--ink-3:${rgba(p.ink, 0.68)};--line:${rgba(p.ink, 0.24)};}`
-  const css = [PAPER, ...PIGMENTS].map(rule).join('\n')
+  // Normally inlined into index.html at build time (see vite.config.js), so
+  // the colours exist before any script runs. Inject only if that is missing.
+  if (document.querySelector('style[data-ground="fields"]')) return
   const el = document.createElement('style')
   el.dataset.ground = 'fields'
-  el.textContent = css
+  el.textContent = fieldCSS()
   document.head.appendChild(el)
 }
 
