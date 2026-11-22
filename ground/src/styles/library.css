@@ -82,6 +82,9 @@
   transform-origin: left;
   transition: transform 0.6s var(--ease-out);
 }
+/* the ring sits inside the padded hit area, so it never crowds the next
+   filter where the row's gap shrinks to nothing (768-900 px) */
+#library .lib-filter:focus-visible { outline-offset: -2px; }
 #library .lib-filter:hover { color: var(--ink); }
 #library .lib-filter:hover::after { transform: scaleX(0.4); }
 #library .lib-filter[aria-pressed='true'] { color: var(--ink); }

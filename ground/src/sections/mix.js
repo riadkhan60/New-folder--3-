@@ -930,8 +930,9 @@ export function init(ctx) {
     } catch {}
     // a mouse press focuses the input, as on the input itself; a finger
     // leaves focus where it is (focusing from script would show the
-    // keyboard's focus ring on the knob)
-    if (e.pointerType === 'mouse' && document.activeElement !== range) range.focus({ preventScroll: true })
+    // keyboard's focus ring on the knob; focusVisible: false keeps a mouse
+    // press from showing it too)
+    if (e.pointerType === 'mouse' && document.activeElement !== range) range.focus({ preventScroll: true, focusVisible: false })
     slideTo(e.clientX)
   }
   function letGo(e) {
