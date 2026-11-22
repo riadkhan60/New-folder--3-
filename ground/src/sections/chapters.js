@@ -2,9 +2,10 @@
  * chapters.js — the six colour chapters, oldest to newest (= CHAPTERS).
  *
  * Each chapter is a full-bleed field poured by the dish. Its text is shown
- * only while the dish holds its own field (palette field === its id), so
- * type never sits on a colour it wasn't set for; the bottom of every chapter
- * is an empty tail the next pour plays over. On the field sit:
+ * only while the dish holds its own field and it is the section on screen
+ * (palette field === section === its id), so type never sits on a colour it
+ * wasn't set for; the bottom of every chapter is an empty tail the next pour
+ * plays over. On the field sit:
  *   - the pigment's name (the section's h2), which bleeds in like ink on wet
  *     paper: blurred and spread wide, drawing in until it is sharp;
  *   - a heap of the dry pigment: a generated powder pile, rendered once per
@@ -59,7 +60,12 @@ function agoOf(p) {
   return Math.max(step, Math.round(a / step) * step)
 }
 const stillMade = (p) => /to today$/i.test(p.era || '')
-const agoText = (p) => (stillMade(p) ? 'years ago, and still made today' : 'years ago')
+/* Where a pigment's `year` marks something other than its first use, the
+   date says so. Carmine's is its arrival in Europe: Mixtec and Aztec dyers
+   used cochineal long before (its History row says as much). */
+const SINCE = { carmine: 'years in Europe' }
+const whenText = (p) => SINCE[p.id] ?? 'years ago'
+const agoText = (p) => (stillMade(p) ? 'years ago, and still made today' : whenText(p))
 /* The ribbon: a log scale from 100,000 years ago to today. */
 const A0 = 100000
 const A1 = 30
@@ -639,7 +645,8 @@ export function init(ctx) {
       if (!p) continue
       el.querySelectorAll('[data-k]').forEach((n) => {
         const k = n.dataset.k
-        if (k === 'formula') n.innerHTML = p.formula
+        // long formulas may break between their bracketed groups on a phone
+        if (k === 'formula') n.innerHTML = p.formula.replace(/\)<sub>(\d+)<\/sub>(?=\()/g, ')<sub>$1</sub><wbr>')
         else if (k === 'price') n.textContent = formatPrice(p.price) ?? ''
         else if (k === 'ago') n.textContent = agoOf(p).toLocaleString('en-GB')
         else if (k === 'ago-text') n.textContent = agoText(p)
@@ -659,8 +666,10 @@ export function init(ctx) {
   }
 
   /* --------------------------------------------------------- fields */
-  // A chapter's text is shown only while the dish holds its own field. With
-  // no dish (html.no-dish) every section paints its own field, so all show.
+  // A chapter's text is shown only while the dish holds its own field and
+  // the chapter is the section on screen (the footer's field is bone black
+  // too). With no dish (html.no-dish) every section paints its own field,
+  // so all show.
   function setupFields() {
     const byId = new Map(sections.map((el) => [el.id, el]))
     let shown = null
@@ -670,15 +679,24 @@ export function init(ctx) {
       byId.get(id)?.classList.add('is-field')
       shown = id
     }
-    ctx.palette.onChange((st) => show(byId.has(st.field) ? st.field : null))
+    ctx.palette.onChange((st) => show(byId.has(st.section) && st.field === st.section ? st.section : null))
     root.classList.add('is-live')
     // keyboard focus into a chapter whose field isn't poured yet: bring it
-    // to the middle of the screen, which pours its field and shows it
+    // to the middle of the screen, which pours its field and shows it. It
+    // lands at once (a smooth scroll would keep running after a fast Tab has
+    // moved on, and carry the next focus off screen), and only once the
+    // palette has caught up with the browser's own scroll to the focus.
     root.addEventListener('focusin', (e) => {
-      const sec = e.target.closest?.('.chapter')
-      if (!sec || sec.classList.contains('is-field') || html.classList.contains('no-dish')) return
-      const r = e.target.getBoundingClientRect()
-      ctx.scrollTo(Math.max(0, window.scrollY + r.top - vh() * 0.4), { duration: 0.8 })
+      const t = e.target
+      const sec = t.closest?.('.chapter')
+      if (!sec || html.classList.contains('no-dish')) return
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (document.activeElement !== t || sec.classList.contains('is-field') || ctx.jumping) return
+          const r = t.getBoundingClientRect()
+          ctx.scrollTo(Math.max(0, window.scrollY + r.top - vh() * 0.4), { immediate: true })
+        }),
+      )
     })
   }
 
@@ -1230,10 +1248,13 @@ export function init(ctx) {
     const loop = (now) => {
       const dt = Math.max(0, Math.min(0.2, (now - last) / 1000))
       last = Math.max(last, now)
-      const hot = holding || auto
+      const heating = holding || auto
+      // once it has burned it stays red: only "Start again" (or leaving the
+      // chapter before it is done) cools the heap back to yellow
+      const hot = heating || done
       level = clamp(level + (hot ? UP : -DOWN) * dt)
       paint()
-      if (hot && !html.classList.contains('no-dish') && now - lastFeed > 140) {
+      if (heating && !html.classList.contains('no-dish') && now - lastFeed > 140) {
         lastFeed = now
         const G = unit.heap.geo()
         const cv = el.querySelector('.chapter__heap-canvas')
@@ -1249,7 +1270,7 @@ export function init(ctx) {
           })
         }
       }
-      if (hot && level >= 1 && !done) complete()
+      if (heating && level >= 1 && !done) complete()
       if ((hot && level < 1) || (!hot && level > 0)) raf = requestAnimationFrame(loop)
       else raf = 0
     }
@@ -1336,12 +1357,18 @@ export function init(ctx) {
       }
       if (doneAtDown && done) reset()
     })
-    // leaving the chapter: an unfinished heat cools
+    // leaving the chapter (or jumping away): an unfinished heat cools
+    const leave = () => {
+      if (!holding && !auto) return
+      holding = auto = false
+      btn.classList.remove('is-holding')
+      run()
+    }
     ctx.palette.onChange((st) => {
-      if (st.field !== el.id && (holding || auto)) {
-        holding = auto = false
-        run()
-      }
+      if (st.field !== el.id || st.section !== el.id) leave()
+    })
+    ctx.on('jump', (d) => {
+      if (d?.phase === 'start') leave()
     })
   }
 
@@ -1366,8 +1393,13 @@ export function init(ctx) {
       }
     }
     btn.addEventListener('click', () => set(!on))
+    // the dark of the infrared covers the whole screen: it goes as soon as
+    // the chapter does, or a jump takes the page elsewhere
     ctx.palette.onChange((st) => {
-      if (on && st.field !== el.id) set(false)
+      if (on && (st.field !== el.id || st.section !== el.id)) set(false)
+    })
+    ctx.on('jump', (d) => {
+      if (d?.phase === 'start') set(false)
     })
   }
 
@@ -1581,7 +1613,7 @@ export function init(ctx) {
       const nm = li.querySelector('.ribbon__name')
       const wh = li.querySelector('.ribbon__when')
       if (nm) nm.textContent = p.name
-      if (wh) wh.textContent = `${agoOf(p).toLocaleString('en-GB')} years ago`
+      if (wh) wh.textContent = `${agoOf(p).toLocaleString('en-GB')} ${whenText(p)}`
     }
     // positions: true log-scale places, nudged apart so dots never crowd
     const layout = () => {
@@ -1597,30 +1629,49 @@ export function init(ctx) {
       })
       last.mx = -1
     }
-    let last = { on: null, mx: -1, ink: '', active: '' }
+    let last = { on: null, mx: -1, ink: '', ink2: '', active: '' }
     layout()
     let rt = 0
     window.addEventListener('resize', () => {
       clearTimeout(rt)
       rt = setTimeout(layout, 150)
     })
-    ctx.palette.onChange((st) => {
-      const on = stops.has(st.field)
+    // the small labels take the field's own second ink (contrast-aware, from
+    // the field styles), read once per field from a section that carries it
+    const inks = new Map()
+    const ink2Of = (field) => {
+      if (!inks.has(field)) {
+        const sec = [...document.querySelectorAll('section[data-field], footer[data-field]')].find(
+          (s) => s.dataset.field === field,
+        )
+        inks.set(field, sec ? getComputedStyle(sec).getPropertyValue('--ink-2').trim() : '')
+      }
+      return inks.get(field)
+    }
+    const update = (st) => {
+      // On in a chapter, decided by the section on screen (the footer's field
+      // is bone black too); hidden while a jump runs, when the field holds
+      // still and the sections fly past. The ring follows the field.
+      const on = stops.has(st.section) && !ctx.jumping
       const xf = xs[st.from] ?? xs[st.to] ?? 0
       const xt = xs[st.to] ?? xs[st.from] ?? 0
       const mx = Math.round((xf + (xt - xf) * st.mix) * 10000) / 10000
-      const active = stops.has(st.field) ? st.field : ''
+      const active = on ? st.section : ''
+      const ink2 = ink2Of(st.field)
       if (on !== last.on) nav.classList.toggle('is-on', on)
       if (mx !== last.mx) nav.style.setProperty('--mx', mx)
       if (st.ink !== last.ink) nav.style.setProperty('--rb-ink', st.ink)
+      if (ink2 !== last.ink2) nav.style.setProperty('--rb-ink-2', ink2)
       if (active !== last.active) {
         stops.get(last.active)?.classList.remove('is-active')
         stops.get(active)?.classList.add('is-active')
         stops.get(last.active)?.querySelector('a')?.removeAttribute('aria-current')
         stops.get(active)?.querySelector('a')?.setAttribute('aria-current', 'location')
       }
-      last = { on, mx, ink: st.ink, active }
-    })
+      last = { on, mx, ink: st.ink, ink2, active }
+    }
+    ctx.palette.onChange(update)
+    ctx.on('jump', () => update(ctx.palette.get()))
   }
 
   /* --------------------------------------------------------- orders */

@@ -18,19 +18,22 @@
   --slot-3: calc(var(--wl) * 0.94 + var(--head)); /* the small, costly jars */
   --plank-h: 28px;
   --face-h: 11px;
-  /* the bottom of the shop is left empty: the footer's bone black is poured
-     in over it (palette.js hands the field over while the footer's top moves
-     from 85% to 65% of the viewport), so no text may sit there */
-  --tail: 66vh;
+  /* the bottom of the shop is left empty paper, like a chapter's tail: the
+     footer's bone black is poured in over it (palette.js hands the field
+     over while the footer's top moves from 85% to 65% of the viewport). The
+     tail lies outside .shop__body, so the sticky order slip (and the phone's
+     order bar) has gone up with the sets before the black arrives. */
+  --tail: 64vh;
 
   --slip: #f8f7f3; /* the order slip: paper, a shade lighter */
   --plank-top: #fbfaf7;
   --plank-edge: #ecebe5;
   --err: #a3123a; /* carmine, from pigments.js */
   --order-top: 104px;
+  --bar-h: 60px; /* the phone's order bar */
 
   position: relative;
-  padding-block: var(--s-9) 0;
+  padding-block: var(--s-9) var(--tail);
 }
 
 /* ------------------------------------------------------------- header */
@@ -65,9 +68,6 @@
   overflow-x: clip;
   overflow-y: visible;
   padding-top: var(--s-5);
-  /* the empty tail lives inside the stock column, so the order slip beside
-     it stays pinned while the black is poured in around it */
-  padding-bottom: var(--tail);
 }
 
 /* ------------------------------------------------------------- the shelf
@@ -252,7 +252,7 @@
   font-style: italic;
   font-size: 6cqi;
   line-height: 1;
-  color: rgb(21 20 19 / 0.6);
+  color: var(--ink-3);
 }
 #shop .jar__name {
   font-family: var(--font-display);
@@ -266,7 +266,7 @@
   font-family: var(--font-display);
   font-size: 6.4cqi;
   line-height: 1;
-  color: rgb(21 20 19 / 0.72);
+  color: var(--ink-3);
   white-space: nowrap;
 }
 #shop .jar__formula sub { font-size: 0.7em; vertical-align: -0.25em; line-height: 0; }
@@ -339,7 +339,10 @@
 #shop .jar__ticket .shop-add { margin-top: auto; }
 #shop .jar__ticket > :nth-last-child(2) { margin-bottom: var(--s-3); }
 
-/* ------------------------------------------------------------- add button */
+/* ------------------------------------------------------------- add button
+   The house button (base.css .btn), as "Add to order" is in the chapters and
+   the library: a printed label in ink, lettered in the field colour, that
+   turns into its own outline on hover, like a proof. */
 #shop .shop-add {
   position: relative;
   display: inline-flex;
@@ -354,46 +357,52 @@
   letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
-  color: var(--ink);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--field);
+  background: var(--ink);
   overflow: hidden;
   isolation: isolate;
-  transition: color 0.5s var(--ease-out), box-shadow 0.5s var(--ease-out);
+  transition: background-color 0.35s var(--ease-out), color 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out);
 }
-/* the colour of the jar rises into the button, like powder filling it */
+#shop .shop-add__label { display: inline-block; }
+/* once added, the colour of the jar rises into the button, like powder
+   filling it (shop.js picks --add-fill and --add-ink so the words read) */
 #shop .shop-add::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: var(--pig, var(--ink));
+  background: var(--add-fill, var(--pig, var(--ink)));
   transform: scaleY(0);
   transform-origin: 50% 100%;
   transition: transform 0.6s var(--ease-pour);
 }
-#shop .shop-add.is-added {
-  color: var(--pig-ink, var(--field));
-  box-shadow: inset 0 0 0 1px var(--pig, var(--ink));
-}
-#shop .shop-add.is-added::before { transform: scaleY(1); }
 @media (hover: hover) {
   #shop .shop-add:hover {
-    color: var(--pig-ink, var(--field));
-    box-shadow: inset 0 0 0 1px var(--pig, var(--ink));
+    background: transparent;
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1.5px var(--ink);
   }
-  #shop .shop-add:hover::before { transform: scaleY(1); }
 }
-#shop .shop-add:active { transform: translateY(1px); }
+#shop .shop-add:active { box-shadow: inset 0 0 0 2.5px var(--ink); }
+#shop .shop-add.is-added,
+#shop .shop-add.is-added:hover { color: var(--add-ink, var(--pig-ink, var(--field))); }
+#shop .shop-add.is-added::before { transform: scaleY(1); }
 /* refused (Tyrian purple: two jars at most): the label says so, in carmine,
-   and the colour stays out of the button */
+   on its own outline, and the colour stays out of the button */
 #shop .shop-add.is-refused,
 #shop .shop-add.is-refused:hover {
+  background: transparent;
   color: var(--err);
   box-shadow: inset 0 0 0 1px var(--err);
 }
-#shop .shop-add.is-refused::before,
-#shop .shop-add.is-refused:hover::before { transform: scaleY(0); }
+#shop .shop-add.is-refused::before { transform: scaleY(0); }
+/* the new words slide in, as on the chapters' button */
+#shop .shop-add.is-added .shop-add__label,
+#shop .shop-add.is-refused .shop-add__label { animation: shop-add-say 0.6s var(--ease-out); }
+@keyframes shop-add-say {
+  from { opacity: 0; transform: translateY(40%); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ------------------------------------------------------------- sets
    Three trays in one row, standing on one line, their tickets beneath. */
@@ -559,7 +568,7 @@
 #shop .order__title:focus-visible { outline-offset: 6px; }
 #shop .order__count {
   font-size: var(--fs-micro);
-  color: rgb(21 20 19 / 0.56);
+  color: var(--ink-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -567,7 +576,7 @@
   padding-block: var(--s-5);
   font-size: var(--fs-small);
   line-height: 1.5;
-  color: rgb(21 20 19 / 0.7);
+  color: var(--ink-3);
   border-bottom: 1px solid rgb(21 20 19 / 0.14);
 }
 #shop .order__lines:empty { display: none; }
@@ -582,6 +591,9 @@
   padding-block: 12px;
   border-bottom: 1px solid rgb(21 20 19 / 0.14);
   overflow: hidden;
+  /* clipped top and bottom only (the line grows in from nothing), so the
+     tap area of a step at the slip's edge is not cut */
+  overflow: visible clip;
 }
 #shop .line__wash {
   position: absolute;
@@ -617,13 +629,15 @@
   font-size: 1.12rem;
   line-height: 1.1;
   color: var(--ink-black);
+  text-wrap: balance;
 }
 #shop .line__name em { font-style: italic; }
 #shop .line__unit {
   margin-top: 2px;
   font-size: var(--fs-micro);
   line-height: 1.4;
-  color: rgb(21 20 19 / 0.58);
+  color: var(--ink-3);
+  text-wrap: balance;
 }
 #shop .line__end {
   display: grid;
@@ -631,15 +645,26 @@
   gap: 2px;
 }
 #shop .line__remove {
+  position: relative;
   padding: 2px 0;
-  font-size: var(--fs-micro);
   line-height: 1.4;
   font-size: inherit;
-  color: rgb(21 20 19 / 0.72);
+  color: var(--ink-3);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
   text-decoration-color: rgb(21 20 19 / 0.3);
+}
+/* a finger-sized target round the small printed word, reaching down more
+   than up, so it stays clear of the steps above it */
+#shop .line__remove::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: max(100%, 44px);
+  height: 44px;
+  translate: -50% 0;
 }
 #shop .line__remove:hover { color: var(--ink-black); text-decoration-color: currentColor; }
 #shop .line__qty {
@@ -648,15 +673,24 @@
   box-shadow: inset 0 0 0 1px rgb(21 20 19 / 0.2);
   border-radius: 2px;
 }
+/* each step shows as a --step square but takes a 44 px tap: the padding
+   around it is part of the button, and the negative margin keeps the
+   stepper's printed size */
 #shop .line__step {
+  --step: 34px;
+  --pad: calc((44px - var(--step)) / 2);
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
+  margin: calc(var(--pad) * -1);
+  padding: var(--pad);
+  background-clip: content-box;
   display: grid;
   place-items: center;
   color: var(--ink-black);
   transition: background-color 0.3s var(--ease-out);
 }
+#shop .line__step:focus-visible { outline-offset: -2px; }
 #shop .line__step::before,
 #shop .line__step::after {
   content: '';
@@ -687,6 +721,13 @@
   color: var(--ink-black);
   white-space: nowrap;
 }
+/* a narrow slip (tablets, small laptops) gives each line two rows, as on a
+   phone: the name keeps its width, and the total and Remove go beneath */
+#shop .order__lines { container: order-lines / inline-size; }
+@container order-lines (max-width: 330px) {
+  #shop .line { grid-template-columns: 18px minmax(0, 1fr) auto; row-gap: 14px; }
+  #shop .line__end { grid-column: 2 / -1; grid-row: 2; display: flex; justify-content: space-between; align-items: baseline; }
+}
 
 #shop .order__limit {
   margin-top: var(--s-3);
@@ -704,7 +745,7 @@
 #shop .order__total-label {
   font-size: var(--fs-small);
   font-weight: 500;
-  color: rgb(21 20 19 / 0.76);
+  color: var(--ink-2);
 }
 #shop .order__total-amount {
   font-family: var(--font-display);
@@ -731,16 +772,16 @@
   line-height: 1.2;
   color: var(--ink-black);
 }
-#shop .field { display: grid; gap: 0; }
+#shop .field { display: grid; gap: 4px; }
 #shop .field__label {
   font-size: var(--fs-micro);
   font-weight: 500;
   line-height: 1.3;
-  color: rgb(21 20 19 / 0.66);
+  color: var(--ink-3);
 }
 #shop .field__input {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0.45rem 0 0.4rem;
   border: 0;
   border-radius: 0;
@@ -760,6 +801,12 @@
   box-shadow: inset 0 -2px 0 var(--ink-black);
 }
 #shop .field__input[aria-invalid='true'] { box-shadow: inset 0 -2px 0 var(--err); }
+/* a field with an error keeps its carmine rule when focused, so focus is
+   shown by the house ring instead */
+#shop .field__input[aria-invalid='true']:focus-visible {
+  outline: 2px solid var(--ink-black);
+  outline-offset: 2px;
+}
 #shop .field__msg {
   font-size: var(--fs-micro);
   line-height: 1.45;
@@ -800,7 +847,7 @@
 #shop .order__fine {
   font-size: var(--fs-micro);
   line-height: 1.5;
-  color: rgb(21 20 19 / 0.58);
+  color: var(--ink-3);
 }
 
 /* order placed */
@@ -839,14 +886,14 @@
 #shop .order__done-text {
   font-size: var(--fs-body);
   line-height: 1.55;
-  color: rgb(21 20 19 / 0.82);
+  color: var(--ink-2);
   max-width: 34ch;
 }
 #shop .order__done-text strong { font-weight: 600; color: var(--ink-black); overflow-wrap: anywhere; }
 #shop .order__done-sum {
   margin-top: var(--s-3);
   font-size: var(--fs-small);
-  color: rgb(21 20 19 / 0.6);
+  color: var(--ink-3);
 }
 #shop .order__again {
   display: inline-flex;
@@ -897,9 +944,9 @@
 
 /* ------------------------------------------------------------- phones */
 @media (max-width: 767px) {
-  #shop {
-    --wl: clamp(70px, 22vw, 116px);
-    padding-block: var(--s-9) 0;
+  #shop { --wl: clamp(70px, 22vw, 116px); }
+  @supports (height: 1svh) {
+    #shop { --tail: 64svh; } /* the steady phone viewport, toolbars shown (as the chapters) */
   }
   #shop .shop__head { margin-bottom: var(--s-7); }
   #shop .shop__title,
@@ -921,13 +968,19 @@
   #shop .shop__set-list { row-gap: var(--s-7); }
   #shop .shop__archive { margin-top: var(--s-7); }
 
-  /* the order becomes a bar along the bottom of the screen */
+  /* the order becomes a bar along the bottom of the screen; it comes to rest
+     under the sets, so it has gone up with them before the footer pours */
   #shop .order {
     position: sticky;
     top: auto;
     bottom: 0;
     z-index: 6;
-    margin: 0 calc(var(--rail) * -1);
+    margin: var(--s-7) calc(var(--rail) * -1) 0;
+  }
+  /* keyboard focus never lands behind the bar: focusing a button scrolls it
+     clear of the bar */
+  #shop .shop__stock :is(a[href], button) {
+    scroll-margin-bottom: calc(var(--bar-h) + env(safe-area-inset-bottom, 0px) + var(--s-4));
   }
   #shop .order__bar {
     position: relative;
@@ -937,7 +990,7 @@
     align-items: center;
     column-gap: var(--s-3);
     width: 100%;
-    min-height: 60px;
+    min-height: var(--bar-h);
     padding: 0 var(--rail);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     /* a hair short of opaque: a fully opaque sticky bar is used by the
@@ -999,6 +1052,10 @@
     box-shadow: 0 -1px 0 rgb(21 20 19 / 0.16);
   }
   #shop .order:not(.is-js) .order__sheet { max-height: none; }
+  /* without the script the bar cannot open anything: the slip stands in the
+     page after the sets, and nothing is pinned over the shelf */
+  #shop .order:not(.is-js) { position: static; }
+  #shop .order:not(.is-js) .order__bar { display: none; }
   #shop .order__slip {
     margin-top: 0;
     padding: var(--s-5) var(--rail) var(--s-6);
@@ -1021,9 +1078,9 @@
     box-shadow: 0 -1px 0 rgb(21 20 19 / 0.16);
     pointer-events: none;
   }
-  #shop .line { grid-template-columns: 18px minmax(0, 1fr) auto; row-gap: 4px; }
+  #shop .line { grid-template-columns: 18px minmax(0, 1fr) auto; row-gap: 14px; }
   #shop .line__end { grid-column: 2 / -1; grid-row: 2; display: flex; justify-content: space-between; align-items: baseline; }
-  #shop .line__step { width: 40px; height: 40px; }
+  #shop .line__step { --step: 40px; }
 }
 
 /* ------------------------------------------------------------- motion off */

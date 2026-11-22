@@ -20,6 +20,24 @@
   padding-bottom: 0;
 }
 
+/* The type waits for its field, as the chapters' does: shown only once the
+   dish has poured bone black (footer.js: .is-field), the colour first, then
+   the type. Opacity only, so it is still read and reachable; keyboard focus
+   inside shows it at once (.is-focus). No dish: the footer paints its own
+   field, so everything shows. */
+html:not(.no-dish) #footer.is-live .footer__inner {
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-out);
+}
+html:not(.no-dish) #footer.is-live.is-field .footer__inner {
+  opacity: 1;
+  transition: opacity 1.2s var(--ease-out) 0.5s;
+}
+html:not(.no-dish) #footer.is-live.is-focus .footer__inner {
+  opacity: 1;
+  transition: none;
+}
+
 /* ------------------------------------------------------------- top row */
 #footer .footer__top {
   display: grid;
@@ -59,7 +77,7 @@
 
 #footer .footer__links {
   display: grid;
-  gap: 0.1rem;
+  gap: 4px; /* rows 44 px apart, so each link's 44 px target has a row to itself */
 }
 #footer .footer__link {
   position: relative;
@@ -70,6 +88,16 @@
   line-height: 1.2;
   color: var(--ink-2);
   transition: color 0.45s var(--ease-out);
+}
+/* a 44 x 44 target however short the word ("Mix"), without changing its look */
+#footer .footer__link::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
 }
 #footer .footer__link::after {
   content: '';

@@ -272,6 +272,25 @@
   border: 0;
   border-radius: 0;
 }
+/* touch screens: a pad over the range (mix.js) takes the finger, so only a
+   sideways drag or a tap sets the ratio and a vertical swipe scrolls the page.
+   Same box as the range; mouse and keyboard keep the range itself. */
+#mix .mix__range-pad { display: none; }
+@media (pointer: coarse) {
+  #mix .mix__range-pad {
+    display: block;
+    position: absolute;
+    top: -26px;
+    bottom: -10px;
+    left: calc(var(--lab) - 14px);
+    width: calc(100% - var(--lab) + 28px);
+    touch-action: pan-y;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: ew-resize;
+  }
+}
 #mix .mix__ends {
   display: flex;
   justify-content: space-between;

@@ -47,10 +47,15 @@
 }
 #library .library__filters-label { color: var(--ink-3); }
 #library .library__filter-row {
+  /* every filter is padded out to a target of at least 44 x 44 px ("Kiln" is
+     only 37 px of text); the gap and the row's edges give that room back, so
+     the words sit exactly where they would without it */
+  --hit: 0.45rem;
   display: flex;
   flex-wrap: wrap;
-  column-gap: clamp(0.9rem, 1.6vw, 1.6rem);
+  column-gap: calc(clamp(0.9rem, 1.6vw, 1.6rem) - var(--hit) * 2);
   row-gap: 0;
+  margin-inline: calc(var(--hit) * -1);
 }
 #library .lib-filter {
   position: relative;
@@ -59,6 +64,7 @@
   gap: 0.3em;
   min-height: 44px;
   padding-block: 0.7rem;
+  padding-inline: var(--hit);
   font-size: var(--fs-body);
   line-height: 1.2;
   color: var(--ink-2);
@@ -67,8 +73,8 @@
 #library .lib-filter::after {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: var(--hit);
+  right: var(--hit);
   bottom: 0.45rem;
   height: 1px;
   background: currentColor;
@@ -534,7 +540,7 @@ html.lib-plate-lock { overflow: hidden; }
   #library .library__title,
   #library .library__intro { grid-column: 1 / -1; }
   #library .library__filters { flex-direction: column; align-items: stretch; column-gap: 0; }
-  #library .library__filter-row { column-gap: 1.1rem; }
+  #library .library__filter-row { column-gap: calc(1.1rem - var(--hit) * 2); }
   #library .lib-filter { font-size: 0.98rem; }
   #library .library__plate-head .t-caption:last-child { display: none; }
 

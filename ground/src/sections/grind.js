@@ -18,8 +18,11 @@
  * Touch: only a touch that starts on the muller grabs it (a grip that
  * follows the muller has touch-action: none); the rest of the slab scrolls.
  *
- * Bus: emits `drop` (via ctx.palette.drop) at the sweet spot, and `stir`
- * while the muller moves. Listens to nothing.
+ * Bus: emits `drop` (via ctx.palette.drop) at the sweet spot, `stir` while
+ * the muller moves, and `tone` { field: 'ultramarine' } when the flood has
+ * reached the nav, { field: null } when the clear water has (the nav tones
+ * as if that were the field). Listens to `jump`: a jump that starts
+ * mid-flood rinses the blue out at once.
  */
 import '../styles/grind.css'
 
@@ -1500,32 +1503,151 @@ export function init(ctx) {
 
   /* ---------------------------------------------------------- the flood */
   // The reward for stopping at the deepest blue: it pours out of the paste
-  // under the muller and opens across the whole dish, the lab's type turns
-  // to the field's ink, and after a breath clear water blooms in and washes
-  // the blue out again (Cennini's last step, in the dish).
+  // under the muller and opens across the whole dish, a ring at a time, and
+  // after a breath clear water blooms in from the top and washes the blue
+  // out again (Cennini's last step, in the dish).
+  //
+  // The type changes ink as the colour reaches it, block by block. Every
+  // drop is the lab's own, so the lab knows where each one lands and how far
+  // it opens, and turns a block the moment the colour behind most of it
+  // crosses from light to dark, or back: never light type on light water,
+  // or dark type on the blue. The flood's ink is borrowed by the .wrap
+  // (data-field="ultramarine"); each block holds paper ink
+  // (data-field="paper") until its turn. The nav is told the same way
+  // ('tone' { field }), when the flood reaches it and when the water does.
   const FLOOD_HOLD = 2.6 // seconds of full field
+  // How a drop opens (dish.js): its splat replaces the colour under it by
+  // about exp(-(d/R)^2), with a ragged edge, and its bloom carries the
+  // colour further for a few tenths of a second. Fitted to the dish (the
+  // moment the colour behind each block crosses, at 1440 x 900 and
+  // 820 x 1180, to within about 50 ms):
+  // R = radius * (REACH + BLOOM * (1 - exp(-age / BLOOM_T))).
+  const REACH = 0.9
+  const BLOOM = 0.55
+  const BLOOM_T = 0.3
+  // the share of the flood's colour behind the type at which paper ink and
+  // the light ink read the same (luminance about 0.18): pouring ultramarine
+  // onto paper, about half its density; washing it out (the field has eased
+  // a little by then), the first fifth of clear water already lifts it so far
+  const MID_IN = 0.55
+  const MID_OUT = 0.8
+  // the lab in blocks of type, small enough that each follows the colour
+  // behind it; a block may hold others, and each keeps its own ink until
+  // its turn
+  const inkEls = [
+    ...root.querySelectorAll(
+      '.grind__title, .grind__lead, .grind__slab, .grind__mini, .grind__keys, .grind__cap, .grind__label, .grind__size, ' +
+        '.grind__ruler, .grind__sweet, .grind__ticks li, .grind__status, .grind__swatches, .grind__swatch figcaption, ' +
+        '.grind__controls .btn, .grind__method, .grind__method-head, .grind__stepitem, .grind__grades-text, .grind__chips li',
+    ),
+  ]
+  const navEl = document.querySelector('.nav')
   let floodCalls = []
   let floodOn = false
+  let toned = false
+  let tintCall = null
+  let wave = null
   function dishRunning() {
     const h = document.documentElement
     return h.classList.contains('dish-on') && !h.classList.contains('no-dish')
   }
-  function inkOn(on) {
-    if (!wrapEl) return
+  function tone(on) {
+    if (on === toned) return
+    toned = on
+    ctx.emit('tone', { field: on ? 'ultramarine' : null })
+  }
+  // one wave of colour over the lab: the flood pouring in (on), or the
+  // clear water washing it out
+  function inkWave(on) {
+    wave?.halt()
+    const sy0 = window.scrollY
+    // each block's box in page px (the nav's in screen px: it is fixed)
+    const boxOf = (el, nav) => {
+      const b = el.getBoundingClientRect()
+      const oy = nav ? 0 : sy0
+      return { el, nav, x0: b.left, x1: b.right, y0: b.top + oy, y1: b.bottom + oy }
+    }
+    const left = inkEls.map((el) => boxOf(el, false))
+    if (navEl) left.push(boxOf(navEl, true))
+    const landed = [] // { x, y: page px, r: px, t: s } (on paper the water travels with the page)
+    let live = true
+    tintCall?.kill()
     root.classList.add('is-tinting')
-    if (on) wrapEl.dataset.field = 'ultramarine'
-    else delete wrapEl.dataset.field
-    floodCalls.push(gsap.delayedCall(1.1, () => root.classList.remove('is-tinting')))
+    // the share of the flood's colour behind a point (page px), at time t
+    const share = (x, y, t) => {
+      let f = on ? 0 : 1
+      for (const d of landed) {
+        const r = d.r * (REACH + BLOOM * (1 - Math.exp(-(t - d.t) / BLOOM_T)))
+        const g = Math.exp(-((x - d.x) ** 2 + (y - d.y) ** 2) / (r * r))
+        f = on ? f + (1 - f) * g : f * (1 - g)
+      }
+      return f
+    }
+    // has the colour behind most of this block's part of the screen turned?
+    const turned = (k, t) => {
+      const sy = window.scrollY
+      const oy = k.nav ? sy : 0
+      const top = Math.max(k.y0 + oy, sy)
+      const bot = Math.min(k.y1 + oy, sy + window.innerHeight)
+      if (bot - top < 2 || k.x1 - k.x0 < 2) return false
+      const s = []
+      for (let j = 0; j < 3; j++) {
+        for (let i = 0; i < 3; i++) s.push(share(k.x0 + ((i + 0.5) / 3) * (k.x1 - k.x0), top + ((j + 0.5) / 3) * (bot - top), t))
+      }
+      s.sort((a, c) => a - c)
+      return on ? s[4] > MID_IN : s[4] < MID_OUT
+    }
+    const turn = (k) => {
+      left.splice(left.indexOf(k), 1)
+      if (k.nav) tone(on)
+      else k.el.dataset.field = on ? 'ultramarine' : 'paper'
+    }
+    // the drops keep opening after they land: look again every frame
+    const check = () => {
+      if (!landed.length) return
+      const t = performance.now() / 1000
+      for (const k of [...left]) if (turned(k, t)) turn(k)
+      if (!left.length) halt()
+    }
+    const halt = () => {
+      if (!live) return
+      live = false
+      gsap.ticker.remove(check)
+      tintCall?.kill()
+      tintCall = gsap.delayedCall(0.6, () => root.classList.remove('is-tinting'))
+    }
+    gsap.ticker.add(check)
+    wave = {
+      halt,
+      // a drop has landed: x, y in 0..1 of the viewport, radius in short sides
+      land(x, y, radius) {
+        if (!live) return
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        landed.push({ x: x * vw, y: y * vh + window.scrollY, r: radius * Math.min(vw, vh), t: performance.now() / 1000 })
+        check()
+      },
+      // the wave has crossed the screen: whatever it has not reached turns now
+      end() {
+        if (wave !== this) return
+        for (const k of [...left]) turn(k)
+        if (!on) {
+          if (wrapEl) delete wrapEl.dataset.field
+          inkEls.forEach((el) => delete el.dataset.field)
+        }
+        halt()
+      },
+    }
+    return wave
   }
   function endFlood(rinse) {
     if (!floodOn) return
     floodOn = false
     floodCalls.forEach((c) => c.kill())
     floodCalls = []
-    if (!rinse) return inkOn(false)
-    washOut()
+    const w = inkWave(false)
     // the type goes back to paper ink as the clear water reaches it
-    floodCalls.push(gsap.delayedCall(0.35, () => inkOn(false)))
+    if (!rinse || !washOut(w)) w.end()
   }
   // drops on a grid that covers the viewport, nearest the origin first
   function floodGrid(ox, oy) {
@@ -1544,14 +1666,21 @@ export function init(ctx) {
     }
     return pts.sort((a, b) => a.d - b.d)
   }
-  function washOut() {
-    if (!dishRunning() || ctx.palette?.get().field !== 'paper') return
+  function washOut(w) {
+    if (!dishRunning() || ctx.palette?.get().field !== 'paper') return false
     const pts = floodGrid(0.5, -0.1) // the water comes in from the top
+    let last = 0
     pts.forEach((p, i) => {
-      gsap.delayedCall(0.05 + p.d * 0.32 + i * 0.02, () =>
-        ctx.palette?.drop('water', { x: p.x, y: p.y, amount: 1, radius: 0.5, mode: 'mix' }),
-      )
+      const t = 0.05 + p.d * 0.32 + i * 0.02
+      last = Math.max(last, t)
+      gsap.delayedCall(t, () => {
+        ctx.palette?.drop('water', { x: p.x, y: p.y, amount: 1, radius: 0.5, mode: 'mix' })
+        w.land(p.x, p.y, 0.5)
+      })
     })
+    // (the last drops are still opening: give them a moment)
+    gsap.delayedCall(last + 0.3, () => w.end())
+    return true
   }
   function floodDish() {
     if (reduced || !dishRunning() || !ctx.palette) return false
@@ -1568,6 +1697,10 @@ export function init(ctx) {
     const oy = clamp((b.top + Y(st.M.y)) / vh)
     endFlood(false)
     floodOn = true
+    // the flood's ink, held back block by block until the blue reaches it
+    if (wrapEl) wrapEl.dataset.field = 'ultramarine'
+    inkEls.forEach((el) => (el.dataset.field = 'paper'))
+    const w = inkWave(true)
     // out of the paste first, carried on by the muller's swing
     ctx.palette.drop('ultramarine', {
       x: ox,
@@ -1578,17 +1711,23 @@ export function init(ctx) {
       vx: clamp(st.V.x * 0.2, -0.4, 0.4),
       vy: clamp(st.V.y * 0.2, -0.4, 0.4),
     })
+    w.land(ox, oy, 0.2)
     // then it opens out over the dish, a ring at a time
+    let full = 0
     floodGrid(ox, oy).forEach((p) => {
+      const t = 0.12 + p.d * 0.55
+      full = Math.max(full, t)
       floodCalls.push(
-        gsap.delayedCall(0.12 + p.d * 0.55, () =>
-          ctx.palette?.drop('ultramarine', { x: p.x, y: p.y, amount: 1.1, radius: 0.44, mode: 'mix' }),
-        ),
+        gsap.delayedCall(t, () => {
+          ctx.palette?.drop('ultramarine', { x: p.x, y: p.y, amount: 1.1, radius: 0.44, mode: 'mix' })
+          w.land(p.x, p.y, 0.44)
+        }),
       )
     })
-    // the type turns as the blue reaches it
-    floodCalls.push(gsap.delayedCall(0.7, () => inkOn(true)))
-    floodCalls.push(gsap.delayedCall(0.7 + FLOOD_HOLD, () => endFlood(true)))
+    // the blue has filled the screen (the last drops still opening): any
+    // type it has not reached turns now
+    floodCalls.push(gsap.delayedCall(full + 0.3, () => w.end()))
+    floodCalls.push(gsap.delayedCall(full + FLOOD_HOLD, () => endFlood(true)))
     return true
   }
 
@@ -1975,6 +2114,12 @@ export function init(ctx) {
 
   // the hold-to-grind button
   let lastHoldAt = 0
+  // a finger (or a pen) on the button may be starting a swipe, not a press:
+  // the page scrolls from the button (touch-action: pan-y, grind.css) and
+  // the browser cancels the press as it does. So a finger waits a breath
+  // before it grinds, and a swipe neither grinds nor flashes the button.
+  const PRESS_WAIT = 120 // ms, from the press itself (a timer, not the frame clock)
+  let pressing = 0
   const holdOn = () => {
     if (!st.built || !st.poured) return
     if (!st.hold) {
@@ -1986,10 +2131,22 @@ export function init(ctx) {
     }
   }
   const holdOff = () => {
+    if (pressing) {
+      clearTimeout(pressing)
+      pressing = 0
+    }
     if (!st.hold) return
     st.hold = false
     lastHoldAt = performance.now()
     holdBtn.classList.remove('is-active')
+  }
+  // a moment of grinding: a tap, or a bare click
+  const nudge = (ms) => {
+    if (!st.built || !st.poured) return
+    startOrbit()
+    st.holdUntil = performance.now() + ms
+    firstTouch()
+    wake()
   }
   holdBtn.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -1997,9 +2154,24 @@ export function init(ctx) {
     try {
       holdBtn.setPointerCapture(e.pointerId)
     } catch {}
-    holdOn()
+    if (e.pointerType === 'mouse') return holdOn()
+    clearTimeout(pressing)
+    pressing = setTimeout(() => {
+      pressing = 0
+      holdOn()
+    }, PRESS_WAIT)
   })
-  holdBtn.addEventListener('pointerup', holdOff)
+  holdBtn.addEventListener('pointerup', () => {
+    // a finger lifted before its press began: a tap, a moment of grinding
+    if (pressing) {
+      clearTimeout(pressing)
+      pressing = 0
+      lastHoldAt = performance.now()
+      nudge(160)
+      return
+    }
+    holdOff()
+  })
   holdBtn.addEventListener('pointercancel', holdOff)
   holdBtn.addEventListener('lostpointercapture', holdOff)
   holdBtn.addEventListener('contextmenu', (e) => e.preventDefault())
@@ -2015,11 +2187,8 @@ export function init(ctx) {
   holdBtn.addEventListener('blur', holdOff)
   // assistive tech that sends a bare click: grind for a moment
   holdBtn.addEventListener('click', () => {
-    if (st.hold || performance.now() - lastHoldAt < 500 || !st.poured) return
-    startOrbit()
-    st.holdUntil = performance.now() + 1600
-    firstTouch()
-    wake()
+    if (st.hold || performance.now() - lastHoldAt < 500) return
+    nudge(1600)
   })
   resetBtn.addEventListener('click', reset)
   stepBtn.addEventListener('click', step)
@@ -2097,6 +2266,20 @@ export function init(ctx) {
       st.keys.clear()
     } else wake()
   })
+  // a jump away (a link, back or forward) mid-flood: rinse the blue out now,
+  // rather than carry it into wherever the page lands (the nav lets go of
+  // its tone as the jump starts)
+  ctx.on?.('jump', (d) => {
+    if (d?.phase === 'start') endFlood(true)
+  })
+  // back in the lab while the flood is still up: tell the nav again (it lets
+  // go of the tone when the section changes)
+  let lastSection = null
+  ctx.palette?.onChange((s) => {
+    if (s.section === lastSection) return
+    lastSection = s.section
+    if (floodOn && toned && s.section === 'grind') ctx.emit('tone', { field: 'ultramarine' })
+  })
 
   /* ---------------------------------------------------------- title */
   if (!reduced && ctx.SplitText) {
@@ -2112,6 +2295,9 @@ export function init(ctx) {
           ease: 'expo.out',
           stagger: 0.09,
           scrollTrigger: { trigger: title, start: 'top 82%', once: true },
+          // once the lines are up, their masks stop clipping the descenders
+          // (the tail of the y in "your"); grind.css
+          onComplete: () => title.classList.add('is-set'),
         })
       },
     })

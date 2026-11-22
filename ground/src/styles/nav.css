@@ -14,7 +14,11 @@
   z-index: var(--z-nav);
   color: var(--ink);
   pointer-events: none;
-  transition: color 0.7s var(--ease-out);
+  /* When the tone changes the band crossfades (0.7 s, ease-out: halfway in
+     colour at about 0.07 s) and the ink switches in one step at that
+     midpoint, so ink and band never pass through the same grey together. */
+  --ink-step: 0.07s;
+  transition: color 0s linear var(--ink-step);
 }
 .nav.is-open {
   z-index: var(--z-menu);
@@ -113,6 +117,17 @@ html.is-loading .nav {
   line-height: 1.2;
   letter-spacing: 0.005em;
 }
+/* a 44 px target however short the word ("Mix"); it reaches into the gap
+   between links (never less than 1.2rem), so neighbours never overlap */
+.nav__link::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
 /* hover: the grotesque rolls away and the word returns in Bodoni italic */
 .nav__roll {
   display: inline-grid;
@@ -169,6 +184,16 @@ html.is-loading .nav {
     box-shadow 0.4s var(--ease-out),
     background-color 0.7s var(--ease-out),
     color 0.7s var(--ease-out);
+}
+/* a change of tone (nav.js sets .is-toning for it): the fill and the label
+   switch in one step with the ink, at the band's midpoint; the hover above
+   keeps its slow fade (html.is-ready: to outrank the entrance's delay reset) */
+html.is-ready .nav.is-toning .nav__cta {
+  transition:
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s var(--ease-out),
+    background-color 0s linear var(--ink-step),
+    color 0s linear var(--ink-step);
 }
 
 /* ------------------------------------------------------ the order count */

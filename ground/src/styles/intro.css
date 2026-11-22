@@ -36,6 +36,9 @@ html.no-dish #intro { --tail: clamp(6rem, 18vh, 13rem); }
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
+/* optical kerning the font leaves open at display size: the upright W's
+   last arm is a hairline, so the h stood off from it (as the hero's .hero__k) */
+#intro .intro__k { letter-spacing: -0.075em; }
 #intro .intro__text {
   grid-column: 5 / span 7;
   grid-row: 2;

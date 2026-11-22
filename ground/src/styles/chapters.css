@@ -17,7 +17,7 @@
   /* the empty tail the next field is poured over (palette hands over while
      the next section's top runs from 85% to 65% of the screen) */
   --tail: 64vh;
-  --paper-ink: rgb(21 20 19 / 0.66);
+  --paper-ink: rgb(21 20 19 / 0.68); /* paper's own --ink-3: the card is paper */
   position: relative;
   overflow-x: clip; /* a spreading name or a tilted card never widens the page */
   padding-block: var(--pad-top) var(--tail);
@@ -283,6 +283,17 @@ a.chapter__try:focus-visible .chapter__try-fill,
 .chapter.is-ir .chapter__heap-canvas {
   filter: grayscale(1) brightness(2.1) contrast(1.12) drop-shadow(0 0 22px rgb(243 242 238 / 0.5));
 }
+/* where the name crosses the glowing heap, the dark of the infrared field
+   knocks out a fine halo round each letter (stroke painted under the fill),
+   so the white type never melts into the white glow */
+#egyptian-blue .chapter__name {
+  -webkit-text-stroke: 0.075em transparent;
+  paint-order: stroke fill;
+  transition: -webkit-text-stroke-color 1.1s var(--ease-out);
+}
+#egyptian-blue.is-ir .chapter__name {
+  -webkit-text-stroke-color: color-mix(in srgb, var(--ink-black) 90%, var(--field));
+}
 .chapter__card-canvas { transition: filter 1s var(--ease-out); }
 .chapter.is-ir .chapter__card-canvas {
   filter: invert(1) grayscale(1) contrast(1.6) brightness(1.15) drop-shadow(0 0 10px rgb(243 242 238 / 0.35));
@@ -460,6 +471,9 @@ a.chapter__try:focus-visible .chapter__try-fill,
 .chapter__row--formula dd {
   font-size: clamp(1.15rem, 1.4vw, 1.45rem);
   line-height: 1.3;
+  /* a long formula wraps between its groups (chapters.js marks them), and
+     at worst anywhere, rather than running out of its column on a phone */
+  overflow-wrap: anywhere;
 }
 .chapter__row--formula dd i { font-style: italic; }
 
@@ -536,9 +550,12 @@ a.chapter__try:focus-visible .chapter__try-fill,
   pointer-events: none;
   transition: opacity 0.8s var(--ease-out), color 0.6s linear;
 }
-.chapters__ribbon.is-on,
-.chapters__ribbon:focus-within {
-  opacity: 1;
+.chapters__ribbon.is-on { opacity: 1; }
+/* keyboard focus on a stop shows the ribbon wherever the page is; a link
+   that only kept focus from a mouse click doesn't hold it up */
+.chapters__ribbon:has(.ribbon__link:focus-visible) { opacity: 1; }
+@supports not selector(:has(*)) {
+  .chapters__ribbon:focus-within { opacity: 1; }
 }
 .chapters__ribbon.is-on .ribbon__link { pointer-events: auto; }
 .ribbon__scale,
@@ -574,6 +591,8 @@ a.chapter__try:focus-visible .chapter__try-fill,
   background: currentColor;
   opacity: 0.5;
 }
+/* small labels: the field's second ink (contrast-aware), never thinned
+   further with opacity */
 .ribbon__end {
   position: absolute;
   left: 50%;
@@ -581,7 +600,8 @@ a.chapter__try:focus-visible .chapter__try-fill,
   font-size: 0.72rem;
   line-height: 1;
   white-space: nowrap;
-  opacity: 0.78;
+  color: var(--rb-ink-2, currentColor);
+  transition: color 0.6s linear;
   font-variant-numeric: tabular-nums lining-nums;
 }
 .ribbon__end--from { bottom: calc(100% + 10px); transform: translateX(-50%); }
@@ -647,7 +667,7 @@ a.chapter__try:focus-visible .chapter__try-fill,
   font-optical-sizing: auto;
   font-size: 1.02rem;
 }
-.ribbon__when { font-size: 0.72rem; opacity: 0.8; }
+.ribbon__when { font-size: 0.72rem; color: var(--rb-ink-2, currentColor); transition: color 0.6s linear; }
 .ribbon__stop.is-active .ribbon__label,
 .ribbon__link:hover .ribbon__label,
 .ribbon__link:focus-visible .ribbon__label {
@@ -741,5 +761,6 @@ a.chapter__try:focus-visible .chapter__try-fill,
   html:not(.no-dish) .chapters.is-live .chapter .chapter__inner,
   .chapter__ir,
   .chapter__heap-canvas,
-  .chapter__card-canvas { transition: none; }
+  .chapter__card-canvas,
+  #egyptian-blue .chapter__name { transition: none; }
 }

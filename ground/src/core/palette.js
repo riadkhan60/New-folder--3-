@@ -18,6 +18,15 @@
  *   pigment(id)      → pigment data (or PAPER)
  *   refresh()        → re-measure sections
  *   drop(id, opts)   → ask the dish to drop a pigment: ctx.emit('drop', {...})
+ *   hold(key)        → freeze the field (main.js: 'jump' while a programmatic
+ *   release(key)       jump runs, 'resize' while the page re-finds the reader's
+ *   held()             place). While any hold is on, field, from, to, mix,
+ *                      color and ink keep their values from when the first
+ *                      hold began; section, progress and velocity keep
+ *                      updating and listeners are still notified. When the
+ *                      last hold is released the palette recomputes at once,
+ *                      so listeners see one change, straight to where the
+ *                      page now is (DESIGN.md §8, jumps).
  */
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { BY_ID, PAPER, fieldCSS } from './pigments.js'
@@ -89,6 +98,7 @@ export function createPalette({ gsap, lenis = null, emit }) {
   let lastVh = -1
   let dirty = true
   let vel = 0
+  const holds = new Set() // while not empty, the field is frozen (see hold())
 
   function update(force = false) {
     const y = scrollTop()
@@ -120,18 +130,20 @@ export function createPalette({ gsap, lenis = null, emit }) {
         mix = smooth(clamp(into / band))
       }
     }
-    const a = pigment(from)
-    const b = pigment(to)
-    state.from = from
-    state.to = to
-    state.mix = mix
-    state.field = mix >= 0.5 ? to : from
+    if (!holds.size) {
+      const a = pigment(from)
+      const b = pigment(to)
+      state.from = from
+      state.to = to
+      state.mix = mix
+      state.field = mix >= 0.5 ? to : from
+      state.color = from === to ? b.hex : mixHex(a.hex, b.hex, mix)
+      state.ink = mix >= 0.5 ? b.ink : a.ink
+      document.body.style.backgroundColor = state.color
+    }
     state.section = cur?.el.id ?? null
-    state.color = from === to ? b.hex : mixHex(a.hex, b.hex, mix)
-    state.ink = mix >= 0.5 ? b.ink : a.ink
     state.progress = docH > vh ? clamp(y / (docH - vh)) : 0
     state.velocity = vel
-    document.body.style.backgroundColor = state.color
     notify()
   }
 
@@ -175,5 +187,14 @@ export function createPalette({ gsap, lenis = null, emit }) {
     drop(id, opts = {}) {
       emit('drop', { id, ...opts })
     },
+    hold(key = 'hold') {
+      holds.add(key)
+    },
+    release(key = 'hold') {
+      if (!holds.delete(key) || holds.size) return
+      measure()
+      update(true)
+    },
+    held: () => holds.size > 0,
   }
 }

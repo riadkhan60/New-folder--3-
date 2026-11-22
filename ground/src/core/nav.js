@@ -5,7 +5,12 @@
  * Tone: the bar takes the ink of the current field. It uses data-tone, an
  * exact copy of the palette's [data-field] tokens (injected here), because
  * palette.js measures every top-level [data-field] element as a section, and
- * a fixed bar measured mid-page would hijack the field.
+ * a fixed bar measured mid-page would hijack the field. When the tone changes
+ * the band crossfades while the ink (and the button's fill and label) switch
+ * in one step at its midpoint (nav.css), so the type never goes grey on grey.
+ * A section that floods the screen with a colour of its own says so with
+ * 'tone' { field } (the grind lab's ultramarine); the bar takes that field
+ * until 'tone' { field: null }, the section is left behind, or a jump starts.
  *
  * Order: a quiet count of the visitor's order sits in "Order pigments" (bar
  * and phone menu) and, on phones, in a short "Order" link that appears
@@ -16,7 +21,8 @@
  * pigments, 2 items in your order"); the figures themselves are aria-hidden.
  *
  * Bus: emits 'nav:menu' { open } when the phone menu opens or closes (the
- * cursor listens, to take the menu's paper ink). Listens to 'order-change'.
+ * cursor listens, to take the menu's paper ink). Listens to 'order-change',
+ * 'tone' and 'jump'.
  */
 import '../styles/nav.css'
 
@@ -70,13 +76,24 @@ export function init(ctx) {
   }
 
   /* --------------------------------------------------------------- tone */
-  let tone = 'paper'
+  let tone = 'paper' // the palette's field
+  let override = null // a section's own flood over it ('tone' { field }), or null
+  let section = null // the palette's section
   let open = false
   let active = null
   let dropOn = false
+  let toningT = 0
   const setTone = (t) => {
-    if (root.dataset.tone !== t) root.dataset.tone = t
+    if (root.dataset.tone === t) return
+    // while the band crossfades, the button's fill and label switch in one
+    // step with the ink (nav.css); afterwards its hover fades as before
+    root.classList.add('is-toning')
+    clearTimeout(toningT)
+    toningT = setTimeout(() => root.classList.remove('is-toning'), 900)
+    root.dataset.tone = t
   }
+  const toneNow = () => override || tone
+  const known = (id) => id === 'paper' || !!ctx.pigments?.BY_ID?.[id]
   const linkFor = (id) => (chapters.includes(id) ? 'colours' : LINK_SECTIONS.includes(id) ? id : null)
 
   /* ------------------------------------------ the drop under the current link */
@@ -124,12 +141,26 @@ export function init(ctx) {
   // first call already has a section to mark
   ctx.palette?.onChange((st) => {
     tone = st.field || 'paper'
-    if (!open) setTone(tone)
+    section = st.section
+    if (override && section !== 'grind') override = null // the flood stays in its lab
+    if (!open) setTone(toneNow())
     const a = linkFor(st.section)
     if (a !== active) {
       active = a
       markActive(true)
     }
+  })
+  // the grind lab floods the screen with ultramarine and re-inks its type:
+  // the bar tones as if that were the field, until the wash-out says null
+  ctx.on('tone', (d) => {
+    const f = d?.field && known(d.field) ? d.field : null
+    override = f && section === 'grind' && !ctx.jumping ? f : null
+    if (!open) setTone(toneNow())
+  })
+  ctx.on('jump', (d) => {
+    if (d?.phase !== 'start' || !override) return
+    override = null
+    if (!open) setTone(toneNow())
   })
   document.fonts?.ready.then(replace)
   ctx.ready?.then(replace)
@@ -319,7 +350,7 @@ export function init(ctx) {
     open = false
     menuTl?.kill()
     root.classList.remove('is-open')
-    setTone(tone)
+    setTone(toneNow())
     toggle.setAttribute('aria-expanded', 'false')
     if (toggleLabel) toggleLabel.textContent = 'Menu'
     ctx.lenis?.start()

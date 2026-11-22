@@ -11,8 +11,16 @@
  * without bounce. The real text stays in the DOM (transparent once the grains
  * are drawn), so the heading is still read, selected and found.
  *
- * "Back to paper" drops clear water into the black at the button, then
- * scrolls back to the top.
+ * The type waits for its field, as the chapters' does: it is held back (by
+ * opacity only) until the dish has poured bone black, fades in after the
+ * colour, and goes again when the field leaves; the sand pours once it can be
+ * seen. No dish, or reduced motion: it all shows at once. Keyboard focus
+ * inside shows it at once, and brings the footer into its field.
+ *
+ * "Back to paper" drops clear water into the black at the button, lets it
+ * open across the black, then puts the page back at the top in one frame
+ * (not a smooth jump through every chapter) and clears the hash; the dish
+ * wipes the black off to paper (DESIGN.md §8: jumps).
  */
 import '../styles/footer.css'
 
@@ -30,6 +38,13 @@ const SWEEP = 0.5 // seconds for a curtain to cross the word
 const JIT = 0.18
 const FALL = [0.5, 0.35] // fall time: base + random
 const POUR_END = (n) => (n - 1) * BAND_T + SWEEP + JIT + FALL[0] + FALL[1] + 0.05
+// the type fades in this long after its field arrives (footer.css, as the chapters)
+const HOLD_MS = 500
+// how long the clear water of "Back to paper" opens across the black before the page goes,
+// and when a second drop feeds it (the hand that stirred the water on its way to the
+// button would otherwise carry a single drop off before it opens)
+const OPEN_MS = 800
+const FEED_MS = 380
 // how coarse each powder is: 1 = sparkling crystals, 0 = a fine lake
 const COARSE = { 'yellow-ochre': 0.7, 'bone-black': 0.45, 'egyptian-blue': 0.95, 'tyrian-purple': 0.3, ultramarine: 1, carmine: 0.25 }
 
@@ -63,30 +78,105 @@ function rng(seed) {
 export function init(ctx) {
   const root = document.getElementById('footer')
   if (!root) return
+  const html = document.documentElement
+  const reduced = ctx.reducedMotion
+  const noDish = () => html.classList.contains('no-dish')
 
   /* ---------------------------------------------------------- back to paper */
+  // Clear water at the button; once it has opened across the black, the page
+  // is at the top in one frame (ctx.scrollTo immediate: not a jump, so the
+  // palette turns once, bone black to paper, and the dish wipes once) and the
+  // hash is cleared, so a reload stays on paper. Back returns to the footer.
   const back = root.querySelector('[data-back-to-paper]')
+  let going = 0
+  const dropAt = () => {
+    const r = (back.querySelector('.footer__paper-drop') || back).getBoundingClientRect()
+    return { x: (r.left + r.width / 2) / window.innerWidth, y: (r.top + r.height / 2) / window.innerHeight }
+  }
   back?.addEventListener('click', (e) => {
-    const drop = back.querySelector('.footer__paper-drop') || back
-    const r = drop.getBoundingClientRect()
-    ctx.palette?.drop('paper', {
-      x: (r.left + r.width / 2) / window.innerWidth,
-      y: (r.top + r.height / 2) / window.innerHeight,
-      amount: 1.6,
-      radius: 0.1,
-    })
+    if (going) return
     const keyboard = e.detail === 0
-    const focusMain = () => document.getElementById('main')?.focus({ preventScroll: true })
+    ctx.palette?.drop('paper', { ...dropAt(), amount: 2, radius: 0.12 })
     const go = () => {
-      if (ctx.lenis) ctx.scrollTo(0, { onComplete: keyboard ? focusMain : undefined })
-      else {
-        ctx.scrollTo(0)
-        if (keyboard) focusMain()
+      going = 0
+      try {
+        history.replaceState({ ...(history.state || {}), y: window.scrollY }, '') // where Back returns
+      } catch {}
+      ctx.scrollTo(0, { immediate: true })
+      try {
+        history.pushState({ y: 0 }, '', location.pathname + location.search)
+      } catch {}
+      if (keyboard) document.getElementById('main')?.focus({ preventScroll: true })
+    }
+    // no water to open (reduced motion, no dish): straight back
+    if (reduced || noDish()) return go()
+    going = setTimeout(go, OPEN_MS)
+    setTimeout(() => going && ctx.palette?.drop('paper', { ...dropAt(), amount: 2, radius: 0.1 }), FEED_MS)
+  })
+
+  /* ------------------------------------------------ the type waits for its field */
+  // As the chapters do: everything in the footer is held back by opacity
+  // (footer.css; still read, found and reachable) until the palette's field
+  // is bone black with the footer as the section, fades in HOLD_MS after it,
+  // and goes again when the field leaves. Without a dish the footer paints
+  // its own field (html.no-dish, which reduced motion implies), so it shows
+  // at once. Keyboard focus inside shows it at once.
+  const FIELD = root.dataset.field || 'bone-black'
+  const live = !!ctx.palette && !reduced
+  let inField = false
+  let shownAt = -1e9 // when the type last started to show (fading in from here)
+  let wasShown = null
+  const onShow = new Set() // fn(shown): the wordmark's pour follows
+  const isShown = () => !live || inField || noDish() || root.classList.contains('is-focus')
+  function shownChanged(delay) {
+    const s = isShown()
+    if (s === wasShown) return
+    wasShown = s
+    if (s) shownAt = performance.now() + delay
+    for (const fn of onShow) fn(s)
+  }
+  if (live) {
+    root.classList.add('is-live')
+    ctx.palette.onChange((st) => {
+      const f = st.section === root.id && st.field === FIELD
+      if (f === inField) return
+      inField = f
+      root.classList.toggle('is-field', f)
+      // focus only shows it early: once the field has gone, the type follows
+      // the field again, even if the focus stayed behind in the footer
+      if (!f) root.classList.remove('is-focus')
+      shownChanged(HOLD_MS)
+    })
+    const keyboardFocus = (el) => {
+      try {
+        return el.matches(':focus-visible')
+      } catch {
+        return true
       }
     }
-    if (ctx.reducedMotion) go()
-    else setTimeout(go, 280)
-  })
+    root.addEventListener('focusin', (e) => {
+      const t = e.target
+      if (!t || !keyboardFocus(t)) return
+      root.classList.add('is-focus')
+      shownChanged(0)
+      // and bring the footer into its field, so the type it shows sits on
+      // bone black: the focus a little above the middle of the screen, in one
+      // frame (as the chapters do), once the browser's own scroll has settled
+      if (inField || noDish()) return
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (document.activeElement !== t || inField || ctx.jumping) return
+          const r = t.getBoundingClientRect()
+          ctx.scrollTo(Math.max(0, window.scrollY + r.top - window.innerHeight * 0.4), { immediate: true })
+        }),
+      )
+    })
+    root.addEventListener('focusout', (e) => {
+      if (!root.classList.contains('is-focus') || (e.relatedTarget && root.contains(e.relatedTarget))) return
+      root.classList.remove('is-focus')
+      shownChanged(0)
+    })
+  }
 
   /* ---------------------------------------------------------- the wordmark */
   const mark = root.querySelector('.footer__mark')
@@ -96,7 +186,6 @@ export function init(ctx) {
   const g = canvas.getContext('2d')
   if (!g) return
 
-  const reduced = ctx.reducedMotion
   const probe = document.createElement('span')
   probe.className = 'footer__probe'
   probe.setAttribute('aria-hidden', 'true')
@@ -112,6 +201,7 @@ export function init(ctx) {
   let ready = false
   let poured = reduced
   let pourStart = 0
+  let pending = false // sampled, and waiting to pour until the footer's type can be seen
   let running = false
   let visible = false
   let pointer = { x: -9999, y: -9999, vx: 0, vy: 0, t: 0, in: false }
@@ -328,7 +418,7 @@ export function init(ctx) {
   }
 
   function loop(now) {
-    if (!visible || !ready) {
+    if (!visible || !ready || pending) {
       running = false
       return
     }
@@ -346,10 +436,34 @@ export function init(ctx) {
     }
   }
   function wake() {
-    if (running || !ready || !visible) return
+    if (running || !ready || !visible || pending) return
     running = true
     requestAnimationFrame(loop)
   }
+
+  // The sand pours when it can be seen: with the type, as it fades in after
+  // the field (or at once). If the field leaves before the pour is done, the
+  // bottle is emptied and pours again on the way back.
+  function clear() {
+    g.setTransform(1, 0, 0, 1, 0, 0)
+    g.clearRect(0, 0, canvas.width, canvas.height)
+  }
+  function pour() {
+    pending = false
+    poured = false
+    pourStart = Math.max(performance.now(), shownAt)
+    wake()
+  }
+  function hold() {
+    pending = true
+    poured = false
+    clear()
+  }
+  onShow.add((shown) => {
+    if (!ready || reduced) return
+    if (shown && pending) pour()
+    else if (!shown && !poured) hold()
+  })
 
   let started = false
   async function setup() {
@@ -368,9 +482,8 @@ export function init(ctx) {
       draw(performance.now())
       return
     }
-    poured = false
-    pourStart = performance.now()
-    wake()
+    if (isShown()) pour()
+    else hold()
   }
 
   const io = new IntersectionObserver(
@@ -427,6 +540,7 @@ export function init(ctx) {
     clearTimeout(ro.t)
     ro.t = setTimeout(() => {
       if (!sample()) return
+      if (pending) return clear() // still waiting to pour
       poured = true
       draw(performance.now())
     }, 150)

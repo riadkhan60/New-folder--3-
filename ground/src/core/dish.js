@@ -17,12 +17,26 @@
  *     water that lifts the last colour cleanly, never as grey dishwater: a
  *     single colour leaves tide lines of its own tint, while soot (bone
  *     black) or a marbling of several colours is wiped off at the wet edge
+ *   - a jump (ctx.jumping, the 'jump' event: anchors, the nav, back and
+ *     forward) flies past fields without pouring them: the dish keeps the
+ *     field it left until the jump lands, then pours the one it landed on,
+ *     once (or wipes back to paper, once). Clear water dropped into a colour
+ *     just before the field turns to paper (Back to paper) opens into that
+ *     wipe, as one gesture; a drop made once a wipe has done its work ends
+ *     what is left of it, so the drop lingers
  *   - on paper the water travels with the page, so a drop stays with the
- *     section it was made in; on a colour field it drifts more slowly
- *   - text stays readable: under the type of the current field (measured
- *     line boxes, rasterised to a small mask, given a brushed, ragged edge)
- *     dye settles to the field faster, and during a pour the type works as
- *     a resist: it takes the new field even before the wash reaches it
+ *     section it was made in (but not under a pour, nor while the next
+ *     colour wicks in at an edge: water scrolled in there would draw a
+ *     ruled seam); on a colour field it drifts more slowly
+ *   - text stays readable: under the visible type of the current field
+ *     (measured line boxes, rasterised to a small mask, blurred wide and
+ *     pushed about by noise fixed to the page, so it is an irregular blot,
+ *     never a box) dye settles to the field faster, and during a pour the
+ *     type works as a resist: it takes the new field even before the wash
+ *     reaches it. Type that is hidden (a chapter holding its text back
+ *     until its field is in, a heading waiting for the paper) is left out,
+ *     and so is type that was hidden when a pour began, until its front has
+ *     crossed the dish. No rim, relief or tide line is drawn round the type
  *   - indigo is dropped as the pale yellow-green of its vat and turns blue as
  *     the air reaches it (pigments.js: indigo)
  *   - ctx.on('drop', { id, x, y, amount, radius, vx, vy, mode })
@@ -259,12 +273,32 @@ void main(){
   o = vec4(v, 0., 1.);
 }`,
 
+  // The type mask (line boxes of the visible type, dilated and blurred wide
+  // on the CPU) given the edge of a resist that soaks into damp paper: it is
+  // pushed about by noise fixed to the page, so a block of text clears as an
+  // irregular blot that keeps its shape as it scrolls, never as a box or a
+  // stack of ruled bands, and its edge frays where the paper is thirstier.
+  maskWarp: `
+in vec2 vUv; out vec4 o;
+uniform sampler2D uTex; uniform float uAspect; uniform float uPage;
+${NOISE}
+void main(){
+  // page coordinates, in screen heights, running down the page
+  vec2 q = vec2(vUv.x * uAspect, uPage - vUv.y);
+  vec2 w = vec2(fbm(q * 2.3 + 3.1), fbm(q * 2.3 + 41.7)) - .5;
+  w += (vec2(vnoise(q * 6.4 + 17.9), vnoise(q * 6.4 + 7.7)) - .5) * .6;
+  w += (vec2(vnoise(q * 17. + 5.3), vnoise(q * 17. + 29.1)) - .5) * .18;
+  float m = texture(uTex, vUv + w * vec2(.16 / uAspect, .16)).r;
+  float f = fbm(q * 5.3 + 23.4);
+  o = vec4(smoothstep(.04, .78, m * (.5 + f)), 0., 0., 1.);
+}`,
+
   // Dye advection, then relaxation towards the field. During a pour a ragged
   // front (uFlood) sweeps out from the pour: behind it the dish relaxes fast.
-  // Under the type of the current field (uMask) it relaxes faster still, so
-  // text always sits on its own field. While a pour clears (uLift) the dish
-  // takes whichever is quicker, thinning the dye (density) or the light
-  // passing through it (transmittance): a dark field lifts off cleanly
+  // Under the visible type of the current field (uMask) it relaxes faster
+  // still, so text always sits on its own field. While a pour clears (uLift)
+  // the dish takes whichever is quicker, thinning the dye (density) or the
+  // light passing through it (transmittance): a dark field lifts off cleanly
   // instead of draining through grey.
   advectDye: `
 in vec2 vUv; out vec4 o;
@@ -274,23 +308,24 @@ uniform float uDt; uniform float uRelaxDt; uniform float uShift; uniform float u
 uniform vec4 uTarget; uniform float uRateIn; uniform float uRateOut;
 uniform float uMaskRate; uniform float uMaskPour; uniform float uMaskAhead;
 uniform vec4 uFlood; uniform float uFloodOn; uniform vec3 uBand; uniform float uAspect; uniform float uTime;
+uniform vec2 uInflow;
 ${NOISE}
 void main(){
   vec2 coord = vUv - uDt * SAMPLE(uVelocity, vUv, uVelTexel).xy * uVelTexel - vec2(0., uShift);
   vec4 c = SAMPLE(uSource, coord, uSrcTexel);
-  // water scrolled in from beyond the glass is clean field
+  // water scrolled in from beyond the glass is clean field, except at an
+  // edge the next colour is wicking in at (uInflow: bottom, top): there it
+  // is more of what is at the edge, so the wick leaves no ruled line as the
+  // page carries it up
   float sy = vUv.y - uShift;
-  c = mix(uTarget, c, smoothstep(-2. * uSrcTexel.y, 0., sy) * smoothstep(1. + 2. * uSrcTexel.y, 1., sy));
-  // where the type sits (soft boxes round each line), given a ragged edge
-  // like a resist painted round it with a brush, never a box
-  float type = texture(uMask, vUv).r;
-  if (type > .004) {
-    vec2 qm = vUv * vec2(uAspect, 1.);
-    vec2 warp = (vec2(vnoise(qm * 2.6 + 3.1), vnoise(qm * 2.6 + 41.7)) - .5) * .16
-              + (vec2(vnoise(qm * 9.1 + 17.9), vnoise(qm * 9.1 + 7.7)) - .5) * .05;
-    type = texture(uMask, vUv + warp * vec2(1. / uAspect, 1.)).r;
-    type = smoothstep(.16, .7, type + (vnoise(qm * 23.) + vnoise(qm * 51. + 9.) * .5 - .75) * .42);
+  float inside = smoothstep(-2. * uSrcTexel.y, 0., sy) * smoothstep(1. + 2. * uSrcTexel.y, 1., sy);
+  if (inside < 1.) {
+    vec4 edge = SAMPLE(uSource, vec2(coord.x, clamp(coord.y, uSrcTexel.y, 1. - uSrcTexel.y)), uSrcTexel);
+    c = mix(mix(uTarget, edge, smoothstep(0., .12, sy < .5 ? uInflow.x : uInflow.y)), c, inside);
   }
+  // where the visible type sits: a soft, irregular blot round each block of
+  // text (maskWarp)
+  float type = texture(uMask, vUv).r;
   float rate = uRateIn + uMaskRate * type;
   if (uFloodOn > .5) {
     // a wet edge: ragged like a wash running into damp paper. Just inside it
@@ -300,10 +335,11 @@ void main(){
     float d = length(q - uFlood.xy) + (n - .5) * uFlood.w;
     float e = uFlood.z - d;
     float front = smoothstep(0., .035, e);
-    // tide lines: the wash takes more readily on some rings than others.
+    // tide lines: the wash takes more readily on some rings than others,
+    // except round the type, where it only soaks in (no ruled lines there).
     // (uBand: rate at the wet edge, how fast it falls off behind it, rings)
     float ring = .5 + .5 * sin(d * 44.);
-    float band = front * exp(-e * uBand.y) * mix(1., .3 + .7 * ring * ring, uBand.z);
+    float band = front * exp(-e * uBand.y) * mix(1., .3 + .7 * ring * ring, uBand.z * (1. - type));
     // the type is a resist: it starts to take the new field even before the
     // wash reaches it (soaking in unevenly, like the wash itself), so it is
     // never left sitting on the old one
@@ -328,7 +364,7 @@ void main(){
   // from the density gradient, and moving water reading a little deeper.
   display: `
 in vec2 vUv; in vec2 vL; in vec2 vR; in vec2 vT; in vec2 vB; out vec4 o;
-uniform sampler2D uDye; uniform sampler2D uVelocity;
+uniform sampler2D uDye; uniform sampler2D uVelocity; uniform sampler2D uMask;
 uniform vec2 uDyeTexel; uniform vec2 uVelTexel;
 uniform vec3 uPaper; uniform float uDpr; uniform float uTexelPx; uniform float uVelPx;
 uniform float uRelief; uniform float uRim; uniform float uGrain; uniform float uGran; uniform float uWet;
@@ -361,14 +397,16 @@ void main(){
   float wet = 1. - exp(-length(v) * .004);
   dens *= 1. + wet * uWet;
 
-  // the rim a wash leaves where it thins
+  // the rim a wash leaves where it thins, and its relief, but never round
+  // the type: there the water only soaks in, so a resist draws no outline
+  float calm = 1. - smoothstep(0., .4, texture(uMask, vUv).r);
   float slope = length(g);
-  dens *= 1. + min(slope * uRim, .28);
+  dens *= 1. + min(slope * uRim, .28) * calm;
 
   vec3 col = uPaper * exp(-dens);
 
   // wet relief: light from the upper left catches the swell of the colour
-  vec3 nrm = normalize(vec3(-g * uRelief, 1.));
+  vec3 nrm = normalize(vec3(-g * uRelief * (.2 + .8 * calm), 1.));
   const vec3 LI = vec3(-.42, .6, .68);
   float lit = dot(nrm, normalize(LI)) / normalize(LI).z;
   col *= mix(1., lit, .35);
@@ -388,8 +426,9 @@ const UNIFORMS = {
   pressure: ['uTexel', 'uPressure', 'uDivergence'],
   gradient: ['uTexel', 'uPressure', 'uVelocity'],
   advectVelocity: ['uVelocity', 'uVelTexel', 'uDt', 'uDiss', 'uDrift', 'uTime', 'uShift'],
-  advectDye: ['uVelocity', 'uSource', 'uMask', 'uVelTexel', 'uSrcTexel', 'uDt', 'uRelaxDt', 'uShift', 'uLift', 'uTarget', 'uRateIn', 'uRateOut', 'uMaskRate', 'uMaskPour', 'uMaskAhead', 'uFlood', 'uFloodOn', 'uBand', 'uAspect', 'uTime'],
-  display: ['uTexel', 'uDye', 'uVelocity', 'uDyeTexel', 'uVelTexel', 'uPaper', 'uDpr', 'uTexelPx', 'uVelPx', 'uRelief', 'uRim', 'uGrain', 'uGran', 'uWet'],
+  maskWarp: ['uTex', 'uAspect', 'uPage'],
+  advectDye: ['uVelocity', 'uSource', 'uMask', 'uVelTexel', 'uSrcTexel', 'uDt', 'uRelaxDt', 'uShift', 'uLift', 'uTarget', 'uRateIn', 'uRateOut', 'uMaskRate', 'uMaskPour', 'uMaskAhead', 'uFlood', 'uFloodOn', 'uBand', 'uAspect', 'uTime', 'uInflow'],
+  display: ['uTexel', 'uDye', 'uVelocity', 'uMask', 'uDyeTexel', 'uVelTexel', 'uPaper', 'uDpr', 'uTexelPx', 'uVelPx', 'uRelief', 'uRim', 'uGrain', 'uGran', 'uWet'],
 }
 
 /* ===================================================================== tuning */
@@ -512,6 +551,7 @@ function createDish(ctx, canvas, disable) {
   const target = new Float32Array(4) // density the dish relaxes to
   const whisper = new Float32Array(4) // what stirring leaves behind
   let memory = OPTICS.ultramarine // the last colour poured: the water remembers it
+  let lastClear = null // the last drop of clear water: { x, y } in dish uv, t in sim time
   let whisperGain = 0.6
   let field = null
   let fieldProgress = 0
@@ -527,6 +567,7 @@ function createDish(ctx, canvas, disable) {
   let typeBoost = SIM.typePaper // extra relaxation under the type, now
   let drift = 0
   let follow = 0 // 0..1: how much the water travels with the page now
+  const inflow = [0, 0] // how much water scrolled in at the bottom / top edge is like the edge (a wick)
   let lastScroll = null // page scroll at the last step, css px
   let simTime = 0
   let lastInput = 0
@@ -649,8 +690,10 @@ function createDish(ctx, canvas, disable) {
   let vao = null
   let buf = null
   let vel, dye, pressure, divergence, curl
-  // where the type of the current field sits on screen (R8, linear: soft)
-  const mask = { tex: null, w: 0, h: 0, data: null, tmp: null, y: NaN, field: null, version: -1 }
+  // where the visible type of the current field sits on screen: the line
+  // boxes, softened on the CPU (tex: R8, linear), then given an irregular
+  // edge on the GPU (warp: R8 at twice the size, what the shaders sample)
+  const mask = { tex: null, warp: null, w: 0, h: 0, data: null, tmp: null, y: NaN, field: null, version: -1, sig: 0 }
 
   function measure() {
     const r = canvas.getBoundingClientRect()
@@ -714,6 +757,7 @@ function createDish(ctx, canvas, disable) {
     const mh = a >= 1 ? Math.max(24, Math.round(res / a)) : res
     if (mask.tex && mask.w === mw && mask.h === mh) return
     if (mask.tex) gl.deleteTexture(mask.tex)
+    if (mask.warp) dispose(mask.warp)
     mask.w = mw
     mask.h = mh
     mask.data = new Uint8ClampedArray(mw * mh)
@@ -728,6 +772,33 @@ function createDish(ctx, canvas, disable) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, mw, mh, 0, gl.RED, gl.UNSIGNED_BYTE, mask.data)
+    mask.warp = maskTarget(mw * 2, mh * 2)
+  }
+
+  // R8 is colour-renderable in WebGL2 and always filterable; should a driver
+  // refuse it, the float format the simulation already uses will do
+  function maskTarget(w, h) {
+    gl.activeTexture(gl.TEXTURE0)
+    const tex = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null)
+    const fb = gl.createFramebuffer()
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.deleteFramebuffer(fb)
+      gl.deleteTexture(tex)
+      return fbo(w, h, caps.r, caps.linear ? gl.LINEAR : gl.NEAREST)
+    }
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+    return { tex, fb, w, h, tx: 1 / w, ty: 1 / h }
   }
 
   function fbo(w, h, fmt, filter) {
@@ -986,9 +1057,7 @@ function createDish(ctx, canvas, disable) {
     const u = P.advectDye.u
     gl.uniform1i(u.uVelocity, bind(0, vel.read))
     gl.uniform1i(u.uSource, bind(1, dye.read))
-    gl.activeTexture(gl.TEXTURE2)
-    gl.bindTexture(gl.TEXTURE_2D, mask.tex)
-    gl.uniform1i(u.uMask, 2)
+    gl.uniform1i(u.uMask, bind(2, mask.warp))
     gl.uniform2f(u.uVelTexel, vel.tx, vel.ty)
     gl.uniform2f(u.uSrcTexel, dye.tx, dye.ty)
     gl.uniform1f(u.uDt, moving ? dt : 0)
@@ -1006,6 +1075,7 @@ function createDish(ctx, canvas, disable) {
     gl.uniform3f(u.uBand, flood.band[0], flood.band[1], flood.band[2])
     gl.uniform1f(u.uAspect, aspect)
     gl.uniform1f(u.uTime, simTime)
+    gl.uniform2f(u.uInflow, inflow[0], inflow[1])
     blit(dye.write)
     dye.swap()
   }
@@ -1016,6 +1086,7 @@ function createDish(ctx, canvas, disable) {
     gl.uniform2f(u.uTexel, dye.tx, dye.ty)
     gl.uniform1i(u.uDye, bind(0, dye.read))
     gl.uniform1i(u.uVelocity, bind(1, vel.read))
+    gl.uniform1i(u.uMask, bind(2, mask.warp))
     gl.uniform2f(u.uDyeTexel, dye.tx, dye.ty)
     gl.uniform2f(u.uVelTexel, vel.tx, vel.ty)
     gl.uniform3f(u.uPaper, paperLin[0], paperLin[1], paperLin[2])
@@ -1060,6 +1131,8 @@ function createDish(ctx, canvas, disable) {
     setTarget(o)
     residual = Math.max(residual, Math.abs(maxDensity(target) - before) + 0.6)
     if (!glReady) return
+    // type that is hidden as the pour begins sits out its resist
+    holdHidden(id)
 
     const g = o.gesture
     const s = shortH()
@@ -1071,18 +1144,29 @@ function createDish(ctx, canvas, disable) {
     const portrait = aspect < 0.8
 
     // ---- where the colour comes from, and the ragged front it floods behind
+    // Clear water dropped into a colour just before the page turns to paper
+    // (Back to paper drops it at the button): the wipe opens out of that
+    // drop, as one gesture, rather than rolling in from an edge.
+    const cw = lastClear
+    const spring =
+      o.paper && !left.paper && cw && simTime - cw.t < 1.6 && cw.x > -0.05 && cw.x < 1.05 && cw.y > -0.05 && cw.y < 1.05
+    const kind = spring ? 'bloom' : g.kind
     let ox, oy, soft
     let delay = 0
     let minDur = 1.3
-    if (g.kind === 'bloom') {
+    if (spring) {
+      ox = cw.x
+      oy = cw.y
+      soft = 0.42
+    } else if (kind === 'bloom') {
       ox = 0.5
       oy = 0.52
       soft = 0.42
-    } else if (g.kind === 'stream') {
+    } else if (kind === 'stream') {
       ox = g.x + rand(-0.04, 0.04)
       oy = edge - inward * 0.04
       soft = 0.42
-    } else if (g.kind === 'scatter') {
+    } else if (kind === 'scatter') {
       // the drops land first; the field runs together behind them
       ox = g.x
       oy = edge - inward * 0.35
@@ -1095,7 +1179,8 @@ function createDish(ctx, canvas, disable) {
       soft = 0.5
     }
     // is the last pour still running? Then the dish holds a marbling of
-    // several colours, not one (a jump down the page pours them all)
+    // several colours, not one (a quick scroll through two chapters; a jump
+    // never gets here on the way, it pours only where it lands)
     const busy = flood.on || (flood.tail && simTime - flood.t0 - flood.delay < flood.dur + flood.hold + 0.4)
     const fx = ox * aspect
     let far = 0
@@ -1130,12 +1215,13 @@ function createDish(ctx, canvas, disable) {
     flood.ramp = soot ? 0.9 : 2.4
     rateIn = flood.rate
     rateOut = 0
-    // a pour is screen-wide: the water stops travelling with the page
-    follow = Math.min(follow, 0.25)
+    // a pour is screen-wide: the water stops travelling with the page (at
+    // once: water scrolled in under a pour would arrive as a ruled band)
+    follow = 0
     lastScroll = window.scrollY
 
     // ---- the pour
-    if (g.kind === 'wave') {
+    if (kind === 'wave') {
       // a broad flood from the edge: liquid wells up all along it
       const n = portrait ? 3 : 5
       for (let i = 0; i < n; i++) {
@@ -1184,7 +1270,7 @@ function createDish(ctx, canvas, disable) {
         c.vy = inward * rand(0.6, 0.9) * H
         c.rough = 0.5
       }
-    } else if (g.kind === 'smoke') {
+    } else if (kind === 'smoke') {
       // soot: plumes well up from the edge and curl over as they rise
       const n = portrait ? 2 : 3
       for (let j = 0; j < n; j++) {
@@ -1225,7 +1311,7 @@ function createDish(ctx, canvas, disable) {
         c.swirl = rand(-0.5, 0.5) * H
         c.rough = 0.4
       }
-    } else if (g.kind === 'stream') {
+    } else if (kind === 'stream') {
       // a jet poured in from one point of the edge
       const lean = (0.5 - ox) * 0.8
       const src = takeOp(0)
@@ -1253,7 +1339,7 @@ function createDish(ctx, canvas, disable) {
         p.mixTo.set(rich)
         p.amt = 1
       }
-    } else if (g.kind === 'scatter') {
+    } else if (kind === 'scatter') {
       // drops rain in, nearest the edge first; each one blooms, then the
       // front runs them together into the field
       const cols = portrait ? 4 : 6
@@ -1361,7 +1447,11 @@ function createDish(ctx, canvas, disable) {
   let lastSeep = -1
   function seep(id, k, fromBottom) {
     const o = optics(id)
-    if (!o || k < 0.08 || simTime - lastSeep < 0.07) return
+    if (!o || k < 0.08) return
+    // the water beyond that edge is the next colour's now
+    const side = fromBottom ? 0 : 1
+    inflow[side] = Math.max(inflow[side], clamp(k))
+    if (simTime - lastSeep < 0.07) return
     lastSeep = simTime
     const s = shortH()
     const edge = fromBottom ? 0 : 1
@@ -1412,12 +1502,26 @@ function createDish(ctx, canvas, disable) {
     if (k >= 1) flood.tail = false
   }
 
+  // A wipe back to paper has done its work once its front has crossed and
+  // the hold has had time to lift what was left (about 2.8 / rate seconds).
+  // A drop made after that ends the rest of it at once, so the drop opens
+  // and lingers (the hero blooming again after Back to paper) instead of
+  // being lifted off with the last of the old field.
+  function settleWipe() {
+    if (!flood.tail || flood.on || baseRate !== SIM.relaxPaper) return
+    if (simTime - flood.t0 - flood.delay - flood.dur < 2.8 / flood.rate) return
+    flood.tail = false
+    rateIn = rateOut = baseRate
+    typeBoost = SIM.typePaper
+  }
+
   /* ------------------------------------------------------------ drops, stir */
   function drop(d = {}) {
     if (!glReady) {
       if (pending.length < 24) pending.push(d)
       return
     }
+    if (field === 'paper') settleWipe()
     const id = d.id || (field && field !== 'paper' ? field : 'ultramarine')
     const o = optics(id)
     if (!o) return
@@ -1432,6 +1536,7 @@ function createDish(ctx, canvas, disable) {
     const vy = -(d.vy || 0) * window.innerHeight * pxToTex()
     const clear = o.paper
     const mix = clear || d.mode === 'mix'
+    if (clear) lastClear = { x, y, t: simTime }
     // indigo arrives as the yellow-green of the vat, and turns blue in air
     const dev = !clear && o.develop ? o.develop : null
     const colour = dev ? dev.from : o.mass
@@ -1652,19 +1757,46 @@ function createDish(ctx, canvas, disable) {
     kick(true)
   })
 
-  ctx.palette.onChange((st) => {
+  // A jump (an anchor, the nav, back and forward: main.js sets ctx.jumping
+  // and emits 'jump' at its start and end) flies past fields: the dish holds
+  // on to the field it left and pours the one it lands on, once (the palette
+  // holds its field during a jump too; this keeps the dish right whatever
+  // drives the scroll). The events are the record; ctx.jumping stands in if
+  // none has come.
+  let jumpDepth = 0
+  let jumpSeen = false
+  let jumpFrom = 0
+  function jumpingNow() {
+    const j = jumpSeen ? jumpDepth > 0 : ctx.jumping === true
+    if (!j) {
+      jumpFrom = 0
+      return false
+    }
+    const now = performance.now()
+    if (!jumpFrom) jumpFrom = now
+    if (now - jumpFrom < 6000) return true
+    // a jump that never ended: never hold on to a field for good
+    jumpDepth = 0
+    jumpFrom = 0
+    return false
+  }
+
+  function onPalette(st) {
     // scrolling drags the water a little (on paper the water travels with
     // the page instead, see frame(); this only adds a liquid lag to it)
     const v = st.velocity || 0
     const k = SIM.driftField + (SIM.driftPaper - SIM.driftField) * follow
     drift = glReady ? clamp(v, -60, 60) * 60 * pxToTex() * k : 0
     if (Math.abs(v) > 0.08) kick(false)
+    const jumping = jumpingNow()
     // as a boundary nears the probe, the next colour wicks in from its edge
-    if (glReady && st.field === field && st.from !== st.to && Math.abs(v) > 0.05) {
+    // (not on a jump, which only flies past)
+    if (!jumping && glReady && st.field === field && st.from !== st.to && Math.abs(v) > 0.05) {
       if (v > 0 && field === st.from) seep(st.to, st.mix / 0.5, true)
       else if (v < 0 && field === st.to) seep(st.from, (1 - st.mix) / 0.5, false)
     }
     if (st.field === field) return
+    if (jumping && field !== null && glReady) return
     const prev = field
     const dir = st.progress >= fieldProgress ? 1 : -1
     field = st.field
@@ -1676,6 +1808,14 @@ function createDish(ctx, canvas, disable) {
       return
     }
     pour(field, Math.abs(v) > 0.3 ? Math.sign(v) : dir, prev)
+  }
+  ctx.palette.onChange(onPalette)
+  ctx.on('jump', (d) => {
+    const start = d?.phase === 'start'
+    jumpSeen = true
+    jumpDepth = Math.max(0, jumpDepth + (start ? 1 : -1))
+    // landed: pour where it landed now, if the palette hasn't brought it yet
+    if (!start && !jumpingNow()) onPalette(ctx.palette.get())
   })
 
   /* ------------------------------------------------- the water and the page */
@@ -1684,14 +1824,31 @@ function createDish(ctx, canvas, disable) {
   function carry(dy) {
     if (opCount) for (let i = 0; i < POOL; i++) if (ops[i].on) ops[i].y += dy
     for (let i = 0; i < SRC; i++) if (sources[i].on) sources[i].y += dy
+    if (lastClear) lastClear.y += dy
   }
 
   // Where the type is: the line boxes of every text node in the page, in
-  // page coordinates, each tagged with the field it is set on. Measured when
-  // the layout settles (never per frame); rasterised per frame into a small
-  // mask of the screen for the current field only (a lab that re-inks its
-  // type for a flood of its own drops out of the mask while it does).
-  const text = { n: 0, rects: new Float32Array(0), fields: new Uint8Array(0), ids: new Map(), version: 0 }
+  // page coordinates, each tagged with the field it is set on and with the
+  // element it belongs to. Measured when the layout settles (never per
+  // frame); rasterised per frame into a small mask of the screen for the
+  // current field only (a lab that re-inks its type for a flood of its own
+  // drops out of the mask while it does), and only for type that can be
+  // seen: a section that holds its text back until its field is poured, or a
+  // heading that waits for the paper, needs no resist.
+  const text = {
+    n: 0,
+    rects: new Float32Array(0),
+    fields: new Uint8Array(0),
+    el: new Uint32Array(0), // per line box: its element (an index into els)
+    els: [],
+    vis: new Uint8Array(0), // per element: in the mask this frame (as of `stamp`)
+    stamp: new Uint32Array(0),
+    seen: new Uint8Array(0), // per element: could be seen when last looked at…
+    seenAt: new Float64Array(0), // …at this sim time (looked at again after 0.1 s)
+    ids: new Map(),
+    version: 0,
+  }
+  let visStamp = 0
   const fieldId = (f) => {
     let i = text.ids.get(f)
     if (i === undefined && text.ids.size < 250) text.ids.set(f, (i = text.ids.size + 1))
@@ -1704,6 +1861,8 @@ function createDish(ctx, canvas, disable) {
     const vw = window.innerWidth
     const out = []
     const tags = []
+    const owners = []
+    const els = []
     const range = document.createRange()
     const MAX = 8000
     for (const r of roots) {
@@ -1711,6 +1870,7 @@ function createDish(ctx, canvas, disable) {
       let node
       let lastEl = null
       let fi = 0
+      let ei = 0
       while ((node = walker.nextNode()) && tags.length < MAX) {
         const v = node.nodeValue
         if (!v || !/\S/.test(v)) continue
@@ -1720,6 +1880,7 @@ function createDish(ctx, canvas, disable) {
           lastEl = el
           const f = el.closest('[data-field]')
           fi = f && !el.closest(SKIP) ? fieldId(f.dataset.field) : 0
+          if (fi) ei = els.push(el) - 1
         }
         if (!fi) continue
         range.selectNodeContents(node)
@@ -1730,11 +1891,18 @@ function createDish(ctx, canvas, disable) {
           const m = Math.min(14, Math.max(4, q.height * 0.2))
           out.push(q.left - m, q.top + sy - m, q.right + m, q.bottom + sy + m)
           tags.push(fi)
+          owners.push(ei)
         }
       }
     }
     text.rects = Float32Array.from(out)
     text.fields = Uint8Array.from(tags)
+    text.el = Uint32Array.from(owners)
+    text.els = els
+    text.vis = new Uint8Array(els.length)
+    text.stamp = new Uint32Array(els.length)
+    text.seen = new Uint8Array(els.length)
+    text.seenAt = new Float64Array(els.length).fill(-Infinity)
     text.n = tags.length
     text.version++
   }
@@ -1753,26 +1921,98 @@ function createDish(ctx, canvas, disable) {
     }, ms)
   }
 
+  // Can this type be seen? Opacity 0 or visibility: hidden on it or on any of
+  // its ancestors hides it (checkVisibility, or by hand where it is missing).
+  const VIS = { opacityProperty: true, visibilityProperty: true, checkOpacity: true, checkVisibilityCSS: true }
+  const nativeVis = typeof Element !== 'undefined' && typeof Element.prototype.checkVisibility === 'function'
+  function seen(el) {
+    if (!el.isConnected) return false
+    if (nativeVis) return el.checkVisibility(VIS)
+    if (getComputedStyle(el).visibility === 'hidden') return false
+    for (let a = el, i = 0; a && a !== document.body && i < 16; a = a.parentElement, i++) {
+      if (parseFloat(getComputedStyle(a).opacity) < 0.01) return false
+    }
+    return true
+  }
+
+  // Type that is still hidden a moment into a pour is being held back by its
+  // section until the field is in (a chapter's text waits half a second, then
+  // fades in while its field is still pouring): it takes no part in the
+  // resist until the pour's front has crossed the dish. Type that was only
+  // catching up (a heading fading back in with the scroll, one released as
+  // the field turned) joins once the moment has passed.
+  const held = new Set()
+  const HELD_GRACE = 0.3 // s
+  let heldAt = -1 // sim time the snapshot was taken; -1 once it has been looked at again
+  function holdHidden(id) {
+    held.clear()
+    heldAt = simTime
+    const fi = text.ids.get(id)
+    if (!fi || !text.n) return
+    const sy = window.scrollY
+    const R = text.rects
+    const F = text.fields
+    const E = text.el
+    const stamp = ++visStamp
+    for (let i = 0, j = 0; i < text.n; i++, j += 4) {
+      if (F[i] !== fi) continue
+      // anything that can scroll on screen while the front is crossing
+      if (R[j + 3] < sy - cssH || R[j + 1] > sy + 3 * cssH) continue
+      const e = E[i]
+      if (text.stamp[e] === stamp) continue
+      text.stamp[e] = stamp
+      if (!seen(text.els[e])) held.add(text.els[e])
+    }
+  }
+
   function paintMask(sy) {
     if (!mask.tex) return
     const fi = text.ids.get(field) || 0
-    if (sy === mask.y && fi === mask.field && text.version === mask.version) return
+    const R = text.rects
+    const F = text.fields
+    const E = text.el
+    // which of this field's type on screen can be seen now (and, while a
+    // pour's front is crossing, could already be seen when it began)
+    let sig = 0
+    if (heldAt >= 0 && simTime - heldAt >= HELD_GRACE) {
+      heldAt = -1
+      for (const el of held) if (seen(el)) held.delete(el)
+    }
+    if (fi && text.n) {
+      const stamp = ++visStamp
+      const front = flood.on && held.size > 0
+      for (let i = 0, j = 0; i < text.n; i++, j += 4) {
+        if (F[i] !== fi || R[j + 3] < sy || R[j + 1] > sy + cssH) continue
+        const e = E[i]
+        if (text.stamp[e] !== stamp) {
+          text.stamp[e] = stamp
+          const el = text.els[e]
+          if (!(simTime - text.seenAt[e] < 0.1)) {
+            text.seen[e] = seen(el) ? 1 : 0
+            text.seenAt[e] = simTime
+          }
+          text.vis[e] = front && held.has(el) ? 0 : text.seen[e]
+        }
+        if (text.vis[e]) sig = (Math.imul(sig, 31) + e + 1) | 0
+      }
+    }
+    if (sy === mask.y && fi === mask.field && text.version === mask.version && sig === mask.sig) return
     mask.y = sy
     mask.field = fi
     mask.version = text.version
+    mask.sig = sig
     const data = mask.data
     const W = mask.w
     data.fill(0)
+    let any = false
     if (fi && text.n) {
       const kx = W / cssW
       const ky = mask.h / cssH
-      const R = text.rects
-      const F = text.fields
       for (let i = 0, j = 0; i < text.n; i++, j += 4) {
         if (F[i] !== fi) continue
         const top = R[j + 1] - sy
         const bottom = R[j + 3] - sy
-        if (bottom < 0 || top > cssH) continue
+        if (bottom < 0 || top > cssH || !text.vis[E[i]]) continue
         const c0 = Math.max(0, Math.floor(R[j] * kx))
         const c1 = Math.min(W, Math.ceil(R[j + 2] * kx))
         if (c1 <= c0) continue
@@ -1780,23 +2020,50 @@ function createDish(ctx, canvas, disable) {
         const r0 = Math.max(0, Math.floor((cssH - bottom) * ky))
         const r1 = Math.min(mask.h, Math.ceil((cssH - top) * ky))
         for (let r = r0; r < r1; r++) data.fill(255, r * W + c0, r * W + c1)
+        any = true
       }
-      softenMask()
+      if (any) softenMask()
     }
-    gl.activeTexture(gl.TEXTURE2)
+    gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, mask.tex)
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, mask.h, gl.RED, gl.UNSIGNED_BYTE, data)
+    // the edge of the resist: pushed about by noise fixed to the page
+    if (!any) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mask.warp.fb)
+      gl.viewport(0, 0, mask.warp.w, mask.warp.h)
+      gl.clearColor(0, 0, 0, 0)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      return
+    }
+    use(P.maskWarp)
+    const u = P.maskWarp.u
+    gl.uniform1i(u.uTex, 0)
+    gl.uniform1f(u.uAspect, aspect)
+    gl.uniform1f(u.uPage, sy / cssH + 1)
+    blit(mask.warp)
   }
 
-  // two box blurs make a soft halo round the type, so the water clears in a
-  // breath around a line of text rather than in a box behind it
+  // The line boxes grown by a texel (so the lines of a paragraph run into
+  // one block), then two wide box blurs: a broad, soft halo round the type,
+  // never a box, nor a ruled line for every line of text.
   function softenMask() {
     const W = mask.w
     const Hh = mask.h
     const a = mask.data
     const b = mask.tmp
-    const R = 2
+    for (let y = 0; y < Hh; y++) {
+      const row = y * W
+      for (let x = 0; x < W; x++) {
+        b[row + x] = Math.max(a[row + Math.max(0, x - 1)], a[row + x], a[row + Math.min(W - 1, x + 1)])
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < Hh; y++) {
+        a[y * W + x] = Math.max(b[Math.max(0, y - 1) * W + x], b[y * W + x], b[Math.min(Hh - 1, y + 1) * W + x])
+      }
+    }
+    const R = 4
     const n = 2 * R + 1
     for (let pass = 0; pass < 2; pass++) {
       for (let y = 0; y < Hh; y++) {
@@ -1808,7 +2075,7 @@ function createDish(ctx, canvas, disable) {
           sum += a[row + Math.min(W - 1, x + R + 1)] - a[row + Math.max(0, x - R)]
         }
       }
-      const gain = pass ? 1.6 : 1
+      const gain = pass ? 1.5 : 1
       for (let x = 0; x < W; x++) {
         let sum = 0
         for (let y = -R; y <= R; y++) sum += b[clamp(y, 0, Hh - 1) * W + x]
@@ -1891,10 +2158,15 @@ function createDish(ctx, canvas, disable) {
     simTime += dt
 
     // on paper the water travels with the page, so a drop stays with the
-    // section it was made in; a pour is screen-wide, so it stays put
-    const followTo = field === 'paper' && !flood.on ? 1 : 0
+    // section it was made in; a pour is screen-wide, so it stays put, and so
+    // does water the next colour is wicking into (else the page would carry
+    // the wick up and scroll clean water in under it: a ruled seam)
+    const followTo = field === 'paper' && !flood.on ? 1 - Math.max(inflow[0], inflow[1]) : 0
     follow += (followTo - follow) * (1 - Math.exp(-dt * (followTo > follow ? 2.5 : 9)))
     const shift = lastScroll === null ? 0 : clamp((follow * SIM.follow * (sy - lastScroll)) / cssH, -2, 2)
+    const ease = Math.exp(-dt * 3)
+    inflow[0] *= ease
+    inflow[1] *= ease
     lastScroll = sy
     if (shift) carry(shift)
     paintMask(sy)
@@ -1972,7 +2244,7 @@ function createDish(ctx, canvas, disable) {
     () => {
       // start again from scratch on the new context
       vel = dye = pressure = divergence = curl = null
-      mask.tex = null
+      mask.tex = mask.warp = null
       mask.w = mask.h = 0
       for (const k in P) delete P[k]
       firstFrame = true

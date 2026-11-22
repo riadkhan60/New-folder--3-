@@ -71,6 +71,10 @@ incoming section's top moves from 85% to 65% of the viewport, flipping at
   variables for everything: `--ink` (text), `--ink-2`, `--ink-3`, `--line`,
   `--field` (the field colour), `--tint` (a thin wash of it). palette.js sets
   these per `[data-field]`, so text is always legible on its own field.
+  `--ink-2` and `--ink-3` are the ink at 0.84 and 0.68 alpha, raised per field
+  wherever that would read below 4.5:1 on the field (`fieldCSS()` in
+  `pigments.js`: Egyptian blue takes about 0.9 for both). Small text uses
+  `--ink`, `--ink-2` or `--ink-3` only: no lower alpha, no opacity on text.
 - Pigment colours come only from `pigments.js` (`hex` masstone, `tint`
   wash). Paper is `#f3f2ee`, ink `#151413`. No other hues, no gradients as
   decoration, no grey drop shadows. Depth comes from the medium: powder,
@@ -129,7 +133,39 @@ incoming section's top moves from 85% to 65% of the viewport, flipping at
 
 Bus events: `drop`, `stir` (above), `order` — `{ id, qty }` an item was added
 to the order (shop listens; anything may emit), `select-pigment` — `{ id }`
-(library → mix lab, optional).
+(library → mix lab, optional), and:
+
+- `jump` — `{ phase: 'start' }`, then `{ phase: 'end', reason }` (main.js
+  emits). Every programmatic smooth scroll is a jump: anchor and nav links,
+  the skip link, back and forward, and `ctx.scrollTo(target, opts)` unless
+  `opts.immediate`. While it runs `ctx.jumping` is true and the palette holds
+  `field`, `from`, `to`, `mix`, `color` and `ink` at their values from when it
+  started (`section`, `progress` and `velocity` keep updating, and listeners
+  are still notified). It ends when the scroll arrives, when the visitor takes
+  over (wheel, touch, a press outside an in-page link, scrolling keys), when
+  something else stops the scroll, or at the latest its duration + 600 ms
+  after it began. Then `ctx.jumping` is false, the palette recomputes at once
+  (listeners see one change, straight from the origin field to the
+  destination) and `end` is emitted. So the dish makes one clean pour of the
+  destination, or one clean wipe when it is paper, and never pours the fields
+  passed on the way. Starts and ends are always balanced: a jump that replaces
+  another ends it first, and the palette stays held across the hand-over.
+  `ctx.scrollTo(y, { immediate: true })` is not a jump: it lands in one frame
+  and the palette follows it like any scroll.
+- `tone` — `{ field }` (grind emits, nav listens). `{ field: 'ultramarine' }`
+  when the grind flood has filled the screen and the lab's text re-inks to the
+  light ink; `{ field: null }` when the wash-out re-inks it to paper ink. While
+  an override is set the nav (ink, band and CTA) tones exactly as if the
+  palette's field were that pigment; it drops the override on `null`, when the
+  palette's section is no longer `grind`, or when a jump starts.
+
+main.js also keeps the reader's place when the window's size or orientation
+changes (on phones and tablets, height-only changes under 120 px, the
+toolbars, are ignored): it keeps a reading anchor (the first block of text
+under the nav, or the paragraph being read) while scrolling and puts it back
+once the new layout settles, holding the palette meanwhile. Sections that
+re-lay themselves out on resize should do so in a ResizeObserver or on
+ScrollTrigger's refresh, which it waits for.
 
 ## 9. Engineering contract
 
@@ -145,9 +181,10 @@ to the order (shop listens; anything may emit), `select-pigment` — `{ id }`
   registered), `lenis`, `spectral.js` (Kubelka–Munk pigment mixing, MIT). No
   other packages.
 - `ctx`: `gsap, ScrollTrigger, SplitText, lenis, palette, pigments,
-  reducedMotion, skipIntro, isTouch, isMobile(), dpr, ready, emit, on,
-  scrollTo`. `ctx.pigments` = `{ PIGMENTS, BY_ID, CHAPTERS, PAPER, SOURCES,
-  formatPrice }`.
+  reducedMotion, skipIntro, isTouch, isMobile(), dpr, ready, jumping, emit,
+  on, scrollTo`. `ctx.pigments` = `{ PIGMENTS, BY_ID, CHAPTERS, PAPER,
+  SOURCES, formatPrice, fieldCSS, inkAlpha, contrast }`. `ctx.jumping` is true
+  while a jump runs (§8).
 - Heavy work (WebGL, big canvases) never runs synchronously in `init()`:
   defer to `ctx.ready` or near-view. Render only while on screen; pause when
   the tab is hidden; cap DPR at `ctx.dpr`.

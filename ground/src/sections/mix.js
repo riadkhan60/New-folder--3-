@@ -900,6 +900,79 @@ export function init(ctx) {
     if (visible) dropNearWell()
   })
 
+  // Touch: a native range jumps to wherever a finger lands, so a swipe up the
+  // page across the strips would change the ratio. Where the main pointer is
+  // coarse, a pad over the strips (mix.css) takes the finger instead: a
+  // sideways drag or a tap sets the ratio, a vertical swipe only scrolls the
+  // page (touch-action: pan-y). Mouse and keyboard keep the input itself, and
+  // the pad drives it, so its input and change events run as before.
+  const pad = document.createElement('span')
+  pad.className = 'mix__range-pad'
+  pad.setAttribute('aria-hidden', 'true')
+  // without pointer events the pad would only be in the way: leave the input
+  if (window.PointerEvent) range.after(pad)
+  const THUMB = 28 // the input's thumb (mix.css): its centre runs from 14 px to width - 14 px
+  const SLOP = 8 // px a touch moves before it counts as a drag or a scroll
+  let grab = null // { id, x0, y0, v0, on }
+  let dragged = false // the last press was a drag, so its click is not a tap
+  const commit = (v0) => range.value !== v0 && range.dispatchEvent(new Event('change', { bubbles: true }))
+  function slideTo(clientX) {
+    const b = pad.getBoundingClientRect()
+    const v = Math.min(100, Math.max(0, Math.round(((clientX - b.left - THUMB / 2) / Math.max(1, b.width - THUMB)) * 100)))
+    if (v === +range.value) return
+    range.value = String(v)
+    range.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  function take(e) {
+    grab.on = true
+    try {
+      pad.setPointerCapture(e.pointerId)
+    } catch {}
+    // a mouse press focuses the input, as on the input itself; a finger
+    // leaves focus where it is (focusing from script would show the
+    // keyboard's focus ring on the knob)
+    if (e.pointerType === 'mouse' && document.activeElement !== range) range.focus({ preventScroll: true })
+    slideTo(e.clientX)
+  }
+  function letGo(e) {
+    if (!grab || e.pointerId !== grab.id) return
+    const g0 = grab
+    grab = null
+    if (!g0.on) return
+    dragged = true
+    commit(g0.v0)
+  }
+  pad.addEventListener('pointerdown', (e) => {
+    if (grab || !e.isPrimary || e.button > 0) return
+    dragged = false
+    grab = { id: e.pointerId, x0: e.clientX, y0: e.clientY, v0: range.value, on: false }
+    if (e.pointerType === 'mouse') {
+      e.preventDefault() // a mouse drags at once, as on the input, and selects no text
+      take(e)
+    }
+  })
+  pad.addEventListener('pointermove', (e) => {
+    if (!grab || e.pointerId !== grab.id) return
+    if (grab.on) return slideTo(e.clientX)
+    const dx = Math.abs(e.clientX - grab.x0)
+    const dy = Math.abs(e.clientY - grab.y0)
+    if (dy >= SLOP && dy >= dx) grab = null // up or down: the page scrolls, the ratio stays
+    else if (dx >= SLOP) take(e)
+  })
+  pad.addEventListener('pointerup', letGo)
+  pad.addEventListener('pointercancel', letGo)
+  // a tap (browsers send no click for a swipe, or for a touch that stops a
+  // fling) puts the ratio where the finger landed, as a slider does
+  pad.addEventListener('click', (e) => {
+    if (dragged) {
+      dragged = false
+      return
+    }
+    const v0 = range.value
+    slideTo(e.clientX)
+    commit(v0)
+  })
+
   presets.forEach((b) =>
     b.addEventListener('click', () => {
       set({ a: b.dataset.a, b: b.dataset.b, r: +b.dataset.r / 100 }, { pour: true, announce: true })
@@ -910,7 +983,9 @@ export function init(ctx) {
     if (!BY_ID[id]) return
     let b = S.b
     if (b === id) b = id === 'yellow-ochre' ? 'ultramarine' : 'yellow-ochre'
-    set({ a: id, b }, { pour: true, announce: true })
+    // a ratio chosen for the old pair means nothing for the new one, and at
+    // either end it would leave the handed-over pigment out: start it at half
+    set({ a: id, b, r: 0.5 }, { pour: true, announce: true })
   })
 
   // pointer: the light on the paint shifts as you move, like tilting the dish

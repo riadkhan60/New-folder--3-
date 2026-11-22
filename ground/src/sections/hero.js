@@ -12,10 +12,23 @@
  * seconds the headline gives up one of its colour words in turn (shell,
  * insect, bone, stone). The word pales as its pigment drops into the open
  * water beside the bloom, a slow current marbles it in, and the word inks
- * up again. A visitor who comes back to the top finds it blooming afresh.
- * The plate caption keeps the record of what is in the water. Pointing at a
- * colour word (or tapping it) lets a wisp of it rise. Every drop is placed
- * in open water, clear of the headline's words, whatever the window.
+ * up again. Pointing at a colour word (or tapping it) lets a wisp of it
+ * rise. Every drop is placed in open water, clear of the headline's words,
+ * whatever the window.
+ *
+ * A visitor who comes back to the top finds it blooming afresh, at the
+ * opening's strength, but only once that is safe (DESIGN.md, contract H):
+ * the page is at the top (the palette's section is 'top'), no jump is
+ * running, the scroll has been still for 300 ms and the field last changed
+ * at least 2.5 s ago, so the drops land after the dish's clear-water wipe
+ * instead of being lifted off with it.
+ *
+ * The plate caption keeps the record of what is in the water, and is always
+ * true: what the hero dropped is forgotten whenever the field changes (a
+ * colour poured over the paper, or the wipe back to paper) and when the hero
+ * goes off screen (on paper the water travels with the page); while its water
+ * is clear the caption fades out, and it is set again when the hero pours.
+ * Drops made further down the page are not counted.
  *
  * After the loader, its hand-over drop of ultramarine (which lands right
  * behind the headline) is adopted as the hero's ultramarine: a current
@@ -23,8 +36,9 @@
  *
  * Emits: 'drop' (via ctx.palette.drop, incl. id 'water') and 'stir'.
  * Listens: 'drop' (to keep the caption true, and to notice the loader's
- * hand-over). Without the dish (html.no-dish) the three drops are shown
- * still in SVG; with reduced motion nothing moves.
+ * hand-over), 'jump' and the palette. Without the dish (html.no-dish) the
+ * three drops are shown still in SVG and the caption names them; with
+ * reduced motion nothing moves.
  */
 import '../styles/hero.css'
 
@@ -50,6 +64,12 @@ const DRIP = { 'bone-black': 0.62, 'tyrian-purple': 0.85, carmine: 0.9, ultramar
 // The dish dries on paper at about this rate (per second). Only used to
 // judge which colours are still visible in the water, for the caption.
 const DRY = 0.14
+// When the hero may bloom afresh (contract H): the scroll still (palette
+// velocity under STILL_V px a frame) for STILL_FOR s, and the field last
+// changed AFTER_FIELD s ago or more (the dish's clear-water wipe is done)
+const STILL_V = 0.2
+const STILL_FOR = 0.3
+const AFTER_FIELD = 2.5
 // pigment names that keep their capital inside a sentence
 const PROPER = /^(Egyptian|Tyrian)\b/
 
@@ -217,9 +237,20 @@ export function init(ctx) {
   const clock = () => (performance.now() - hiddenFor - (hiddenAt ? performance.now() - hiddenAt : 0)) / 1000
   const water = new Map() // id → { t, a: amount, w: amount × radius² }
   const left = (e, t) => Math.exp(-DRY * (t - e.t))
+  let inView = true // the hero fills enough of the screen (see the observer below)
+  let washed = false // the hero's water was washed away: it is to bloom afresh
+  // The caption speaks for the live dish. Without it (html.no-dish) the still
+  // drops are shown, and the caption names them as written.
+  const liveCaption = () => !html.classList.contains('no-dish')
   ctx.on('drop', (d) => {
     const id = d?.id
     if (!id || !pigments.BY_ID[id]) return // clear water lifts colour; it adds none
+    // only what goes into the hero's own water, not a drop made further down
+    // the page (a specimen in the drawer, a swatch in the library…)
+    if (!inView) return
+    const box = root.getBoundingClientRect()
+    const y = (d.y ?? 0.5) * window.innerHeight
+    if (y < box.top || y > box.bottom) return
     const t = clock()
     const a = d.amount ?? 1
     const r = d.radius ?? 0.12
@@ -227,10 +258,6 @@ export function init(ctx) {
     // a wisp of a colour that is already blooming doesn't replace the bloom
     if (prev && prev.w * left(prev, t) > a * r * r) return
     water.set(id, { t, a, w: a * r * r })
-  })
-  // pouring a field washes the paper's drops away
-  ctx.palette.onChange((st) => {
-    if (st.field !== 'paper' && water.size) water.clear()
   })
   function inWater() {
     const t = clock()
@@ -242,20 +269,79 @@ export function init(ctx) {
       .sort((x, y) => x.t - y.t)
       .map((e) => e.id)
   }
+  // The caption names `ids`; with none, the water is clear and it fades out
+  // (capHTML is then ''). It is only ever set from what is in the water.
   let capTl = null
-  function setCaption(ids) {
-    if (!capText || !ids.length) return
-    const next = captionHTML(ids)
-    if (!next || next === capHTML) return
+  let capShown = false // the opening has got as far as the caption
+  function setCaption(ids, fadeIn = 1.3) {
+    if (!capText || !liveCaption()) return
+    const next = ids.length ? captionHTML(ids) : ''
+    if (next === capHTML) return
+    const shown = !!capHTML
     capHTML = next
     capTl?.kill()
-    capTl = gsap
-      .timeline()
-      .to(capText, { opacity: 0, duration: 0.45, ease: 'power1.in' })
+    capTl = gsap.timeline()
+    // (autoAlpha: once faded out it is hidden from screen readers too)
+    if (shown) capTl.to(capText, { autoAlpha: 0, duration: next ? 0.45 : 0.6, ease: 'power1.in' })
+    else capTl.set(capText, { autoAlpha: 0 })
+    if (!next) return
+    capTl
       .add(() => {
         capText.innerHTML = next
       })
-      .to(capText, { opacity: 1, duration: 1.3, ease: 'power2.out' })
+      .to(capText, { autoAlpha: 1, duration: fadeIn, ease: 'power2.out' })
+  }
+  // Whatever the hero dropped is gone: a colour was poured over the paper,
+  // the dish wiped back to paper, or the water went off with the page.
+  function forget() {
+    water.clear()
+    washed = true
+    setCaption([])
+  }
+
+  /* --------------------------------------- when it may bloom afresh (H) */
+  let field = ctx.palette.get().field
+  let fieldAt = -Infinity // when the palette's field last changed (clock)
+  let movedAt = -Infinity // when the page last moved (clock)
+  ctx.palette.onChange((st) => {
+    const t = clock()
+    if (ctx.jumping || Math.abs(st.velocity || 0) > STILL_V) movedAt = t
+    if (st.field === field) return
+    field = st.field
+    fieldAt = t
+    forget()
+  })
+  ctx.on('jump', () => {
+    movedAt = clock()
+  })
+  const mayBloom = () => {
+    const st = ctx.palette.get()
+    const t = clock()
+    return (
+      st.section === 'top' &&
+      st.field === 'paper' &&
+      !ctx.jumping &&
+      t - movedAt >= STILL_FOR &&
+      t - fieldAt >= AFTER_FIELD
+    )
+  }
+  // The dish's context can be lost (and come back): without it the still
+  // drops show and the caption names them; with it back the water is new.
+  if (capText) {
+    let live = liveCaption()
+    new MutationObserver(() => {
+      if (live === liveCaption()) return
+      live = liveCaption()
+      if (live) {
+        forget()
+        return wake(0.5)
+      }
+      capTl?.kill()
+      capHTML = captionHTML(DROPS.map((d) => d.id))
+      capText.innerHTML = capHTML
+      // (before the opening has shown the caption, it shows it then)
+      if (capShown) gsap.to(capText, { autoAlpha: 1, duration: 0.6, ease: 'power2.out' })
+    }).observe(html, { attributes: true, attributeFilter: ['class'] })
   }
 
   /* ------------------------------------------------- settle, like pigment */
@@ -284,10 +370,11 @@ export function init(ctx) {
     })
   } else gsap.set(title, { opacity: 0 })
   gsap.set(ins, { opacity: 0, y: 14, filter: 'blur(6px)' })
-  // the caption's words fade in (its paragraph is left to the scroll lift, so
-  // a visitor who scrolls before it has appeared still finds it on return)
+  // the caption's words fade in once the drops are in (its paragraph is left
+  // to the scroll lift); until then it names nothing
   const capIn = capText || caption
-  if (capIn) gsap.set(capIn, { opacity: 0 })
+  if (capIn) gsap.set(capIn, { autoAlpha: 0 })
+  if (capText && liveCaption()) capHTML = ''
   if (cueRule) gsap.set(cueRule, { scaleY: 0 })
 
   /* ------------------------------------------------------------ the bloom */
@@ -390,7 +477,9 @@ export function init(ctx) {
 
   // The three drops go in one after another, and a slow current round the
   // ultramarine keeps them marbling. `again`: the hero blooms afresh for a
-  // visitor who comes back to it, and the words give their colour up.
+  // visitor who comes back to it, and the words give their colour up. Once
+  // the last is in, the caption names what went into the water (the opening
+  // sets it at its own time, so this only catches a late drop there).
   function pour(sp, { skipFirst = false, again = false } = {}) {
     bloomAt = sp
     const k = scale()
@@ -398,6 +487,11 @@ export function init(ctx) {
     DROPS.forEach((d, i) => {
       if (i === 0 && skipFirst) return // the loader's drop is our ultramarine
       gsap.delayedCall(d.at * (again ? 0.85 : 1), () => {
+        if (i === DROPS.length - 1) {
+          gsap.delayedCall(0.3, () => {
+            if (capShown && !washed) setCaption(inWater(), again ? 1.3 : 1.6)
+          })
+        }
         if (again && !inView) return
         const y = sp[i].y + moved(top0)
         if (y < 0 || y > 1) return // the visitor has already scrolled it away
@@ -413,7 +507,11 @@ export function init(ctx) {
   function bloom() {
     offHand()
     const r = root.getBoundingClientRect()
-    if (r.bottom < window.innerHeight * 0.35) return // landed elsewhere (deep link)
+    if (r.bottom < window.innerHeight * 0.35) {
+      // landed elsewhere (deep link): it blooms when the visitor comes up
+      washed = true
+      return
+    }
     const sp = spots()
     if (handed) carry(handed, sp[0])
     pour(sp, { skipFirst: !!handed })
@@ -435,12 +533,12 @@ export function init(ctx) {
   // While the hero is on screen, every few seconds the next colour word of
   // the headline drops its pigment beside the bloom, so the water never dries
   // out under the headline. A visitor who comes back to the top finds it
-  // blooming again. Stops off screen and in a hidden tab; never runs without
-  // the live dish.
+  // blooming again (when it is safe to: mayBloom). Stops off screen and in a
+  // hidden tab; never runs without the live dish.
   const dishLive = () => html.classList.contains('dish-on') && !html.classList.contains('no-dish')
   let ambient = false // on once the opening has played
-  let inView = true
   let dripT = null
+  let bloomT = null // waiting to bloom afresh
   let turn = 1 // the stone (ultramarine) went in with the bloom: the shell is next
   let ringAt = 0
   // about every seven seconds (a little less often on a phone, to spare it)
@@ -453,31 +551,57 @@ export function init(ctx) {
   function rest() {
     dripT?.kill()
     dripT = null
+    bloomT?.kill()
+    bloomT = null
   }
   function wake(delay = 1.4) {
-    if (!ambient || !inView || document.hidden || dripT) return
+    if (!ambient || !inView || document.hidden || dripT || bloomT) return
     schedule(delay)
+  }
+  // where the bloom goes, if its water is on screen and clear of the bar
+  function bloomSpots() {
+    const vh = window.innerHeight
+    const L = layout()
+    const sp = spots(L)
+    const c = sp[0]
+    const s = Math.min(window.innerWidth, vh)
+    return c.y * vh < L.navH + 0.05 * s || c.y > 0.92 ? null : { L, sp }
+  }
+
+  // The hero's water is clear (washed away, or dried): the caption fades out,
+  // and the hero blooms afresh once it may (contract H), at the opening's
+  // strength; the caption is set again once the drops are in (pour).
+  function awaitBloom() {
+    bloomT?.kill()
+    bloomT = null
+    if (!ambient || !inView || document.hidden || !dishLive()) return
+    setCaption([])
+    const at = mayBloom() ? bloomSpots() : null
+    if (!at) {
+      bloomT = gsap.delayedCall(0.1, awaitBloom)
+      return
+    }
+    washed = false
+    pour(at.sp, { again: true })
+    schedule(every() + 2)
   }
 
   function drip() {
     dripT = null
     if (!inView || document.hidden || html.classList.contains('no-dish')) return
-    if (!dishLive() || ctx.palette.get().field !== 'paper') return schedule(3)
+    if (!dishLive()) return schedule(3)
+    // the water went off with the page, was wiped, or has dried: bloom afresh
+    // (awaitBloom waits for the jump, the scroll and the wipe)
+    if (washed || !inWater().length) return awaitBloom()
+    if (ctx.palette.get().field !== 'paper' || ctx.jumping) return schedule(3)
+    const at = bloomSpots()
+    // only while the bloom's water is on screen, clear of the bar
+    if (!at) return schedule(2.5)
+    const { L, sp } = at
     const vw = window.innerWidth
     const vh = window.innerHeight
     const s = Math.min(vw, vh)
-    const L = layout()
-    const sp = spots(L)
     const c = sp[0]
-    // only while the bloom's water is on screen, clear of the bar
-    if (c.y * vh < L.navH + 0.05 * s || c.y > 0.92) return schedule(2.5)
-
-    // the water has dried, or went off with the page: bloom afresh
-    if (!inWater().length) {
-      pour(sp, { again: true })
-      gsap.delayedCall(2.4, () => setCaption(inWater()))
-      return schedule(every() + 2)
-    }
 
     const words = [...root.querySelectorAll('.hero__word')] // SplitText's revert makes new nodes
     const word = words[turn++ % words.length]
@@ -533,13 +657,13 @@ export function init(ctx) {
       if (v === inView) return
       inView = v
       if (v) {
-        setCaption(inWater())
-        wake(inWater().length ? 1.4 : 0.6)
+        if (!washed) setCaption(inWater())
+        wake(washed || !inWater().length ? 0.3 : 1.4)
       } else {
         rest()
         // on paper the water travels with the page: the hero's colours have
         // gone off the top of the screen with it
-        water.clear()
+        forget()
       }
     },
     { threshold: [0, 0.15, 0.25, 0.35, 0.5, 0.7] }
@@ -575,7 +699,15 @@ export function init(ctx) {
     tl.add(() => bloom(), 0)
     tl.to(ins, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.4, ease: 'settle', stagger: 0.14 }, 1.15)
     if (cueRule) tl.to(cueRule, { scaleY: 1, duration: 1.2, ease: 'pour' }, 1.5)
-    if (capIn) tl.to(capIn, { opacity: 1, duration: 1.6, ease: 'power2.out' }, 2.6)
+    // the record, once the drops are in: only what went into the water (a
+    // visitor who has scrolled on, or landed further down, finds it empty)
+    if (capIn) {
+      tl.add(() => {
+        capShown = true
+        if (!capText || !liveCaption()) gsap.to(capIn, { autoAlpha: 1, duration: 1.6, ease: 'power2.out' })
+        else if (!washed) setCaption(inWater(), 1.6)
+      }, 2.6)
+    }
     tl.add(() => {
       // crisp again: restore kerning and plain text
       if (split) {

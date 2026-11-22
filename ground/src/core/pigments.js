@@ -25,7 +25,7 @@ export const PIGMENTS = [
     tint: '#e8c98a',
     ink: '#1d1307',
     fact:
-      'The oldest colour people used. A paint workshop about 100,000 years old, with ochre mixed and stored in abalone shells, was found in Blombos Cave, South Africa.',
+      'Ochre, yellow and red, is the oldest colour people used. In Blombos Cave, South Africa, people mixed it and stored it in abalone shells about 100,000 years ago.',
     price: 14,
     unit: '50 g',
     sold: true,
@@ -38,8 +38,8 @@ export const PIGMENTS = [
     origin: 'Cyprus',
     formula: 'Fe<sub>2</sub>O<sub>3</sub>',
     chemistry: 'Hematite, an iron oxide',
-    era: 'Prehistoric',
-    year: -90000,
+    era: 'At least 100,000 years ago',
+    year: -100000,
     hex: '#9e3b22',
     tint: '#d9937d',
     ink: '#fbeee8',
@@ -258,20 +258,54 @@ export const SOURCES = {
 
 export const formatPrice = (p) => (p == null ? null : '£' + p.toLocaleString('en-GB'))
 
+/* ----------------------------------------------------------- legible inks */
+const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+const lin = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+const luminance = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+/** WCAG contrast ratio of two [r, g, b] colours (1 … 21). */
+export function contrast(a, b) {
+  const x = luminance(a)
+  const y = luminance(b)
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+
+/**
+ * The alpha for a softer ink: the lowest one, never below `base`, at which
+ * `ink` laid over `field` (both #rrggbb) still reads at 4.5:1 or more, as the
+ * browser paints it (8-bit alpha, 8-bit channels; a hair of margin on top).
+ * If even full ink can't reach 4.5:1, full ink.
+ */
+export function inkAlpha(ink, field, base, min = 4.5) {
+  const f = rgbOf(field)
+  const k = rgbOf(ink)
+  for (let i = Math.round(base * 100); i < 100; i++) {
+    const a = Math.round((i / 100) * 255) / 255
+    const seen = k.map((v, c) => Math.round(v * a + f[c] * (1 - a)))
+    if (contrast(seen, f) >= min + 0.05) return i / 100
+  }
+  return 1
+}
+
 /**
  * The field colours as CSS: one rule per pigment (and paper), keyed by
- * [data-field], setting --field, --tint, --ink, --ink-2, --ink-3 and --line.
+ * [data-field] (or another attribute), setting --field, --tint, --ink,
+ * --ink-2, --ink-3 and --line. --ink-2 and --ink-3 are the ink at 0.84 and
+ * 0.68, raised per field where that would read below 4.5:1 on the field
+ * (Egyptian blue, the ochres, carmine…), so small text in any ink is legible.
  * vite.config.js inlines this into index.html at build time, so every field
  * has its colours before any script runs (and without JavaScript at all);
  * palette.js injects it only if that inline copy is missing.
  */
-export function fieldCSS() {
-  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ')
+export function fieldCSS(attr = 'data-field') {
   return [PAPER, ...PIGMENTS]
-    .map(
-      (p) =>
-        `[data-field="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
-        `--ink-2:rgb(${rgb(p.ink)} / 0.84);--ink-3:rgb(${rgb(p.ink)} / 0.68);--line:rgb(${rgb(p.ink)} / 0.24);}`
-    )
+    .map((p) => {
+      const ink = rgbOf(p.ink).join(' ')
+      return (
+        `[${attr}="${p.id}"]{--field:${p.hex};--tint:${p.tint};--ink:${p.ink};` +
+        `--ink-2:rgb(${ink} / ${inkAlpha(p.ink, p.hex, 0.84)});--ink-3:rgb(${ink} / ${inkAlpha(p.ink, p.hex, 0.68)});` +
+        `--line:rgb(${ink} / 0.24);}`
+      )
+    })
     .join('\n')
 }

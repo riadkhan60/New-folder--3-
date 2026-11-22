@@ -20,6 +20,13 @@
   max-width: 13em;
 }
 .grind__title em { font-style: italic; }
+/* optical kerning the upright Bodoni leaves open at display size, after the
+   w of "own" (as the hero's); the word is kept whole for the line split */
+.grind__w { white-space: nowrap; }
+.grind__k { letter-spacing: -0.075em; }
+/* the reveal's line masks (SplitText) would clip the tail of the y in
+   "your"; once the lines are up (grind.js) they let the descenders hang */
+#grind .grind__title.is-set > div { overflow: visible !important; }
 .grind__lead {
   grid-column: 9 / span 4;
   padding-bottom: 0.4em;
@@ -339,8 +346,10 @@
   gap: var(--s-3);
   padding-top: var(--s-2);
 }
+/* a finger that presses and holds grinds; one that swipes from the button
+   scrolls the page (the browser cancels the press, grind.js lets go) */
 .grind__hold {
-  touch-action: none;
+  touch-action: pan-y pinch-zoom;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -432,15 +441,18 @@
 }
 
 /* the flood: while the dish is ultramarine, the lab takes the field's ink
-   (the .wrap borrows data-field="ultramarine"); colours cross-fade */
+   (the .wrap borrows data-field="ultramarine"; each block holds paper ink
+   until the blue reaches it, grind.js). A block turns as the colour behind
+   it crosses from light to dark, so the ink turns quickly: it is past the
+   middle grey in a few hundredths of a second, then settles */
 #grind.is-tinting .wrap,
 #grind.is-tinting .wrap *:not(canvas) {
   transition:
-    color 0.9s var(--ease-out),
-    background-color 0.9s var(--ease-out),
-    border-color 0.9s var(--ease-out),
-    box-shadow 0.9s var(--ease-out),
-    stroke 0.9s var(--ease-out) !important;
+    color 0.3s var(--ease-out),
+    background-color 0.3s var(--ease-out),
+    border-color 0.3s var(--ease-out),
+    box-shadow 0.3s var(--ease-out),
+    stroke 0.3s var(--ease-out) !important;
 }
 
 @keyframes grind-hit {

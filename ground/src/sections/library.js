@@ -566,6 +566,7 @@ export function init(ctx) {
   const factEl = dlg.querySelector('.lib-plate__fact')
   const countEl = dlg.querySelector('.lib-plate__count')
   const orderBtn = dlg.querySelector('[data-act="order"]')
+  const mixBtn = dlg.querySelector('[data-act="mix"]')
   const said = dlg.querySelector('.lib-plate__said')
   const prevBtn = dlg.querySelector('[data-act="prev"]')
   const nextBtn = dlg.querySelector('[data-act="next"]')
@@ -611,7 +612,12 @@ export function init(ctx) {
       ? `${formatPrice(p.price)} for ${p.unit}${p.rare ? `. ${p.rare}` : ''}`
       : 'Archive only: toxic. We keep it for its history, and do not sell it.'
     dlg.classList.toggle('is-archive', !p.sold)
+    // an archive colour has no "Add to order": if that button had focus (the
+    // arrows step onto an archive plate), focus moves on to "Mix it", which
+    // takes its place, instead of dropping to the page behind the plate
+    const orderHadFocus = document.activeElement === orderBtn
     orderBtn.hidden = !p.sold
+    if (orderHadFocus && orderBtn.hidden) mixBtn.focus()
     said.textContent = ''
     countEl.textContent = `${i + 1} of ${items.length}, oldest first`
     const prev = items[i - 1]
@@ -780,7 +786,7 @@ export function init(ctx) {
     saidT = setTimeout(() => (said.textContent = ''), 4000)
     ctx.palette?.drop(p.id, { x: 0.62, y: 0.7, amount: 0.6, radius: 0.08 })
   })
-  dlg.querySelector('[data-act="mix"]').addEventListener('click', () => {
+  mixBtn.addEventListener('click', () => {
     const p = items[cur]?.p
     if (!p) return
     ctx.emit('select-pigment', { id: p.id })

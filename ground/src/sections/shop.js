@@ -78,6 +78,28 @@ const mixRgb = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)))
 const css = (c, a = 1) => `rgb(${c[0]} ${c[1]} ${c[2]} / ${a})`
 const INK = [21, 20, 19]
 const WHITE = [255, 255, 255]
+const INK_HEX = '#151413'
+const PAPER_HEX = '#f3f2ee'
+const lum = (h) => {
+  const [r, g, b] = rgbOf(h).map((v) => {
+    v /= 255
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+const contrast = (a, b) => {
+  const x = lum(a)
+  const y = lum(b)
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+/** "Added to order": the jar's masstone rises into the button, lettered in
+ *  the pigment's own ink, or else in ink or paper, whichever reads (4.5:1).
+ *  Where nothing reads on the masstone (malachite's mid green), its wash
+ *  rises instead, lettered in ink. Returns [fill, letters]. */
+function addColours(p) {
+  const pairs = [[p.hex, p.ink], [p.hex, INK_HEX], [p.hex, PAPER_HEX], [p.tint, INK_HEX]]
+  return pairs.find(([f, l]) => contrast(f, l) >= 4.5) || pairs[0]
+}
 function hash(s) {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
@@ -803,6 +825,9 @@ export function init(ctx) {
     li.style.setProperty('--pig', p.hex)
     li.style.setProperty('--pig-tint', p.tint)
     li.style.setProperty('--pig-ink', p.ink)
+    const [fill, letters] = addColours(p)
+    li.style.setProperty('--add-fill', fill)
+    li.style.setProperty('--add-ink', letters)
     const tall = li.dataset.kind === 'vial'
     put(li.querySelector('.jar__name'), tall ? p.name.split(' ').join('<br>') : p.name, tall)
     put(li.querySelector('.jar__formula'), p.formula, true)
@@ -1392,9 +1417,19 @@ export function init(ctx) {
   /* ---------------------------------------------------------- phone bar */
   const mqPhone = window.matchMedia('(max-width: 767px)')
   let open = false
+  // The sheet rises out of the bar, so the bar must be on the bottom of the
+  // screen. Past the sets the bar has come to rest and rides up with the
+  // page (it never follows into the footer): bring it back down first, in
+  // one frame (not a jump: the field is paper either way).
+  function seatBar() {
+    const gap = window.innerHeight - bar.getBoundingClientRect().bottom
+    if (gap < 2) return
+    ctx.scrollTo(Math.max(0, Math.round(window.scrollY - gap)), { immediate: true, force: true })
+  }
   function setOpen(v, { focus = false } = {}) {
     open = v
     if (v) hideToast()
+    if (v && mqPhone.matches) seatBar()
     bar.setAttribute('aria-expanded', String(v))
     panel.classList.toggle('is-open', v)
     sheet.hidden = mqPhone.matches ? !v : false
