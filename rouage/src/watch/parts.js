@@ -119,7 +119,7 @@ export function spiral(r0, r1, turns, twist = 0, n = 150) {
 }
 
 /** A mainspring in its barrel: coils sit near the arbor when wound, near the wall when run down. */
-export function mainspring(r0, r1, turns, wound, n = 260) {
+export function mainspring(r0, r1, turns, wound, n = 560) {
   const g = 0.45 + 1.75 * wound // > 1 crowds the coils inwards
   let d = ''
   for (let i = 0; i <= n; i++) {
