@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Atelier Rouage</title>
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <!-- Scroll-driven layout is switched on only when scripts can run. -->
+    <script>document.documentElement.classList.add('js')</script>
+    <meta
+      name="description"
+      content="Atelier Rouage makes one watch: the R-01, wound by hand, with its gear train on the dial side. It runs on your time, right on the page."
+    />
+    <meta name="theme-color" content="#101214" />
+    <meta property="og:title" content="Atelier Rouage" />
+    <meta property="og:description" content="A watch that shows its work." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&display=swap"
+    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" data-nav data-intro data-tone="dark">
+      <a class="nav__brand" href="#top" aria-label="Atelier Rouage, back to the top">Rouage</a>
+      <nav class="nav__links" aria-label="Sections">
+        <a href="#inside">Inside</a>
+        <a href="#heartbeat">Heartbeat</a>
+        <a href="#finish">Finish</a>
+        <a href="#yours">Yours</a>
+      </nav>
+      <div class="nav__right">
+        <span class="nav__time" aria-hidden="true"><i></i><span data-localtime>10:10:30</span></span>
+        <a class="btn btn--small" href="#list">Join the list</a>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <!-- ============ The watch: hero, then taken apart ============ -->
+      <section class="stage" id="top" data-tone="dark" aria-label="The R-01">
+        <span class="stage__mark" id="inside"></span>
+        <div class="stage__pin">
+          <div class="stage__light" aria-hidden="true"></div>
+
+          <div class="stage__watch" data-stage-watch>
+            <!-- @watch w1 -->
+            <p class="hint" data-hint aria-hidden="true"><span>Drag the crown to </span>wind</p>
+          </div>
+
+          <div class="hero" data-hero>
+            <p class="eyebrow" data-intro>Atelier Rouage · Besançon · R‑01 Petite Seconde</p>
+            <h1 class="hero__title" data-intro>A watch that shows its work.</h1>
+            <p class="hero__lede" data-intro>
+              The R‑01 is wound by hand and beats five times a second. Its gear train sits on the dial side, so you can
+              see what moves the hands. It is running on your time.
+            </p>
+            <div class="hero__actions" data-intro>
+              <a class="btn" href="#list">Join the waiting list</a>
+              <a class="link" href="#inside">Take it apart</a>
+            </div>
+            <dl class="readout" data-intro aria-label="Live readings from the watch on this page">
+              <div>
+                <dt>Your time</dt>
+                <dd data-localtime>10:10:30</dd>
+              </div>
+              <div>
+                <dt>Rate</dt>
+                <dd>5 beats / s</dd>
+              </div>
+              <div>
+                <dt>Reserve</dt>
+                <dd><span data-reserve>42</span> h</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="inside" data-inside>
+            <div class="inside__head">
+              <p class="eyebrow">Inside the R‑01</p>
+              <h2 class="inside__title">167 parts. One pair of hands.</h2>
+              <p class="inside__lede">Keep scrolling to lift the watch apart, one layer at a time.</p>
+            </div>
+            <ol class="parts" data-parts>
+              <li data-part="crystal"><b>Sapphire crystal</b><span>Domed, 1.6 mm, coated on both faces.</span></li>
+              <li data-part="bezel"><b>Bezel</b><span>316L steel, polished on a tin lap.</span></li>
+              <li data-part="hands"><b>Hands</b><span>Steel, heated to 290 °C until it blues.</span></li>
+              <li data-part="dial"><b>Dial</b><span>Solid silver, brushed and lacquered.</span></li>
+              <li data-part="balance"><b>Balance and hairspring</b><span>Swings 18,000 times an hour.</span></li>
+              <li data-part="bridges"><b>Bridges</b><span>German silver, every edge bevelled.</span></li>
+              <li data-part="train"><b>Going train</b><span>A barrel and four wheels.</span></li>
+              <li data-part="plate"><b>Mainplate</b><span>Brass, striped and pearled by hand.</span></li>
+              <li data-part="band"><b>Case</b><span>38.5 mm across, 9.8 mm tall.</span></li>
+              <li data-part="back"><b>Case back</b><span>Sapphire, held by six screws.</span></li>
+            </ol>
+            <svg class="inside__lines" data-lines aria-hidden="true" focusable="false"></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Heartbeat: the going train on the bench ============ -->
+      <section class="bench" id="heartbeat" data-tone="blue">
+        <div class="wrap bench__grid">
+          <header class="bench__head">
+            <p class="eyebrow">Calibre R‑01 · the going train</p>
+            <h2 class="h2">Five beats a second.</h2>
+            <p class="lede">
+              The mainspring pushes the wheels. The escapement lets them move one tooth at a time, and the balance
+              decides how often. Slow it down to see a single beat, or speed it up and watch the spring run down.
+            </p>
+          </header>
+
+          <div class="bench__main">
+            <div class="bench__view" data-bench>
+              <!-- @bench -->
+            </div>
+            <div class="bench__tools">
+              <button class="chip" type="button" data-zoom aria-pressed="false">Zoom on the escapement</button>
+              <button class="chip" type="button" data-sound aria-pressed="false">Sound off</button>
+            </div>
+          </div>
+
+          <div class="bench__panel">
+            <fieldset class="speed">
+              <legend>Speed</legend>
+              <label><input type="radio" name="speed" id="speed-slow" value="0.05" /><span>Slow motion</span><small>1/20</small></label>
+              <label><input type="radio" name="speed" id="speed-real" value="1" checked /><span>Real time</span><small>×1</small></label>
+              <label><input type="radio" name="speed" id="speed-min" value="60" /><span>A minute a second</span><small>×60</small></label>
+              <label><input type="radio" name="speed" id="speed-hour" value="3600" /><span>An hour a second</span><small>×3,600</small></label>
+            </fieldset>
+
+            <div class="wind">
+              <button class="btn btn--line" type="button" data-wind>Hold to wind</button>
+              <div class="wind__gauge">
+                <div class="meter" role="meter" aria-label="Power reserve in hours" aria-valuemin="0" aria-valuemax="72" aria-valuenow="42" data-meter><i></i></div>
+                <p class="wind__scale" aria-hidden="true"><span>0</span><span>24</span><span>48</span><span>72 h</span></p>
+              </div>
+            </div>
+
+            <dl class="reads">
+              <div><dt>Reserve</dt><dd><span data-b-reserve>41.8</span> h</dd></div>
+              <div><dt>Beats counted</dt><dd data-b-beats>0</dd></div>
+              <div><dt>Time run</dt><dd data-b-time>0 h 00 m 00 s</dd></div>
+              <div><dt>Balance swing</dt><dd><span data-b-amp>264</span>°</dd></div>
+            </dl>
+            <p class="bench__status" data-b-status role="status">Running.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Finishing ============ -->
+      <section class="finish" id="finish" data-tone="light">
+        <div class="wrap">
+          <header class="finish__head">
+            <p class="eyebrow">Finishing</p>
+            <h2 class="h2">Finished where no one looks.</h2>
+            <p class="lede">
+              Every part is decorated by hand, including the faces you never see once the watch is closed. Move across
+              each sample to turn it in the light.
+            </p>
+          </header>
+          <ul class="samples">
+            <li class="sample" data-sample>
+              <div class="sample__view"><i class="cotes"></i><i class="cotes__sheen"></i></div>
+              <h3>Côtes de Genève</h3>
+              <p>Stripes cut across the plate with a turning wooden wheel and abrasive paste.</p>
+              <span class="sample__n">3 h a plate</span>
+            </li>
+            <li class="sample" data-sample>
+              <div class="sample__view"><div class="perlage" data-perlage></div></div>
+              <h3>Perlage</h3>
+              <p>Overlapping circles, pressed one at a time with a spinning peg.</p>
+              <span class="sample__n">1,400 circles</span>
+            </li>
+            <li class="sample" data-sample>
+              <div class="sample__view">
+                <svg class="anglage" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+                  <defs>
+                    <linearGradient id="ang-bevel" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="200" data-bevel>
+                      <stop offset="0" stop-color="#6d7279" />
+                      <stop offset=".42" stop-color="#8d9299" />
+                      <stop offset=".5" stop-color="#ffffff" />
+                      <stop offset=".58" stop-color="#9aa0a6" />
+                      <stop offset="1" stop-color="#5d6268" />
+                    </linearGradient>
+                    <pattern id="ang-grain" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-20)">
+                      <rect width="3" height="1" fill="#fff" opacity=".16" />
+                      <rect y="1.6" width="3" height=".7" fill="#000" opacity=".08" />
+                    </pattern>
+                  </defs>
+                  <rect width="200" height="200" fill="#17191c" />
+                  <path d="M-20 80C40 80 70 60 96 96S130 150 220 138V260H-20Z" fill="#101113" opacity=".7" transform="translate(5 9)" />
+                  <path d="M-20 80C40 80 70 60 96 96S130 150 220 138V260H-20Z" fill="url(#ang-bevel)" />
+                  <path d="M-20 94C38 94 62 76 86 106S128 164 220 152V260H-20Z" fill="#cfcbbf" />
+                  <path d="M-20 94C38 94 62 76 86 106S128 164 220 152V260H-20Z" fill="url(#ang-grain)" />
+                  <circle cx="52" cy="150" r="17" fill="#9a8246" />
+                  <circle cx="52" cy="150" r="13.5" fill="#e8cf8a" />
+                  <circle cx="52" cy="150" r="8.6" fill="#c2134a" />
+                  <circle cx="49" cy="147" r="2.2" fill="#fff" opacity=".85" />
+                </svg>
+              </div>
+              <h3>Anglage</h3>
+              <p>Every edge filed to 45°, then polished with gentian wood until it mirrors.</p>
+              <span class="sample__n">40 h a movement</span>
+            </li>
+            <li class="sample" data-sample>
+              <div class="sample__view"><div class="bleui"><i class="bleui__face"></i><i class="bleui__slot"></i></div></div>
+              <h3>Bleui</h3>
+              <p>Screws laid on hot brass filings until the steel turns cornflower blue.</p>
+              <span class="sample__n">290 °C</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ Yours: configure ============ -->
+      <section class="yours" id="yours" data-tone="dark">
+        <div class="wrap yours__grid">
+          <div class="yours__watch" data-config-watch><!-- @watch w2 lite --></div>
+          <div class="yours__panel">
+            <p class="eyebrow">Made to order</p>
+            <h2 class="h2">Choose yours.</h2>
+            <p class="lede">Thirty watches leave the atelier each year. Each is built for the person who ordered it.</p>
+
+            <form class="config" data-config>
+              <fieldset class="opts">
+                <legend>Dial <b data-pick="dial">Saumon</b></legend>
+                <label class="swatch" style="--sw: #e3a184"><input type="radio" name="dial" id="dial-saumon" value="saumon" checked /><span>Saumon</span></label>
+                <label class="swatch" style="--sw: #a9cad6"><input type="radio" name="dial" id="dial-glacier" value="glacier" /><span>Glacier</span></label>
+                <label class="swatch" style="--sw: #1f5a45"><input type="radio" name="dial" id="dial-foret" value="foret" /><span>Forêt</span></label>
+                <label class="swatch" style="--sw: #444950"><input type="radio" name="dial" id="dial-ardoise" value="ardoise" /><span>Ardoise</span></label>
+                <label class="swatch" style="--sw: #ece4d0"><input type="radio" name="dial" id="dial-ivoire" value="ivoire" /><span>Ivoire</span></label>
+              </fieldset>
+              <fieldset class="opts">
+                <legend>Case <b data-pick="metal">Steel</b></legend>
+                <label class="swatch" style="--sw: #b9bdc2"><input type="radio" name="metal" id="metal-steel" value="steel" checked /><span>Steel</span></label>
+                <label class="swatch" style="--sw: #d9a184"><input type="radio" name="metal" id="metal-rose" value="rose" /><span>Rose gold</span></label>
+              </fieldset>
+              <fieldset class="opts">
+                <legend>Strap <b data-pick="strap">Noir</b></legend>
+                <label class="swatch" style="--sw: #1c1d20"><input type="radio" name="strap" id="strap-noir" value="noir" checked /><span>Noir</span></label>
+                <label class="swatch" style="--sw: #7a4424"><input type="radio" name="strap" id="strap-cognac" value="cognac" /><span>Cognac</span></label>
+                <label class="swatch" style="--sw: #63666c"><input type="radio" name="strap" id="strap-gris" value="gris" /><span>Gris</span></label>
+                <label class="swatch" style="--sw: #1a2848"><input type="radio" name="strap" id="strap-marine" value="marine" /><span>Marine</span></label>
+              </fieldset>
+            </form>
+
+            <div class="yours__sum">
+              <p class="yours__ref">Reference <b data-ref>R01‑SA‑ST‑NO</b></p>
+              <p class="yours__price"><b data-price>€24,800</b> before tax. Delivery in about 14 months.</p>
+              <a class="btn" href="#list" data-request>Request this one</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Specification ============ -->
+      <section class="specs" id="specs" data-tone="light">
+        <div class="wrap specs__grid">
+          <header>
+            <p class="eyebrow">Specification</p>
+            <h2 class="h2">R‑01 Petite Seconde</h2>
+          </header>
+          <dl class="spec">
+            <div><dt>Movement</dt><dd>Calibre R‑01, wound by hand</dd></div>
+            <div><dt>Rate</dt><dd>18,000 vibrations an hour (2.5 Hz)</dd></div>
+            <div><dt>Power reserve</dt><dd>72 hours</dd></div>
+            <div><dt>Parts</dt><dd>167, including 21 jewels</dd></div>
+            <div><dt>Shows</dt><dd>Hours, minutes, small seconds, power reserve</dd></div>
+            <div><dt>Case</dt><dd>316L steel or 18 ct rose gold, 38.5 × 9.8 mm</dd></div>
+            <div><dt>Crystal</dt><dd>Sapphire, front and back</dd></div>
+            <div><dt>Water resistance</dt><dd>50 m</dd></div>
+            <div><dt>Strap</dt><dd>Calf leather with a pin buckle</dd></div>
+            <div><dt>Production</dt><dd>30 watches a year</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ============ The waiting list ============ -->
+      <section class="list" id="list" data-tone="light">
+        <div class="wrap list__grid">
+          <header>
+            <p class="eyebrow">The waiting list</p>
+            <h2 class="h2">Ask for a place.</h2>
+            <p class="lede">Tell us who you are and which watch you have in mind. We answer every request ourselves.</p>
+            <p class="list__note">No payment is taken here. Atelier Rouage is a fictional company, so the form sends nothing.</p>
+          </header>
+
+          <form class="form" data-form novalidate>
+            <div class="field">
+              <label for="f-name">Name</label>
+              <input id="f-name" name="name" type="text" autocomplete="name" required aria-describedby="f-name-err" />
+              <p class="field__err" id="f-name-err" hidden>Enter your name.</p>
+            </div>
+            <div class="field">
+              <label for="f-email">Email</label>
+              <input id="f-email" name="email" type="email" autocomplete="email" required aria-describedby="f-email-err" />
+              <p class="field__err" id="f-email-err" hidden>Enter an email address, like name@example.com.</p>
+            </div>
+            <div class="field">
+              <label for="f-country">Country</label>
+              <input id="f-country" name="country" type="text" autocomplete="country-name" />
+            </div>
+            <div class="field">
+              <label for="f-ref">Your watch</label>
+              <input id="f-ref" name="ref" type="text" value="R‑01 · Saumon · Steel · Noir" readonly />
+            </div>
+            <div class="field field--wide">
+              <label for="f-note">Anything we should know <span>(optional)</span></label>
+              <textarea id="f-note" name="note" rows="3"></textarea>
+            </div>
+            <button class="btn" type="submit">Send the request</button>
+          </form>
+
+          <div class="done" data-done hidden tabindex="-1">
+            <p class="eyebrow">Received</p>
+            <p class="done__title" data-done-title>Thank you.</p>
+            <p class="lede">
+              This is where the atelier would write back. Atelier Rouage is a fictional company, so your request was not
+              sent or stored anywhere.
+            </p>
+            <button class="link" type="button" data-again>Write another request</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot" data-tone="dark">
+      <div class="wrap">
+        <p class="foot__mark" aria-hidden="true">Rouage</p>
+        <div class="foot__row">
+          <p class="foot__note">
+            Atelier Rouage is a fictional company, made as a design demonstration. No watches are for sale, and nothing
+            you type on this page is sent or stored.
+          </p>
+          <p class="foot__time">Your time <b data-localtime>10:10:30</b></p>
+          <a class="link" href="#top">Back to the top</a>
+        </div>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

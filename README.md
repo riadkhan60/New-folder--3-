@@ -62,3 +62,17 @@ cd ground
 npm install
 npm run dev
 ```
+
+## Also in this branch: Atelier Rouage
+
+`rouage/` is a third, separate website: **Atelier Rouage**, a fictional
+watchmaker with one watch. The watch is drawn entirely in code (HTML, SVG and
+CSS, no images and no WebGL), runs on the visitor's local time with a working
+escapement, can be wound by its crown, and comes apart in 3D as you scroll.
+It is its own Vite project:
+
+```bash
+cd rouage
+npm install
+npm run dev
+```

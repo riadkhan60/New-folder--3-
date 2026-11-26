@@ -1,0 +1,400 @@
+/*
+ * watch.css — the R-01, drawn as flat layers stacked along Z.
+ *
+ * The watch sets font-size to 1/100 of its width, so 1em is 10 watch units
+ * (the drawing is 1000 units wide). Everything inside is sized in em.
+ * Light comes from --lx / --ly (-1 … 1), set by watch.js from the pointer:
+ * polished parts turn their reflections with it, using transforms only.
+ */
+
+/* registered so a change of dial or metal fades instead of jumping */
+@property --dial-a { syntax: '<color>'; inherits: true; initial-value: #f6c5aa; }
+@property --dial-b { syntax: '<color>'; inherits: true; initial-value: #e3a184; }
+@property --dial-c { syntax: '<color>'; inherits: true; initial-value: #bf7a5c; }
+@property --dial-ink { syntax: '<color>'; inherits: true; initial-value: #3a1c10; }
+@property --hand-a { syntax: '<color>'; inherits: true; initial-value: #5b74ea; }
+@property --hand-b { syntax: '<color>'; inherits: true; initial-value: #16226e; }
+@property --m0 { syntax: '<color>'; inherits: true; initial-value: #f7f8f9; }
+@property --m1 { syntax: '<color>'; inherits: true; initial-value: #aeb3b8; }
+@property --m2 { syntax: '<color>'; inherits: true; initial-value: #2e3135; }
+@property --m3 { syntax: '<color>'; inherits: true; initial-value: #7d8288; }
+@property --strap { syntax: '<color>'; inherits: true; initial-value: #1c1d20; }
+
+.watch {
+  --lx: 0;
+  --ly: 0;
+  /* dial: saumon, with heat-blued hands */
+  --dial-a: #f6c5aa;
+  --dial-b: #e3a184;
+  --dial-c: #bf7a5c;
+  --dial-ink: #3a1c10;
+  --hand-a: #5b74ea;
+  --hand-b: #16226e;
+  --idx-a: #fbfbfa;
+  --idx-b: #8f949b;
+  --sec: #d81b5c;
+  /* case: steel */
+  --m0: #f7f8f9;
+  --m1: #aeb3b8;
+  --m2: #23262a;
+  --m3: #747a80;
+  --strap: #1c1d20;
+  --stitch: rgba(255, 255, 255, 0.34);
+  position: relative;
+  flex: none;
+  width: 100em;
+  height: 100em;
+  font-size: calc(var(--size, 60vmin) / 100);
+  perspective: 260em;
+  transition:
+    --dial-a 0.9s ease,
+    --dial-b 0.9s ease,
+    --dial-c 0.9s ease,
+    --dial-ink 0.9s ease,
+    --hand-a 0.9s ease,
+    --hand-b 0.9s ease,
+    --m0 0.9s ease,
+    --m1 0.9s ease,
+    --m2 0.9s ease,
+    --m3 0.9s ease,
+    --strap 0.9s ease;
+}
+.watch__defs { position: absolute; }
+.watch__tilt,
+.watch__stack {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+.wl {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.watch .full {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.rot {
+  position: absolute;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+.rot > svg,
+.watch svg.at {
+  position: absolute;
+  overflow: visible;
+}
+.watch .anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* ---- the shadow it stands on ---- */
+.watch__shadow {
+  position: absolute;
+  inset: 3em;
+  border-radius: 50%;
+  background: #000;
+  opacity: calc(0.6 - var(--apart, 0) * 0.2);
+  will-change: opacity;
+  filter: blur(4.5em);
+  transform: translate(calc(1em - var(--lx) * 2em), calc(5.5em - var(--ly) * 2em));
+}
+
+/* ---- strap ---- */
+.strap {
+  position: absolute;
+  left: 40.2em;
+  width: 19.6em;
+  height: 64em;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0) 16%, rgba(255, 255, 255, 0.05) 50%, rgba(0, 0, 0, 0) 84%, rgba(0, 0, 0, 0.55)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
+    var(--strap);
+}
+/* shadows and the strap bow out as the watch comes apart */
+.wl--strap {
+  opacity: clamp(0, calc(1 - var(--apart, 0) * 6), 1);
+  will-change: opacity;
+}
+.rot--shadow {
+  opacity: calc(1 - var(--apart, 0));
+}
+.strap::before {
+  content: '';
+  position: absolute;
+  inset: 0 1.5em;
+  border-inline: 0.16em dashed var(--stitch);
+}
+.strap--top {
+  top: -53em;
+  clip-path: polygon(7% 0, 93% 0, 100% 100%, 0 100%);
+}
+.strap--bottom {
+  top: 89em;
+  clip-path: polygon(0 0, 100% 0, 93% 100%, 7% 100%);
+}
+
+/* ---- case back (seen only when the watch is taken apart) ---- */
+.caseback {
+  position: absolute;
+  inset: 6.2em;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgba(150, 172, 205, 0.12) 0 66%,
+    #4d5157 66.4%,
+    #c9ccd0 70%,
+    #8d9298 84%,
+    #e2e4e6 92%,
+    #5e6369 100%
+  );
+}
+
+/* ---- case middle: a stack of slices, so a tilt shows its flank ----
+   Lower slices are darkened with a wash (--dim) rather than a filter, and
+   most of them are only drawn once the watch leans back ([data-deep]). */
+.wl--band {
+  --dim: linear-gradient(rgba(14, 16, 18, calc(0.52 - var(--k) * 0.52)), rgba(14, 16, 18, calc(0.52 - var(--k) * 0.52)));
+}
+.watch:not([data-deep]) .wl--band:not([data-k='10'], [data-k='6'], [data-k='2']) {
+  display: none;
+}
+.band__ring {
+  position: absolute;
+  inset: 6em;
+  border-radius: 50%;
+  background:
+    var(--dim),
+    conic-gradient(from 200deg, var(--m1), var(--m0) 12%, var(--m3) 28%, var(--m2) 42%, var(--m1) 56%, var(--m0) 68%, var(--m3) 82%, var(--m1));
+  -webkit-mask: radial-gradient(closest-side, transparent 88.4%, #000 88.8%);
+  mask: radial-gradient(closest-side, transparent 88.4%, #000 88.8%);
+}
+.lug {
+  position: absolute;
+  width: 5.8em;
+  height: calc(13.2em - var(--slope) * 2.4em);
+  background:
+    var(--dim),
+    linear-gradient(90deg, var(--m3), var(--m1) 38%, var(--m1) 62%, var(--m3));
+}
+.wl--band[data-k='10'] .lug {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 0.07em, rgba(0, 0, 0, 0.06) 0.07em 0.2em),
+    linear-gradient(90deg, var(--m2) 0, var(--m0) 10%, var(--m1) 22%, var(--m1) 72%, var(--m0) 87%, var(--m3) 100%);
+}
+.lug--tl { left: 34.4em; top: calc(-2.2em + var(--slope) * 2.4em); border-radius: 3.4em 1.3em 0 0 / 6em 1.3em 0 0; transform-origin: 50% 100%; transform: rotate(-2deg); }
+.lug--tr { left: 59.8em; top: calc(-2.2em + var(--slope) * 2.4em); border-radius: 3.4em 1.3em 0 0 / 6em 1.3em 0 0; transform-origin: 50% 100%; transform: rotate(2deg) scaleX(-1); }
+.lug--bl { left: 34.4em; top: 89em; border-radius: 0 0 1.3em 3.4em / 0 0 1.3em 6em; transform-origin: 50% 0; transform: rotate(2deg); }
+.lug--br { left: 59.8em; top: 89em; border-radius: 0 0 1.3em 3.4em / 0 0 1.3em 6em; transform-origin: 50% 0; transform: rotate(-2deg) scaleX(-1); }
+.crown {
+  position: absolute;
+  left: 93.2em;
+  top: calc(50em - var(--ch) / 2);
+  width: 6.6em;
+  height: var(--ch);
+  border-radius: 0.5em 1.2em 1.2em 0.5em / 0.8em 2.2em 2.2em 0.8em;
+  background:
+    var(--dim),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 0) 78%, rgba(0, 0, 0, 0.4)),
+    repeating-linear-gradient(0deg, var(--m2) 0, var(--m0) 0.36em, var(--m3) 0.6em, var(--m2) 0.84em);
+  background-position:
+    0 0,
+    0 0,
+    0 var(--crown-turn, 0em);
+}
+
+/* ---- mainplate ---- */
+.plate {
+  position: absolute;
+  inset: 12.8em;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a2d32;
+}
+.plate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0) 86%, rgba(0, 0, 0, 0.55));
+}
+.plate__stripes {
+  position: absolute;
+  inset: -30%;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.17) 0,
+    rgba(255, 255, 255, 0.03) 2.7em,
+    rgba(0, 0, 0, 0.24) 5.3em,
+    rgba(255, 255, 255, 0.17) 5.4em
+  );
+  transform: rotate(-22deg) translateX(calc(var(--lx) * 1.4em));
+}
+.plate__sheen {
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 62%);
+  transform: translate(calc(-10em - var(--lx) * 16em), calc(-16em - var(--ly) * 16em));
+}
+.engrave {
+  font: 500 10px/1 var(--f-mono);
+  letter-spacing: 0.1em;
+  fill: #d9bd7c;
+}
+.engrave--rim {
+  font-size: 10.5px;
+  letter-spacing: 0.3em;
+}
+
+/* ---- dial ---- */
+.dial-shadow {
+  position: absolute;
+  border-radius: 50%;
+  background: #000;
+  opacity: calc(0.62 * (1 - var(--apart, 0)));
+  will-change: opacity;
+  filter: blur(1.4em);
+  transform: translate(0.5em, 1.1em);
+}
+.dial {
+  position: absolute;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--dial-b);
+}
+.dial__sun {
+  position: absolute;
+  inset: -21%;
+  background: conic-gradient(
+    from 0deg,
+    var(--dial-a),
+    var(--dial-b) 9%,
+    var(--dial-c) 25%,
+    var(--dial-b) 41%,
+    var(--dial-a) 50%,
+    var(--dial-b) 59%,
+    var(--dial-c) 75%,
+    var(--dial-b) 91%,
+    var(--dial-a)
+  );
+  transform: rotate(calc(28deg + var(--lx) * 46deg + var(--ly) * 14deg));
+}
+.dial__shade {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.2));
+}
+.dial svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.dial-ink { fill: none; stroke: var(--dial-ink); }
+.dial-logo {
+  font: 500 17px/1 var(--f-display);
+  font-stretch: 125%;
+  letter-spacing: 0.3em;
+  fill: var(--dial-ink);
+}
+.dial-sub {
+  font: 500 6.4px/1 var(--f-mono);
+  letter-spacing: 0.34em;
+  fill: var(--dial-ink);
+  opacity: 0.78;
+}
+.idx-a { fill: var(--idx-a); }
+.idx-b { fill: var(--idx-b); }
+.hand-a { fill: var(--hand-a); }
+.hand-b { fill: var(--hand-b); }
+.hand-sec { fill: var(--sec); }
+
+/* ---- bezel and crystal ---- */
+.bezel {
+  position: absolute;
+  inset: 6em;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(closest-side, transparent 88.9%, #000 89.3%, #000 99.6%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 88.9%, #000 89.3%, #000 99.6%, transparent 100%);
+}
+.bezel__shine {
+  position: absolute;
+  inset: -8%;
+  background: conic-gradient(
+    from 18deg,
+    var(--m0),
+    var(--m1) 7%,
+    var(--m2) 15%,
+    var(--m1) 23%,
+    var(--m0) 32%,
+    var(--m3) 40%,
+    var(--m2) 50%,
+    var(--m1) 58%,
+    var(--m0) 66%,
+    var(--m3) 75%,
+    var(--m2) 84%,
+    var(--m1) 93%,
+    var(--m0)
+  );
+  transform: rotate(calc(var(--lx) * 40deg + var(--ly) * 18deg));
+}
+.crystal {
+  position: absolute;
+  inset: 10.8em;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 2.4em rgba(150, 176, 255, 0.16),
+    inset 0 0.3em 0.7em rgba(255, 255, 255, 0.14);
+}
+.crystal__glare {
+  position: absolute;
+  left: -40%;
+  top: -60%;
+  width: 78%;
+  height: 220%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.16) 40%, rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0));
+  transform: translate(calc(30em - var(--lx) * 17em), calc(var(--ly) * -8em)) rotate(32deg);
+}
+.crystal__glare--2 {
+  width: 24%;
+  opacity: 0.6;
+  transform: translate(calc(64em - var(--lx) * 24em), calc(var(--ly) * -8em)) rotate(32deg);
+}
+
+/* ---- the crown is the one control on the watch ---- */
+.crown-hit {
+  position: absolute;
+  left: 90em;
+  top: 41em;
+  width: 12em;
+  height: 18em;
+  padding: 0;
+  border: 0;
+  border-radius: 3em;
+  background: none;
+  cursor: ns-resize;
+  touch-action: none;
+  transform: translateZ(4.2em);
+}
+.crown-hit:focus-visible {
+  outline: 0.3em solid var(--focus, #fff);
+  outline-offset: 0.2em;
+}
+.watch[data-apart] .crown-hit { display: none; }
+
+/* phones draw every other slice of the case: at that size the gaps cannot be seen */
+@media (max-width: 899px) {
+  .watch[data-deep] .wl--band:is([data-k='1'], [data-k='3'], [data-k='5'], [data-k='7'], [data-k='9']) {
+    display: none;
+  }
+}
